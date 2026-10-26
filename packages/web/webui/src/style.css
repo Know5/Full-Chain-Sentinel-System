@@ -7421,7 +7421,16 @@ button.link {
 }
 
 /* Evidence keeps a fixed footprint: a command's full output is one scroll away
-   instead of stretching the dialog by thousands of pixels. */
+   instead of stretching the dialog by thousands of pixels. Used standalone (no
+   .ws-console parent), so the dark terminal surface has to come along —
+   otherwise it is light terminal text on the dialog's white background. */
+.vuln-evidence .ws-console__body,
+.vuln-preview .ws-console__body {
+	background: var(--console-bg);
+	border: 1px solid var(--console-border);
+	border-radius: var(--radius);
+}
+
 .vuln-evidence .ws-console__body {
 	max-height: 190px;
 	overflow: auto;
