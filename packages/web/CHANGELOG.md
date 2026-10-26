@@ -25,6 +25,8 @@
 
 ### Added
 
+- 内置预设新增「应急响应」：安全事件排查与取证提示词，硬性约束只排查、只读取证——不处置修复、不动生产环境文件与配置、不爆破高负荷扫描、不利用漏洞，证据只允许复制到自己的工作目录并记录 hash；产出时间线、入侵路径研判、IOC 与处置建议（只写不执行），确认的 webshell / 后门走漏洞中枢上报。既有控制台下次启动时按内置预设补种规则自动补上，操作员改过的同名预设不会被覆盖。
+- 设置 → 通知新增企业微信群机器人：钉钉、飞书、企业微信三渠道可同时启用，推送内容与正文字数上限共用。企业微信只有 webhook 一种配置（平台无加签/关键词），markdown 按 4096 字节单独截断，`###` 标题转为加粗行渲染；卡片提供启用开关与测试按钮，`notifications.json` 新增 `wecom` 段。
 - 文件夹打包下载：对话「文件」面板新增「下载当前文件夹」与目录行「下载」。打包在项目容器内异步执行（`tar -cz`），stdout 流式写入控制台配置目录的 `downloads/`，WebSocket 推进度/完成/失败/取消；完成后经带登录态校验的 `/api/folder-archives/<id>` 流式下载，下载完成即删，未下载的 10 分钟后清理。`tar` 不跟随符号链接，隐藏文件包含；不设大小上限。`/work` 根目录压缩包名为 `<项目名>-work.tar.gz`。新增 `folder-archive.ts`、`folder-archive.test.ts`、`folder-archive-server.test.ts`、`FilePanel.test.tsx`。
 - 资产库：Agent 用 `asset_report` / `asset_note` 主动上报实际接触过的域名、IP、IP:端口服务与 URL，同一资产按项目自动合并，测试结论按时间线累积（状态变更与测试记录分开计数）。控制台侧栏新增「资产库」页，支持筛选、分页、改状态与标签、操作员记录、批量删除（删除前预览时间线与漏洞关联）与导出 Markdown；资产数与记录数不设上限，导出为当前筛选的全量，列表分页只是展示控制。`vuln_submit` 新增可选 `asset` 参数，漏洞与资产双向跳转，删资产只解除关联、不删漏洞。权限新增 `asset_library_write` / `asset_library_read`（旧 permissions.json 需在「设置 → 权限」手动打开），权限面板同时补上此前缺失的 `vuln_submit` / `vuln_read` / `asset_read` 三个开关。数据在 `asset-library.db`，删项目时一并清理。
 - 留证截图可以走自定义 SOCKS5 出口：`replay_capture` 新增 `proxy` 参数（`socks5://[user:password@]host:port`），只作用于这一次发送——不是系统代理，也不改容器网络。代理会被填进 replayd Repeater 页的「上游代理」框并随发送交给引擎，所以截图里就能看到出口；域名交给代理解析（远程 DNS），目标站只有经代理可达时也打得通。地址是容器视角：host 网络下 127.0.0.1 是宿主机，bridge 下用 `host.docker.internal`。代理连不上/认证失败报 `upstream_connect`/`upstream_auth` 并带排查提示，不会误报成「目标拒绝连接」；非 socks5 协议在启动 replayd 和问审批之前就被拒绝。

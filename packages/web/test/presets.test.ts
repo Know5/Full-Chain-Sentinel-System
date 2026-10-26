@@ -15,6 +15,7 @@ import { afterEach, describe, expect, test } from "vitest";
 import {
 	briefDescription,
 	deletePreset,
+	ensureBuiltinPresets,
 	estimateTokens,
 	exportPresets,
 	importPresets,
@@ -368,4 +369,18 @@ describe("commander brief", () => {
 		expect(lines).toHaveLength(31);
 		expect(lines[30]).toContain("另有 2 条预设未列出");
 	});
+});
+
+test("a fresh console is seeded with the built-in presets, including the incident-response agent", () => {
+	const dir = freshAgentDir();
+	ensureBuiltinPresets(dir);
+	const ir = listPresets(dir).find((preset) => preset.id === "incident-response");
+	expect(ir?.name).toBe("应急响应");
+	expect(ir?.enabled).toBe(true);
+	const body = readPresetText(dir, "incident-response");
+	expect(body).toContain("只排查");
+	expect(body).toContain("生产环境");
+	// The preset is context, not capability: it may not promise tools the
+	// permission switches do not grant.
+	expect(body).not.toMatch(/你可以使用|授权你调用/);
 });
