@@ -281,8 +281,8 @@ export interface SentinelModelLibraryView {
 	};
 }
 
-/** The two chat robots a finished notification can go to. */
-export type SentinelNotifyChannel = "dingtalk" | "feishu";
+/** The chat robots a finished notification can go to. */
+export type SentinelNotifyChannel = "dingtalk" | "feishu" | "wecom";
 
 /** One robot's connection settings. */
 export interface SentinelNotifyChannelConfig {
@@ -314,6 +314,12 @@ export interface SentinelNotifyConfig extends SentinelNotifyChannelConfig {
 	 */
 	summaryLimit: number;
 	feishu: SentinelNotifyChannelConfig;
+	/**
+	 * WeCom group robot. Its webhook already carries the access token, and the
+	 * platform has no signing or keyword mode of its own, so only the webhook is
+	 * used; the inherited secret/keyword fields stay empty.
+	 */
+	wecom: SentinelNotifyChannelConfig;
 }
 
 /** Outcome of the most recent notification send, for the settings screen. */

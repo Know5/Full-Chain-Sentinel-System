@@ -60,7 +60,7 @@ function kindIcon(kind: NotifyKind) {
 
 /** The brand initial in a channel card's top-left square. */
 function channelMark(channel: SentinelNotifyChannel): string {
-	return channel === "dingtalk" ? t("钉") : t("飞");
+	return channel === "dingtalk" ? t("钉") : channel === "wecom" ? t("企") : t("飞");
 }
 
 /**
@@ -76,6 +76,7 @@ function ChannelCard({
 	config,
 	placeholder,
 	keywordPlaceholder,
+	simple,
 	busy,
 	testing,
 	result,
@@ -88,6 +89,8 @@ function ChannelCard({
 	config: SentinelNotifyChannelConfig;
 	placeholder: string;
 	keywordPlaceholder: string;
+	/** WeCom has no signing or keyword mode; hide those fields. */
+	simple?: boolean;
 	/** Any channel is testing; this one may be disabled while another runs. */
 	busy: boolean;
 	/** This channel is the one sending. */
@@ -151,9 +154,10 @@ function ChannelCard({
 					</span>
 				</label>
 
-				<div className="notify-field-row">
-					<label className="notify-field">
-						<span>{t("签名密钥")} <em>{t("加签")}</em></span>
+				{simple ? null : (
+					<div className="notify-field-row">
+						<label className="notify-field">
+							<span>{t("签名密钥")} <em>{t("加签")}</em></span>
 						<span className="notify-input">
 							<KeyIcon size={13} />
 							<input
@@ -165,19 +169,20 @@ function ChannelCard({
 							/>
 						</span>
 					</label>
-					<label className="notify-field">
-						<span>{t("关键词")} <em>{t("自定义")}</em></span>
-						<span className="notify-input">
-							<TagIcon size={13} />
-							<input
-								value={config.keyword}
-								onChange={(event) => onChange({ keyword: event.target.value })}
-								placeholder={keywordPlaceholder}
-								spellCheck={false}
-							/>
-						</span>
-					</label>
-				</div>
+						<label className="notify-field">
+							<span>{t("关键词")} <em>{t("自定义")}</em></span>
+							<span className="notify-input">
+								<TagIcon size={13} />
+								<input
+									value={config.keyword}
+									onChange={(event) => onChange({ keyword: event.target.value })}
+									placeholder={keywordPlaceholder}
+									spellCheck={false}
+								/>
+							</span>
+						</label>
+					</div>
+				)}
 			</div>
 
 			<footer className="notify-card__foot">
@@ -209,7 +214,7 @@ function ChannelCard({
 	);
 }
 
-/** The "notifications" section of the settings page: DingTalk and Feishu robots. */
+/** The "notifications" section of the settings page: DingTalk, Feishu and WeCom robots. */
 export function NotifyPanel({
 	config,
 	status,
@@ -231,6 +236,7 @@ export function NotifyPanel({
 		keyword: config.keyword,
 	});
 	const [feishu, setFeishu] = useState<SentinelNotifyChannelConfig>(config.feishu);
+	const [wecom, setWecom] = useState<SentinelNotifyChannelConfig>(config.wecom);
 	const [kinds, setKinds] = useState(config.kinds);
 	const [summaryLimit, setSummaryLimit] = useState(String(config.summaryLimit));
 	const [testing, setTesting] = useState<SentinelNotifyChannel | null>(null);
@@ -248,10 +254,16 @@ export function NotifyPanel({
 				secret: feishu.secret.trim(),
 				keyword: feishu.keyword.trim(),
 			},
+			wecom: {
+				...wecom,
+				webhook: wecom.webhook.trim(),
+				secret: "",
+				keyword: "",
+			},
 			kinds,
 			summaryLimit: Math.max(0, Math.floor(Number(summaryLimit) || 0)),
 		}),
-		[dingtalk, feishu, kinds, summaryLimit],
+		[dingtalk, feishu, wecom, kinds, summaryLimit],
 	);
 
 	const runTest = async (channel: SentinelNotifyChannel) => {
@@ -265,9 +277,9 @@ export function NotifyPanel({
 		}
 	};
 
-	const enabledChannels = Number(dingtalk.enabled) + Number(feishu.enabled);
+	const enabledChannels = Number(dingtalk.enabled) + Number(feishu.enabled) + Number(wecom.enabled);
 	const selectedKinds = KINDS.filter(([key]) => kinds[key]).length;
-	const channelStatuses = (["dingtalk", "feishu"] as const).flatMap((channel) => {
+	const channelStatuses = (["dingtalk", "feishu", "wecom"] as const).flatMap((channel) => {
 		const entry = status.channels?.[channel];
 		return entry ? [{ channel, ...entry }] : [];
 	});
@@ -280,11 +292,11 @@ export function NotifyPanel({
 					<div className="notify-toolbar__title">
 						<h3>{t("通知渠道")}</h3>
 						<span className="notify-count">
-							{t("{enabled} / {total} 已启用", { enabled: enabledChannels, total: 2 })}
+							{t("{enabled} / {total} 已启用", { enabled: enabledChannels, total: 3 })}
 						</span>
 					</div>
 					<p>
-						{t("任务结束后把结果推送到团队群。钉钉和飞书可同时启用；在群「设置 → 群机器人」添加自定义机器人并填入 webhook。加签和关键词按机器人的安全设置选填。")}
+						{t("任务结束后把结果推送到团队群。钉钉、飞书和企业微信可同时启用；在群的机器人设置里添加自定义机器人并填入 webhook。钉钉/飞书的加签与关键词按机器人安全设置选填。")}
 					</p>
 				</div>
 				<div className="notify-toolbar__actions">
@@ -323,6 +335,21 @@ export function NotifyPanel({
 					result={result?.channel === "feishu" ? result.result : null}
 					onChange={(patch) => setFeishu((prev) => ({ ...prev, ...patch }))}
 					onTest={() => void runTest("feishu")}
+				/>
+
+				<ChannelCard
+					channel="wecom"
+					title={t("企业微信")}
+					subtitle={t("群机器人 · Markdown")}
+					config={wecom}
+					placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=…"
+					keywordPlaceholder=""
+					simple
+					busy={testing !== null}
+					testing={testing === "wecom"}
+					result={result?.channel === "wecom" ? result.result : null}
+					onChange={(patch) => setWecom((prev) => ({ ...prev, ...patch }))}
+					onTest={() => void runTest("wecom")}
 				/>
 			</div>
 

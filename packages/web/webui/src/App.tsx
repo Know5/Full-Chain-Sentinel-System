@@ -257,9 +257,10 @@ export function App() {
 		kinds: { runs: true, vulns: true, goals: true, engines: true, pocs: true },
 		summaryLimit: 2000,
 		feishu: { enabled: false, webhook: "", secret: "", keyword: "" },
+		wecom: { enabled: false, webhook: "", secret: "", keyword: "" },
 	});
 	const [notifyStatus, setNotifyStatus] = useState<SentinelNotifyStatus>({ at: null, ok: true });
-	const notifyAvailable = notifyConfig.enabled || notifyConfig.feishu.enabled;
+	const notifyAvailable = notifyConfig.enabled || notifyConfig.feishu.enabled || notifyConfig.wecom.enabled;
 	const [assetConfig, setAssetConfig] = useState<SentinelAssetConfigView | null>(null);
 	const [assetBusy, setAssetBusy] = useState(false);
 	const [webSearchConfig, setWebSearchConfig] = useState<SentinelWebSearchConfigView | null>(null);

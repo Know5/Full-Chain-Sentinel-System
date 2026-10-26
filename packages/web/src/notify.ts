@@ -341,11 +341,132 @@ export async function testFeishu(config: SentinelNotifyChannelConfig): Promise<S
 		: { ok: false, message: t("发送失败"), detail: status.error };
 }
 
+/**
+ * WeCom (企业微信) group robot.
+ *
+ * The webhook URL already carries the access token, and the platform has no
+ * signing or keyword security mode, so the only configured field is the webhook.
+ * The reply uses the same `errcode`/`errmsg` shape as DingTalk.
+ */
+
+/** WeCom rejects a markdown body over 4096 bytes with errcode 44002. */
+const MAX_WECOM_BODY_BYTES = 4096;
+
+/**
+ * WeCom's markdown renderer has no headings: `###` would show up literally.
+ * Heading lines become bold lines, which is the closest rendering it has.
+ */
+export function toWecomContent(markdown: string): string {
+	return markdown
+		.split("\n")
+		.map((line) => line.replace(/^#{1,6}\s+(.*)$/, "**$1**"))
+		.join("\n");
+}
+
+/** A WeCom markdown body, with the keyword prepended when one is configured. */
+export function buildWecomPayload(config: SentinelNotifyChannelConfig, _title: string, markdown: string): string {
+	const prefix = config.keyword ? `${config.keyword}\n` : "";
+	return JSON.stringify({
+		msgtype: "markdown",
+		markdown: { content: `${prefix}${toWecomContent(markdown)}` },
+	});
+}
+
+/** The WeCom body, clipped until it fits the platform's own content limit. */
+export function fitWecomPayload(config: SentinelNotifyChannelConfig, title: string, markdown: string): string {
+	const fits = (body: string) => Buffer.byteLength(body, "utf-8") <= MAX_WECOM_BODY_BYTES;
+	const full = buildWecomPayload(config, title, markdown);
+	if (fits(full)) return full;
+	const note = `…（超出企业微信单条上限，已截断，全文 ${markdown.length} 字）`;
+	const overhead = Buffer.byteLength(buildWecomPayload(config, title, ""), "utf-8");
+	const budget = MAX_WECOM_BODY_BYTES - overhead - Buffer.byteLength(note, "utf-8");
+	const kept = budget > 0 ? clipToBytes(markdown, budget) : "";
+	return buildWecomPayload(config, title, `${kept}${note}`);
+}
+
+interface WecomReply {
+	errcode?: number;
+	errmsg?: string;
+}
+
+async function attemptWecom(
+	config: SentinelNotifyChannelConfig,
+	title: string,
+	markdown: string,
+): Promise<string | undefined> {
+	let response: Response;
+	try {
+		response = await fetch(config.webhook, {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: fitWecomPayload(config, title, markdown),
+			signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
+		});
+	} catch (error) {
+		if (error instanceof Error && error.name === "TimeoutError") {
+			return t("请求超时（{seconds}s）", { seconds: SEND_TIMEOUT_MS / 1000 });
+		}
+		const message = error instanceof Error ? error.message : String(error);
+		const cause = error instanceof Error && error.cause instanceof Error ? error.cause.message : "";
+		return cause ? t("{message}：{cause}", { message, cause }) : message;
+	}
+	if (!response.ok) return `HTTP ${response.status}`;
+	let reply: WecomReply;
+	try {
+		reply = (await response.json()) as WecomReply;
+	} catch {
+		return t("响应不是合法 JSON");
+	}
+	if (reply.errcode === 0) return undefined;
+	return t("企业微信返回 errcode {code}: {message}", {
+		code: String(reply.errcode),
+		message: reply.errmsg ?? "",
+	});
+}
+
+/**
+ * Post a WeCom markdown notification, retrying a transient failure. Never
+ * throws: the caller records the result and moves on.
+ */
+export async function sendWecom(
+	config: SentinelNotifyChannelConfig,
+	title: string,
+	markdown: string,
+): Promise<SentinelNotifyStatus> {
+	const webhook = config.webhook.trim();
+	if (!webhook) return { at: Date.now(), ok: false, error: t("未配置 webhook 地址") };
+	const urlError = webhookUrlError(webhook);
+	if (urlError) return { at: Date.now(), ok: false, error: urlError };
+	let lastError: string | undefined;
+	for (let attemptNumber = 1; attemptNumber <= MAX_ATTEMPTS; attemptNumber += 1) {
+		lastError = await attemptWecom({ ...config, webhook }, title, markdown);
+		if (!lastError) return { at: Date.now(), ok: true };
+		if (attemptNumber < MAX_ATTEMPTS) await delay(RETRY_DELAY_MS);
+	}
+	return { at: Date.now(), ok: false, error: lastError };
+}
+
+/** Settings-screen "send a test message" action for WeCom. */
+export async function testWecom(config: SentinelNotifyChannelConfig): Promise<SentinelTestResult> {
+	if (!config.webhook.trim()) return { ok: false, message: t("请先填写 webhook 地址") };
+	const urlError = webhookUrlError(config.webhook.trim());
+	if (urlError) return { ok: false, message: urlError, detail: t("企业微信群机器人只接受 https。") };
+	const status = await sendWecom(
+		config,
+		"全链哨兵 测试通知",
+		"### 全链哨兵 测试通知\n\n如果你在群里看到这条消息，通知配置可用。",
+	);
+	return status.ok
+		? { ok: true, message: t("测试消息已发送，请查看企业微信群") }
+		: { ok: false, message: t("发送失败"), detail: status.error };
+}
+
 /** Channels that are enabled and have a webhook, in a stable display order. */
 export function enabledNotifyChannels(config: SentinelNotifyConfig): SentinelNotifyChannel[] {
 	const channels: SentinelNotifyChannel[] = [];
 	if (config.enabled && config.webhook.trim()) channels.push("dingtalk");
 	if (config.feishu?.enabled && config.feishu.webhook.trim()) channels.push("feishu");
+	if (config.wecom?.enabled && config.wecom.webhook.trim()) channels.push("wecom");
 	return channels;
 }
 
@@ -372,11 +493,17 @@ export async function sendNotifications(
 			status:
 				channel === "dingtalk"
 					? await sendDingTalk(config, title, markdown)
-					: await sendFeishu(
-							config.feishu ?? { enabled: false, webhook: "", secret: "", keyword: "" },
-							title,
-							markdown,
-						),
+					: channel === "wecom"
+						? await sendWecom(
+								config.wecom ?? { enabled: false, webhook: "", secret: "", keyword: "" },
+								title,
+								markdown,
+							)
+						: await sendFeishu(
+								config.feishu ?? { enabled: false, webhook: "", secret: "", keyword: "" },
+								title,
+								markdown,
+							),
 		})),
 	);
 	const outcomes: NonNullable<SentinelNotifyStatus["channels"]> = {};
@@ -387,7 +514,13 @@ export async function sendNotifications(
 		} else {
 			const error = status.error ?? t("发送失败");
 			outcomes[channel] = { ok: false, error };
-			errors.push(channel === "dingtalk" ? t("钉钉：{error}", { error }) : t("飞书：{error}", { error }));
+			errors.push(
+				channel === "dingtalk"
+					? t("钉钉：{error}", { error })
+					: channel === "wecom"
+						? t("企微：{error}", { error })
+						: t("飞书：{error}", { error }),
+			);
 		}
 	}
 	return {

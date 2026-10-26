@@ -181,6 +181,7 @@ import {
 	shouldNotifyRun,
 	testDingTalk,
 	testFeishu,
+	testWecom,
 } from "./notify.ts";
 import { readNotifyConfig, writeNotifyConfig } from "./notify-config.ts";
 import {
@@ -3668,7 +3669,9 @@ export class SentinelRuntime {
 	): Promise<SentinelTestResult> {
 		return channel === "feishu"
 			? await testFeishu(config.feishu ?? { enabled: false, webhook: "", secret: "", keyword: "" })
-			: await testDingTalk(config);
+			: channel === "wecom"
+				? await testWecom(config.wecom ?? { enabled: false, webhook: "", secret: "", keyword: "" })
+				: await testDingTalk(config);
 	}
 
 	/** Manually compact the viewed session's context into a summary. */

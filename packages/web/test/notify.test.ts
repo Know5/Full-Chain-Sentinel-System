@@ -14,17 +14,22 @@ import { afterAll, afterEach, beforeAll, expect, test } from "vitest";
 import {
 	buildFeishuPayload,
 	buildRunNotification,
+	buildWecomPayload,
 	clipText,
 	feishuSignature,
 	fitFeishuPayload,
 	fitPayload,
+	fitWecomPayload,
 	sendDingTalk,
 	sendFeishu,
 	sendNotifications,
+	sendWecom,
 	shouldNotifyRun,
 	signedWebhookUrl,
 	testDingTalk,
 	testFeishu,
+	testWecom,
+	toWecomContent,
 } from "../src/notify.ts";
 import {
 	DEFAULT_SUMMARY_LIMIT,
@@ -42,6 +47,15 @@ const CONFIG: SentinelNotifyConfig = {
 	kinds: { runs: true, vulns: true, goals: true, engines: true, pocs: true },
 	summaryLimit: 2000,
 	feishu: { enabled: false, webhook: "", secret: "", keyword: "" },
+	wecom: { enabled: false, webhook: "", secret: "", keyword: "" },
+};
+
+/** A WeCom webhook pointed at the fake robot. */
+const WECOM: SentinelNotifyConfig["wecom"] = {
+	enabled: true,
+	webhook: "",
+	secret: "",
+	keyword: "",
 };
 
 /** Requests the fake robot received, in order. */
@@ -49,7 +63,7 @@ interface Received {
 	url: string;
 	body: {
 		msgtype?: string;
-		markdown?: { title?: string; text?: string };
+		markdown?: { title?: string; text?: string; content?: string };
 		msg_type?: string;
 		timestamp?: string;
 		sign?: string;
@@ -72,7 +86,7 @@ beforeAll(async () => {
 		request.on("end", () => {
 			const body = JSON.parse(raw) as Received["body"];
 			received.push({ url: request.url ?? "", body });
-			const text = body.markdown?.text ?? body.card?.elements?.[0]?.content ?? "";
+			const text = body.markdown?.text ?? body.markdown?.content ?? body.card?.elements?.[0]?.content ?? "";
 			const reject = rejectWith && text.includes(rejectWith.match) ? rejectWith : null;
 			response.setHeader("content-type", "application/json");
 			if (body.card) {
@@ -314,22 +328,67 @@ test("the settings-screen test refuses a non-https Feishu webhook", async () => 
 	expect(received).toHaveLength(0);
 });
 
-test("sendNotifications delivers to DingTalk and Feishu independently", async () => {
+test("WeCom markdown headings become bold lines; other markdown is kept", () => {
+	expect(toWecomContent("### 标题\n- **状态**：完成\n> 引用")).toBe("**标题**\n- **状态**：完成\n> 引用");
+});
+
+test("a WeCom payload carries the keyword and the converted content", () => {
+	const body = JSON.parse(buildWecomPayload({ ...WECOM, keyword: "全链" }, "测试", "### 标题\n正文")) as {
+		msgtype: string;
+		markdown: { content: string };
+	};
+	expect(body.msgtype).toBe("markdown");
+	expect(body.markdown.content).toBe("全链\n**标题**\n正文");
+});
+
+test("a WeCom body is clipped below the 4096-byte content limit", () => {
+	const long = "汉".repeat(4000);
+	const body = JSON.parse(fitWecomPayload(WECOM, "标题", long)) as {
+		markdown: { content: string };
+	};
+	expect(Buffer.byteLength(body.markdown.content, "utf-8")).toBeLessThanOrEqual(4096);
+	expect(body.markdown.content).toContain("已截断");
+});
+
+test("a WeCom send posts the markdown and treats errcode 0 as delivered", async () => {
+	const status = await sendWecom({ ...WECOM, webhook: baseUrl }, "标题", "### 内容");
+	expect(status.ok).toBe(true);
+	const last = received.at(-1);
+	expect(last?.body.msgtype).toBe("markdown");
+	expect(last?.body.markdown?.content).toContain("**内容**");
+});
+
+test("a WeCom robot error is reported with its errcode", async () => {
+	rejectWith = { match: "坏消息", errcode: 93000, errmsg: "invalid webhookurl" };
+	const status = await sendWecom({ ...WECOM, webhook: baseUrl }, "标题", "### 坏消息");
+	expect(status.ok).toBe(false);
+	expect(status.error).toContain("93000");
+	expect(status.error).toContain("invalid webhookurl");
+});
+
+test("the settings-screen test refuses a non-https WeCom webhook", async () => {
+	const result = await testWecom({ ...WECOM, webhook: "http://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=x" });
+	expect(result.ok).toBe(false);
+	expect(result.detail).toContain("https");
+});
+
+test("sendNotifications delivers to DingTalk, Feishu and WeCom independently", async () => {
 	const status = await sendNotifications(
 		{
 			...CONFIG,
 			webhook: baseUrl,
 			keyword: "KW",
 			feishu: { enabled: true, webhook: baseUrl, secret: "FSEC", keyword: "zgagent" },
+			wecom: { enabled: true, webhook: baseUrl, secret: "", keyword: "" },
 		},
 		"both",
 		"### both",
 	);
 	expect(status).toMatchObject({
 		ok: true,
-		channels: { dingtalk: { ok: true }, feishu: { ok: true } },
+		channels: { dingtalk: { ok: true }, feishu: { ok: true }, wecom: { ok: true } },
 	});
-	expect(received).toHaveLength(2);
+	expect(received).toHaveLength(3);
 });
 
 test("the notification config round-trips through notifications.json with 0600", () => {
@@ -343,6 +402,7 @@ test("the notification config round-trips through notifications.json with 0600",
 			kinds: { runs: true, vulns: true, goals: true, engines: true, pocs: true },
 			summaryLimit: DEFAULT_SUMMARY_LIMIT,
 			feishu: { enabled: false, webhook: "", secret: "", keyword: "" },
+			wecom: { enabled: false, webhook: "", secret: "", keyword: "" },
 		});
 		writeNotifyConfig(dir, {
 			enabled: true,
@@ -356,6 +416,12 @@ test("the notification config round-trips through notifications.json with 0600",
 				webhook: " https://open.feishu.cn/open-apis/bot/v2/hook/test ",
 				secret: " FSEC ",
 				keyword: " zgagent ",
+			},
+			wecom: {
+				enabled: true,
+				webhook: " https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=test ",
+				secret: "",
+				keyword: "",
 			},
 		});
 		expect(readNotifyConfig(dir)).toEqual({
@@ -371,11 +437,18 @@ test("the notification config round-trips through notifications.json with 0600",
 				secret: "FSEC",
 				keyword: "zgagent",
 			},
+			wecom: {
+				enabled: true,
+				webhook: "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=test",
+				secret: "",
+				keyword: "",
+			},
 		});
 		chmodSync(notificationsJsonPath(dir), 0o600);
 		expect(statSync(notificationsJsonPath(dir)).mode & 0o777).toBe(0o600);
 		expect(readFileSync(notificationsJsonPath(dir), "utf-8")).toContain('"dingtalk"');
 		expect(readFileSync(notificationsJsonPath(dir), "utf-8")).toContain('"feishu"');
+		expect(readFileSync(notificationsJsonPath(dir), "utf-8")).toContain('"wecom"');
 	} finally {
 		rmSync(dir, { recursive: true, force: true });
 	}
@@ -392,6 +465,7 @@ test("a stored limit is normalized: missing reads as the default, negative as 0"
 			kinds: { runs: true, vulns: true, goals: true, engines: true, pocs: true },
 			summaryLimit: -5,
 			feishu: { enabled: false, webhook: "", secret: "", keyword: "" },
+			wecom: { enabled: false, webhook: "", secret: "", keyword: "" },
 		});
 		expect(readNotifyConfig(dir).summaryLimit).toBe(0);
 

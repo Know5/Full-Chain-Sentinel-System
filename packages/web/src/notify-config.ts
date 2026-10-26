@@ -26,10 +26,16 @@ const DEFAULT_CONFIG: SentinelNotifyConfig = {
 	kinds: { runs: true, vulns: true, goals: true, engines: true, pocs: true },
 	summaryLimit: DEFAULT_SUMMARY_LIMIT,
 	feishu: { enabled: false, webhook: "", secret: "", keyword: "" },
+	wecom: { enabled: false, webhook: "", secret: "", keyword: "" },
 };
 
 function defaultConfig(): SentinelNotifyConfig {
-	return { ...DEFAULT_CONFIG, kinds: { ...DEFAULT_CONFIG.kinds }, feishu: { ...DEFAULT_CONFIG.feishu } };
+	return {
+		...DEFAULT_CONFIG,
+		kinds: { ...DEFAULT_CONFIG.kinds },
+		feishu: { ...DEFAULT_CONFIG.feishu },
+		wecom: { ...DEFAULT_CONFIG.wecom },
+	};
 }
 
 /** Every kind on unless the file says otherwise, so an old config keeps pushing. */
@@ -77,6 +83,7 @@ export function readNotifyConfig(agentDir: string): SentinelNotifyConfig {
 		const parsed = JSON.parse(readFileSync(path, "utf-8")) as {
 			dingtalk?: Partial<SentinelNotifyConfig>;
 			feishu?: Partial<SentinelNotifyConfig["feishu"]>;
+			wecom?: Partial<SentinelNotifyConfig["wecom"]>;
 		};
 		const dingtalk = parsed.dingtalk ?? {};
 		return {
@@ -87,16 +94,18 @@ export function readNotifyConfig(agentDir: string): SentinelNotifyConfig {
 			kinds: coerceKinds(dingtalk.kinds),
 			summaryLimit: coerceSummaryLimit(dingtalk.summaryLimit),
 			feishu: coerceChannel(parsed.feishu),
+			wecom: coerceChannel(parsed.wecom),
 		};
 	} catch {
 		return defaultConfig();
 	}
 }
 
-/** Persist the notification config, replacing both channel sections. */
+/** Persist the notification config, replacing every channel section. */
 export function writeNotifyConfig(agentDir: string, config: SentinelNotifyConfig): void {
 	const path = notificationsJsonPath(agentDir);
 	const feishu = coerceChannel(config.feishu);
+	const wecom = coerceChannel(config.wecom);
 	const payload = {
 		dingtalk: {
 			enabled: config.enabled,
@@ -111,6 +120,10 @@ export function writeNotifyConfig(agentDir: string, config: SentinelNotifyConfig
 			webhook: feishu.webhook.trim(),
 			secret: feishu.secret.trim(),
 			keyword: feishu.keyword.trim(),
+		},
+		wecom: {
+			enabled: wecom.enabled,
+			webhook: wecom.webhook.trim(),
 		},
 	};
 	mkdirSync(dirname(path), { recursive: true });

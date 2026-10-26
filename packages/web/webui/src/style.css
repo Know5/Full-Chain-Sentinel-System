@@ -3296,7 +3296,7 @@ button.ghost.small.on {
 
 .notify-channel-grid {
 	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
+	grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
 	gap: 14px;
 	margin-top: 16px;
 }
@@ -3322,6 +3322,10 @@ button.ghost.small.on {
 
 .notify-card--feishu::before {
 	background: #00a8d6;
+}
+
+.notify-card--wecom::before {
+	background: #07c160;
 }
 
 .notify-card__head {
@@ -3350,6 +3354,12 @@ button.ghost.small.on {
 	border-color: #c8edf8;
 	background: #eefbff;
 	color: #0088b3;
+}
+
+.notify-card--wecom .notify-logo {
+	border-color: #c6efd9;
+	background: #edfbf3;
+	color: #079155;
 }
 
 .notify-card__title {

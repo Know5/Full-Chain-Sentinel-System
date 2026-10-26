@@ -3638,6 +3638,16 @@ export const EN_MESSAGES: Record<string, string> = {
 	读取压缩包失败: "Failed to read the archive",
 	"下载任务 id 非法": "Invalid download job id",
 	打包任务不存在或已结束: "The packaging job is missing or has ended",
+	企业微信: "WeCom",
+	"群机器人 · Markdown": "Group robot · Markdown",
+	"企微：{error}": "WeCom: {error}",
+	"企业微信返回 errcode {code}: {message}": "WeCom returned errcode {code}: {message}",
+	"测试消息已发送，请查看企业微信群": "Test message sent; check the WeCom group",
+	"企业微信群机器人只接受 https。": "WeCom group robots only accept https.",
+	"超出企业微信单条上限，已截断，全文 {length} 字":
+		"Over the WeCom per-message limit; truncated, {length} characters in total",
+	"任务结束后把结果推送到团队群。钉钉、飞书和企业微信可同时启用；在群的机器人设置里添加自定义机器人并填入 webhook。钉钉/飞书的加签与关键词按机器人安全设置选填。":
+		"Push results to a team chat when a task ends. DingTalk, Feishu, and WeCom can be enabled together; add a custom robot in the chat's robot settings and paste its webhook. Signing and keywords for DingTalk/Feishu follow each robot's security setting.",
 };
 
 export function translate(language: UiLanguage, source: string, vars?: Record<string, string | number>): string {

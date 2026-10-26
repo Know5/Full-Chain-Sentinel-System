@@ -315,7 +315,7 @@ export interface SentinelTestResult {
 }
 
 /** The two chat robots a finished notification can go to. */
-export type SentinelNotifyChannel = "dingtalk" | "feishu";
+export type SentinelNotifyChannel = "dingtalk" | "feishu" | "wecom";
 
 /** One robot's connection settings. */
 export interface SentinelNotifyChannelConfig {
@@ -332,6 +332,8 @@ export interface SentinelNotifyConfig extends SentinelNotifyChannelConfig {
 	/** Characters of notification body to keep per section; 0 keeps all of it. */
 	summaryLimit: number;
 	feishu: SentinelNotifyChannelConfig;
+	/** WeCom group robot: webhook only (no signing/keyword on the platform). */
+	wecom: SentinelNotifyChannelConfig;
 }
 
 /** Outcome of the most recent notification send. */

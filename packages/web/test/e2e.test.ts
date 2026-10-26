@@ -1637,6 +1637,7 @@ test("a finished run notifies the DingTalk group, and the composer flag can forc
 			kinds: { runs: true, vulns: true, goals: true, engines: true, pocs: true },
 			summaryLimit: 2000,
 			feishu: { enabled: false, webhook: "", secret: "", keyword: "" },
+			wecom: { enabled: false, webhook: "", secret: "", keyword: "" },
 		},
 	});
 	const saved = await waitFor((message) => message.type === "notify_config");
@@ -1709,6 +1710,7 @@ test("a finished run notifies the DingTalk group, and the composer flag can forc
 			kinds: { runs: true, vulns: true, goals: true, engines: true, pocs: true },
 			summaryLimit: 2000,
 			feishu: { enabled: false, webhook: "", secret: "", keyword: "" },
+			wecom: { enabled: false, webhook: "", secret: "", keyword: "" },
 		},
 	});
 	await waitFor((message) => message.type === "notify_config" && !message.config.enabled);
@@ -1789,6 +1791,7 @@ test("a critical finding is pushed to DingTalk the moment it is submitted", asyn
 			kinds: { runs: true, vulns: true, goals: true, engines: true, pocs: true },
 			summaryLimit: 2000,
 			feishu: { enabled: false, webhook: "", secret: "", keyword: "" },
+			wecom: { enabled: false, webhook: "", secret: "", keyword: "" },
 		},
 	});
 	await waitFor((message) => message.type === "notify_config" && message.config.enabled);
@@ -1819,6 +1822,7 @@ test("a critical finding is pushed to DingTalk the moment it is submitted", asyn
 			kinds: { runs: true, vulns: true, goals: true, engines: true, pocs: true },
 			summaryLimit: 2000,
 			feishu: { enabled: false, webhook: "", secret: "", keyword: "" },
+			wecom: { enabled: false, webhook: "", secret: "", keyword: "" },
 		},
 	});
 	await waitFor((message) => message.type === "notify_config" && !message.config.enabled);
