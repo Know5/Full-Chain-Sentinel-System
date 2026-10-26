@@ -25,7 +25,6 @@ import {
 	DeleteIcon,
 	DroidIcon,
 	EnvironmentIcon,
-	ExpandIcon,
 	GateIcon,
 	GitHubIcon,
 	IosIcon,
@@ -528,25 +527,27 @@ export function AppSider({
 			<div
 				className="sider-brand"
 				onClick={mobileOpen ? undefined : onToggleCollapse}
-				title={t("全链哨兵 Full Chain Sentinel System")}
+				title={collapsed ? t("展开侧边栏") : t("全链哨兵 Full Chain Sentinel System")}
 			>
 				<div className="sider-logo">
 					<SentinelMark size={18} />
 				</div>
 				<span className="sider-title">{t("全链哨兵")}</span>
-				<button
-					type="button"
-					className="sider-collapse"
-					title={collapsed ? t("展开侧边栏") : t("收起侧边栏")}
-					aria-label={collapsed ? t("展开侧边栏") : t("收起侧边栏")}
-					aria-expanded={!collapsed}
-					onClick={(event) => {
-						event.stopPropagation();
-						onToggleCollapse();
-					}}
-				>
-					{collapsed ? <ExpandIcon /> : <CollapseIcon />}
-				</button>
+				{collapsed ? null : (
+					<button
+						type="button"
+						className="sider-collapse"
+						title={t("收起侧边栏")}
+						aria-label={t("收起侧边栏")}
+						aria-expanded={false}
+						onClick={(event) => {
+							event.stopPropagation();
+							onToggleCollapse();
+						}}
+					>
+						<CollapseIcon />
+					</button>
+				)}
 				<button
 					type="button"
 					className="sider-mobile-close"
