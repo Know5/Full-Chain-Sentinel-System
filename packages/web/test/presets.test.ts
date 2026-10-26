@@ -384,3 +384,17 @@ test("a fresh console is seeded with the built-in presets, including the inciden
 	// permission switches do not grant.
 	expect(body).not.toMatch(/你可以使用|授权你调用/);
 });
+
+test("the recon preset is seeded and hard-requires asset-library reporting", () => {
+	const dir = freshAgentDir();
+	ensureBuiltinPresets(dir);
+	const recon = listPresets(dir).find((preset) => preset.id === "recon");
+	expect(recon?.name).toBe("信息收集");
+	const body = readPresetText(dir, "recon");
+	expect(body).toContain("asset_report");
+	expect(body).toContain("asset_note");
+	// Reporting is the deliverable, not an afterthought.
+	expect(body).toContain("硬性交付");
+	// Same rule as every preset: context only, no capability promises.
+	expect(body).not.toMatch(/你可以使用|授权你调用/);
+});
