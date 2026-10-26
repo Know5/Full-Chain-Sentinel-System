@@ -114,6 +114,17 @@ export function toContainerWorkPath(input: string, hostWorkDir: string): string 
 	return posix.join(WORK_ROOT, rel.split(sep).join("/"));
 }
 
+/** Verify a path is a directory inside /work, returning its normalized form. */
+export async function requireDirectory(container: string, path: string, signal?: AbortSignal): Promise<string> {
+	const target = resolveWorkPath(path);
+	const result = await execInContainer(container, '[ -d "$1" ] || exit 2', [target], {
+		signal,
+		timeoutMs: 15000,
+	});
+	if (result.code !== 0) throw new Error(t("只能下载文件夹"));
+	return target;
+}
+
 /** Map a container exit code to a readable failure. */
 function fail(action: string, code: number, stderr: string): never {
 	const detail = stderr.trim();

@@ -11,6 +11,7 @@
 import {
 	Apple,
 	Bell,
+	Boxes,
 	Waypoints,
 	Bot,
 	Bug,
@@ -218,6 +219,11 @@ export function EnvironmentIcon(props: IconProps) {
 /** Asset mapping: query FOFA / Quake / Hunter for exposed assets. */
 export function AssetIcon(props: IconProps) {
 	return <Radar size={NAV_SIZE} strokeWidth={NAV_STROKE} {...props} />;
+}
+
+/** Sider menu: the agent-reported asset inventory. */
+export function AssetsIcon(props: IconProps) {
+	return <Boxes size={NAV_SIZE} strokeWidth={NAV_STROKE} {...props} />;
 }
 
 /** Custom MCP servers: plug the console into external tool servers. */

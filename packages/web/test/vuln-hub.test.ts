@@ -168,3 +168,73 @@ VALUES ('v-old', 'E2E-0001', 1, 'p1', '靶场', 's-old', '主代理', '旧记录
 	stores.push(reopened);
 	expect(reopened.needsProvenanceBackfill()).toBe(false);
 });
+
+test("findings link to an asset, can be queried by it, and lose only the link on unlink", () => {
+	const { store } = openStore();
+	const first = store.create({
+		projectId: "p1",
+		projectName: "靶场",
+		source: "主代理",
+		title: "关联一",
+		severity: "high",
+		cvss: 8,
+		target: "10.0.0.5",
+		description: "描述",
+		packet: "GET /",
+		assetId: "asset-1",
+		assetLabel: "P1-A0001",
+	});
+	const second = store.create({
+		projectId: "p1",
+		projectName: "靶场",
+		source: "主代理",
+		title: "关联二",
+		severity: "low",
+		cvss: 2,
+		target: "10.0.0.6",
+		description: "描述",
+		packet: "GET /",
+		assetId: "asset-1",
+		assetLabel: "P1-A0001",
+	});
+	store.create({
+		projectId: "p1",
+		projectName: "靶场",
+		source: "主代理",
+		title: "无关",
+		severity: "low",
+		cvss: 2,
+		target: "10.0.0.7",
+		description: "描述",
+		packet: "GET /",
+	});
+
+	expect(store.get(first.id)?.assetId).toBe("asset-1");
+	expect(store.get(first.id)?.assetLabel).toBe("P1-A0001");
+	expect(store.listByAsset("p1", "asset-1").map((item) => item.label)).toEqual([second.label, first.label]);
+	expect(store.list("p1", { assetId: "asset-1" })).toHaveLength(2);
+	expect(store.countLinkedToAssets("p1", ["asset-1"])).toBe(2);
+	const grouped = store.linkedByAsset("p1");
+	expect(grouped.get("asset-1")).toHaveLength(2);
+
+	expect(store.unlinkAssets("p1", ["asset-1"])).toBe(2);
+	expect(store.listByAsset("p1", "asset-1")).toHaveLength(0);
+	expect(store.get(first.id)?.assetId).toBeUndefined();
+	expect(store.get(first.id)?.assetLabel).toBeUndefined();
+
+	store.create({
+		projectId: "p1",
+		projectName: "靶场",
+		source: "主代理",
+		title: "再关联",
+		severity: "low",
+		cvss: 2,
+		target: "10.0.0.8",
+		description: "描述",
+		packet: "GET /",
+		assetId: "asset-2",
+		assetLabel: "P1-A0002",
+	});
+	expect(store.unlinkAllAssets("p1")).toBe(1);
+	expect(store.linkedByAsset("p1").size).toBe(0);
+});

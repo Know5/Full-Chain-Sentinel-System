@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { afterEach, expect, test } from "vitest";
+import { AssetLibraryStore } from "../src/asset-library.ts";
 import { createVulnerabilityTools, evidencePathsToContainer } from "../src/vuln-tool.ts";
 import { VulnerabilityStore } from "../src/vulnerabilities.ts";
 
@@ -41,6 +42,7 @@ function createTools(workDir: string): { tools: ToolDefinition[]; store: Vulnera
 
 interface CallResult {
 	isError?: boolean;
+	content: Array<{ type: string; text: string }>;
 	details?: { id?: string };
 }
 
@@ -117,4 +119,78 @@ test("evidencePathsToContainer maps legacy host paths only inside the work direc
 		"/work/evidence/nmap.txt",
 		"/etc/passwd",
 	]);
+});
+
+test("vuln_submit links an asset and appends its timeline entry", async () => {
+	const workDir = join(tmpdir(), "sentinel-project-1018");
+	root = mkdtempSync(join(tmpdir(), "sentinel-vuln-asset-"));
+	store = new VulnerabilityStore(join(root, "vulns.db"));
+	const library = new AssetLibraryStore(join(root, "asset-library.db"));
+	try {
+		const asset = library.upsert({
+			projectId: "p1",
+			projectName: "测试项目",
+			source: "测试",
+			identity: { ip: "10.0.166.153", port: 8000 },
+		}).asset;
+		const tools = createVulnerabilityTools({
+			store,
+			getProject: () => ({ id: "p1", name: "测试项目" }),
+			getSessionId: () => "s1",
+			getSource: () => "测试",
+			getWorkDir: () => workDir,
+			resolveAsset: (ref) => {
+				const found = library.find("p1", ref);
+				return found ? { id: found.id, label: found.label } : undefined;
+			},
+			linkAsset: (assetId, vuln) => {
+				library.appendEntry(assetId, {
+					author: "agent",
+					source: vuln.source,
+					outcome: "vulnerable",
+					method: "vuln_submit",
+					text: `提交漏洞 ${vuln.label}：${vuln.title}`,
+					vulnLabel: vuln.label,
+				});
+			},
+		});
+		const submit = tool(tools, "vuln_submit");
+		const result = await submit.execute("c1", {
+			title: "未授权访问",
+			severity: "high",
+			cvss: 7.5,
+			target: "http://10.0.166.153:8000/",
+			description: "描述",
+			packet: "GET /",
+			asset: asset.label,
+		} as never);
+		expect(result.isError).not.toBe(true);
+		const vulnId = result.details?.id as string;
+		const vuln = store.find("p1", vulnId);
+		expect(vuln?.assetId).toBe(asset.id);
+		expect(vuln?.assetLabel).toBe(asset.label);
+		const linked = library.get(asset.id);
+		expect(linked?.testCount).toBe(1);
+		expect(linked?.lastOutcome).toBe("vulnerable");
+		expect(linked?.status).toBe("tested");
+		expect(linked?.entries.at(-1)?.vulnLabel).toBe(vuln?.label);
+
+		const list = tool(tools, "vuln_list");
+		const listed = await list.execute("c2", {} as never);
+		expect(listed.content[0]?.text).toContain(`资产 ${asset.label}`);
+
+		const unknown = await submit.execute("c3", {
+			title: "另一条",
+			severity: "low",
+			cvss: 2,
+			target: "http://10.0.166.153:8000/",
+			description: "描述",
+			packet: "GET /",
+			asset: "NOPE-A9999",
+		} as never);
+		expect(unknown.isError).toBe(true);
+		expect(store.list("p1")).toHaveLength(1);
+	} finally {
+		library.close();
+	}
 });

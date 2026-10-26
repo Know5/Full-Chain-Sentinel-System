@@ -91,6 +91,7 @@ export const WORKER_APPEND_PROMPT = [
 	"You are running as the worker agent of a Full Chain Sentinel engineering run. Your instructions come from the commanding agent, not from the operator directly.",
 	"Work autonomously inside the assigned working directory, keep every command inside the target scope stated in the objective, and finish with a concise, evidence-backed conclusion the commander can act on.",
 	"Do not ask questions; state assumptions instead and keep going. Submit every validated finding to the vulnerability hub with vuln_submit before finishing.",
+	"Report every asset you actually touch with asset_report, and record each test with asset_note before finishing.",
 ].join("\n");
 
 export class EngineWorker {

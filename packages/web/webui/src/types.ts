@@ -23,6 +23,7 @@ export type SentinelPageId =
 	| "projects"
 	| "proxies"
 	| "vulns"
+	| "assets"
 	| "pocs"
 	| "apimodels"
 	| "droid"
@@ -261,6 +262,8 @@ export type SentinelPermissionKey =
 	| "vuln_read"
 	| "poc_read"
 	| "asset_read"
+	| "asset_library_write"
+	| "asset_library_read"
 	| "web_search";
 
 /** The switches of one agent; a missing entry means "not allowed". */
@@ -361,6 +364,8 @@ export interface SentinelProjectInfo {
 	manualStop?: boolean;
 	/** Findings recorded for this project, so its deletion can state what it takes. */
 	vulnCount?: number;
+	/** Inventory assets recorded for this project, for the same reason. */
+	assetCount?: number;
 	/** Gatekeeper judgments recorded for this project, for the same reason. */
 	gateCount?: number;
 	/**
@@ -574,6 +579,10 @@ export interface SentinelVulnerability {
 	taskId?: string;
 	/** Session display name at submission time, for records whose session is gone. */
 	sessionName?: string;
+	/** Inventory asset this finding is linked to, when the submitter named one. */
+	assetId?: string;
+	/** Asset label snapshot, so the hub can show it after the asset is gone. */
+	assetLabel?: string;
 	source: string;
 	title: string;
 	severity: SentinelVulnSeverity;
@@ -609,6 +618,8 @@ export interface SentinelVulnFilters {
 	engineId?: string;
 	/** Exact engineering task inside that engine. */
 	taskId?: string;
+	/** Exact inventory asset the finding is linked to. */
+	assetId?: string;
 	/** Only records the reviewer marked as dubious (hallucination suspects). */
 	dubious?: boolean;
 }
@@ -625,6 +636,125 @@ export interface SentinelVulnStats {
 	bySeverity: Record<SentinelVulnSeverity, number>;
 	byStatus: Record<SentinelVulnStatus, number>;
 }
+
+// --- 资产库（Agent 上报的资产台账） ---
+
+export type SentinelAssetKind = "domain" | "ip" | "service" | "url";
+export type SentinelAssetState = "pending" | "testing" | "tested" | "out_of_scope";
+export type SentinelAssetOutcome = "note" | "clean" | "suspicious" | "vulnerable" | "unreachable";
+
+export interface SentinelAssetEntry {
+	seq: number;
+	/** record = test/remark (counted); status = operator state change (not counted). */
+	kind: "record" | "status";
+	at: string;
+	author: "agent" | "operator";
+	source?: string;
+	outcome: SentinelAssetOutcome;
+	method?: string;
+	text: string;
+	vulnLabel?: string;
+}
+
+export interface SentinelAssetSummary {
+	id: string;
+	label: string;
+	number: number;
+	projectId: string;
+	projectName: string;
+	kind: SentinelAssetKind;
+	name: string;
+	host: string;
+	domain?: string;
+	ip?: string;
+	port?: number;
+	transport?: "tcp" | "udp";
+	protocol?: string;
+	url?: string;
+	title?: string;
+	server?: string;
+	tech?: string;
+	tags: string[];
+	status: SentinelAssetState;
+	source: string;
+	sessionId?: string;
+	engineId?: string;
+	taskId?: string;
+	sessionName?: string;
+	testCount: number;
+	lastOutcome?: SentinelAssetOutcome;
+	lastTestedAt?: string;
+	firstSeenAt: string;
+	lastSeenAt: string;
+	createdAt: string;
+	updatedAt: string;
+}
+
+export interface SentinelAsset extends SentinelAssetSummary {
+	entries: SentinelAssetEntry[];
+}
+
+export interface SentinelAssetDetail {
+	asset: SentinelAsset;
+	vulns: SentinelVulnSummary[];
+}
+
+export interface SentinelAssetFilters {
+	kind?: SentinelAssetKind;
+	status?: SentinelAssetState;
+	tested?: boolean;
+	search?: string;
+}
+
+export interface SentinelAssetUpdate {
+	status?: SentinelAssetState;
+	tags?: string[];
+	outcome?: SentinelAssetOutcome;
+	note?: string;
+}
+
+export interface SentinelAssetStats {
+	total: number;
+	byKind: Record<SentinelAssetKind, number>;
+	byStatus: Record<SentinelAssetState, number>;
+	tested: number;
+	untested: number;
+}
+
+export interface SentinelAssetDeletePreview {
+	count: number;
+	records: number;
+	vulns: number;
+}
+
+export const SENTINEL_ASSET_KINDS: readonly SentinelAssetKind[] = ["domain", "ip", "service", "url"];
+export const SENTINEL_ASSET_STATES: readonly SentinelAssetState[] = ["pending", "testing", "tested", "out_of_scope"];
+export const SENTINEL_ASSET_OUTCOMES: readonly SentinelAssetOutcome[] = [
+	"note",
+	"clean",
+	"suspicious",
+	"vulnerable",
+	"unreachable",
+];
+export const SENTINEL_ASSET_KIND_LABELS: Record<SentinelAssetKind, string> = {
+	domain: t("域名"),
+	ip: t("IP"),
+	service: t("服务"),
+	url: t("URL"),
+};
+export const SENTINEL_ASSET_STATE_LABELS: Record<SentinelAssetState, string> = {
+	pending: t("待测试"),
+	testing: t("测试中"),
+	tested: t("已测试"),
+	out_of_scope: t("范围外"),
+};
+export const SENTINEL_ASSET_OUTCOME_LABELS: Record<SentinelAssetOutcome, string> = {
+	note: t("备注"),
+	clean: t("无发现"),
+	suspicious: t("可疑"),
+	vulnerable: t("有漏洞"),
+	unreachable: t("不可达"),
+};
 
 // --- POC 库（Nuclei 模板中心；对 agent 只读） ---
 
@@ -1395,6 +1525,8 @@ export type SentinelClientMessage =
 	| { type: "delete_path"; path: string }
 	| { type: "rename_path"; from: string; to: string }
 	| { type: "make_directory"; path: string }
+	| { type: "download_folder"; path: string }
+	| { type: "cancel_folder_archive"; id: string }
 	| { type: "terminal_open"; projectId: string; cols: number; rows: number }
 	| { type: "terminal_input"; projectId: string; data: string }
 	| { type: "terminal_close"; projectId: string }
@@ -1405,6 +1537,12 @@ export type SentinelClientMessage =
 	| { type: "list_vulns"; filters?: SentinelVulnFilters }
 	| { type: "get_vuln"; id: string }
 	| { type: "update_vuln"; id: string; patch: SentinelVulnUpdate }
+	| { type: "list_assets"; filters?: SentinelAssetFilters; page?: number; pageSize?: number }
+	| { type: "get_asset"; id: string }
+	| { type: "update_asset"; id: string; patch: SentinelAssetUpdate }
+	| { type: "preview_asset_delete"; ids: string[] }
+	| { type: "delete_assets"; ids: string[] }
+	| { type: "export_assets"; filters?: SentinelAssetFilters }
 	/** How much deleting these records would take with them, for the dialog. */
 	| { type: "preview_vuln_delete"; ids: string[] }
 	| { type: "delete_vulns"; ids: string[] }
@@ -1665,6 +1803,11 @@ export type SentinelServerMessage =
 	| { type: "file_preview"; preview: SentinelFilePreview }
 	| { type: "file_download"; path: string; size: number; data: string; mimeType: string }
 	| { type: "file_result"; action: string; path: string; ok: boolean; error?: string }
+	| { type: "folder_archive_started"; id: string; path: string; filename: string }
+	| { type: "folder_archive_progress"; id: string; bytes: number }
+	| { type: "folder_archive_ready"; id: string; filename: string; size: number; warning?: string }
+	| { type: "folder_archive_failed"; id?: string; error: string }
+	| { type: "folder_archive_cancelled"; id: string }
 	| {
 			type: "terminal_state";
 			projectId: string;
@@ -1690,6 +1833,21 @@ export type SentinelServerMessage =
 	| { type: "vulns_deleted"; count: number }
 	| { type: "vulns_export"; filename: string; markdown: string }
 	| { type: "vuln_review_result"; id: string; ok: boolean; error?: string }
+	| {
+			type: "assets";
+			items: SentinelAssetSummary[];
+			stats: SentinelAssetStats;
+			total: number;
+			page: number;
+			pageSize: number;
+			hasMore: boolean;
+	  }
+	| { type: "assets_changed" }
+	| { type: "asset"; detail: SentinelAssetDetail }
+	| { type: "asset_result"; action: string; id?: string; ok: boolean; error?: string }
+	| { type: "asset_delete_preview"; count: number; records: number; vulns: number }
+	| { type: "assets_deleted"; count: number }
+	| { type: "assets_export"; filename: string; markdown: string }
 	| { type: "pocs"; items: SentinelPocSummary[]; stats: SentinelPocStats; total: number; page: number; pageSize: number }
 	| { type: "poc"; poc: SentinelPoc }
 	| { type: "poc_result"; action: string; id?: string; ok: boolean; error?: string }

@@ -7,9 +7,10 @@
  */
 
 import { randomBytes, X509Certificate } from "node:crypto";
+import { createReadStream, mkdtempSync, statSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { createServer as createSecureServer } from "node:https";
-import { networkInterfaces } from "node:os";
+import { networkInterfaces, tmpdir } from "node:os";
 import { dirname, extname, join, posix, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { SessionManager } from "@earendil-works/pi-coding-agent";
@@ -36,6 +37,7 @@ import { testModelConfig } from "./endpoint-probe.ts";
 import { EngineManager, engineHasWorkInFlight } from "./engine.ts";
 import { checkEnvironment } from "./env-check.ts";
 import { guessMimeType } from "./files.ts";
+import { FolderArchiveManager, folderArchiveContentDisposition } from "./folder-archive.ts";
 import { getServerLanguage, setServerLanguage, t } from "./i18n.ts";
 import { IosGateway } from "./ios-gateway.ts";
 import { readProviderModelConfig } from "./model-config.ts";
@@ -449,6 +451,7 @@ export async function startSentinelServer(
 			onSubagentEvent: (runId, event) => broadcast({ type: "subagent_event", runId, event }),
 			onNotifyStatus: (status) => broadcast({ type: "notify_config", config: runtime.getNotifyConfig(), status }),
 			onVulnChange: () => broadcastVulns(),
+			onAssetChange: () => broadcast({ type: "assets_changed" }),
 			onSessionRenamed: () => void broadcastSessions(),
 			onVulnSubmitted: (id) => reviewer?.enqueue(id),
 			// Every judgment is broadcast: a console with the audit page open appends
@@ -470,6 +473,11 @@ export async function startSentinelServer(
 	const pocImports = new PocImportManager((file, onProgress, signal) =>
 		runtime.importPocBytes([file], { onProgress, signal }),
 	);
+	// Folder archives live outside the project work directory: a partial or
+	// finished archive must not show up in the file panel or be read by the
+	// agent. The directory is private to this process and removed on shutdown.
+	const folderArchiveDir = agentDir ? join(agentDir, "downloads") : mkdtempSync(join(tmpdir(), "sentinel-archives-"));
+	const folderArchives = new FolderArchiveManager({ dir: folderArchiveDir });
 	/**
 	 * Refreshes subscriptions whose interval has elapsed. It pushes the new config
 	 * with `push: true`: the page did not ask for it, so it must not release a form
@@ -717,6 +725,7 @@ export async function startSentinelServer(
 				manualStop: manualStop === true,
 				sessionCount: runtime.countProjectSessions(workDir),
 				vulnCount: runtime.countProjectVulns(id),
+				assetCount: runtime.countProjectAssets(id),
 				gateCount: runtime.countProjectGates(id),
 				proxyId,
 				proxyName: profile?.name ?? null,
@@ -1025,6 +1034,60 @@ export async function startSentinelServer(
 		sendJson(response, job);
 	}
 
+	/**
+	 * One ready archive, streamed from the temp file. The download is authorized
+	 * by the console's normal session cookie: the route sits under /api, after
+	 * the same auth and consent checks as every other API call.
+	 */
+	function handleFolderArchiveDownload(response: ServerResponse, id: string): void {
+		const job = folderArchives.beginDownload(id);
+		if (!job) {
+			const existing = folderArchives.get(id);
+			if (existing?.status === "running") {
+				sendJson(response, { error: t("压缩包还在生成中") }, 409);
+			} else if (existing?.downloading) {
+				sendJson(response, { error: t("压缩包正在被下载") }, 409);
+			} else {
+				sendJson(response, { error: t("压缩包不存在或已过期") }, 404);
+			}
+			return;
+		}
+		let size = 0;
+		try {
+			size = statSync(job.filePath).size;
+		} catch {
+			folderArchives.releaseDownload(id);
+			sendJson(response, { error: t("压缩包不存在或已过期") }, 404);
+			return;
+		}
+		response.writeHead(200, {
+			"content-type": "application/gzip",
+			"content-length": String(size),
+			"content-disposition": folderArchiveContentDisposition(job.filename),
+			"cache-control": "no-store",
+		});
+		const stream = createReadStream(job.filePath);
+		let finished = false;
+		response.on("finish", () => {
+			finished = true;
+			folderArchives.finishDownload(id);
+		});
+		response.on("close", () => {
+			if (finished) return;
+			stream.destroy();
+			folderArchives.releaseDownload(id);
+		});
+		stream.on("error", () => {
+			if (!response.headersSent) {
+				sendJson(response, { error: t("读取压缩包失败") }, 500);
+			} else {
+				response.destroy();
+			}
+			folderArchives.releaseDownload(id);
+		});
+		stream.pipe(response);
+	}
+
 	// The device gateway owns the reverse WS the DroidBridge APK dials. The store
 	// is the runtime's (its tools read the registry); the hooks route lifecycle
 	// events into the console broadcasts and the server log.
@@ -1155,6 +1218,15 @@ export async function startSentinelServer(
 					return;
 				}
 				handlePocImportStatus(response, id);
+				return;
+			}
+			if (path.startsWith("/api/folder-archives/") && request.method === "GET") {
+				const id = path.slice("/api/folder-archives/".length);
+				if (!/^[0-9a-f-]{36}$/i.test(id)) {
+					sendJson(response, { error: t("下载任务 id 非法") }, 400);
+					return;
+				}
+				handleFolderArchiveDownload(response, id);
 				return;
 			}
 			if (path === "/api/health") {
@@ -2311,7 +2383,8 @@ export async function startSentinelServer(
 					const purgedGates = runtime.purgeProjectGates(message.id);
 					const purgedModels = runtime.purgeProjectApiModels(message.id);
 					const purgedCaptures = runtime.purgeProjectCaptures(message.id);
-					const purgedAssets = runtime.purgeProjectAssets(message.id);
+					const purgedAssetQueries = runtime.purgeProjectAssetQueries(message.id);
+					const purgedLibraryAssets = runtime.purgeProjectAssetLibrary(message.id);
 					const purgedWebSearch = runtime.purgeProjectWebSearch(message.id);
 					const purgedSupervisor = runtime.purgeProjectSupervisor(message.id);
 					// Detach before the work directory goes: the live sessions holding it
@@ -2320,7 +2393,7 @@ export async function startSentinelServer(
 					const purgedSessions = await runtime.purgeProjectSessions(target.workDir);
 					const workDir = deleteProjectWorkDir(target.workDir);
 					console.error(
-						`[sentinel-server] 删除项目 ${target.name}，连带删除 ${purged} 条漏洞记录、${purgedGates} 条守门记录、${purgedModels} 份业务模型、${purgedCaptures} 条抓包记录、${purgedAssets} 条资产测绘记录、${purgedWebSearch} 条 Web 搜索记录、${purgedSupervisor} 个监督会话、${purgedSessions} 个会话文件${workDir.ok ? "与工作目录" : `（工作目录未删除：${workDir.error ?? ""}）`}`,
+						`[sentinel-server] 删除项目 ${target.name}，连带删除 ${purged} 条漏洞记录、${purgedGates} 条守门记录、${purgedModels} 份业务模型、${purgedCaptures} 条抓包记录、${purgedAssetQueries} 条资产测绘记录、${purgedLibraryAssets} 条资产库记录、${purgedWebSearch} 条 Web 搜索记录、${purgedSupervisor} 个监督会话、${purgedSessions} 个会话文件${workDir.ok ? "与工作目录" : `（工作目录未删除：${workDir.error ?? ""}）`}`,
 					);
 					await broadcastProjects();
 					broadcastSnapshot();
@@ -2472,6 +2545,60 @@ export async function startSentinelServer(
 				case "make_directory":
 					await runFileAction(socket, "新建目录", message.path, () => runtime.makeDirectory(message.path));
 					return;
+				case "download_folder": {
+					try {
+						const source = await runtime.prepareFolderArchive(message.path);
+						const job = folderArchives.create(source, {
+							onProgress: (progress) =>
+								sendTo(socket, {
+									type: "folder_archive_progress",
+									id: progress.id,
+									bytes: progress.bytes,
+								}),
+							onReady: (ready) =>
+								sendTo(socket, {
+									type: "folder_archive_ready",
+									id: ready.id,
+									filename: ready.filename,
+									size: ready.size,
+									...(ready.warning ? { warning: ready.warning } : {}),
+								}),
+							onFailed: (failed, error) =>
+								sendTo(socket, {
+									type: "folder_archive_failed",
+									id: failed.id,
+									error,
+								}),
+							onCancelled: (cancelled) =>
+								sendTo(socket, {
+									type: "folder_archive_cancelled",
+									id: cancelled.id,
+								}),
+						});
+						sendTo(socket, {
+							type: "folder_archive_started",
+							id: job.id,
+							path: job.path,
+							filename: job.filename,
+						});
+					} catch (error) {
+						sendTo(socket, {
+							type: "folder_archive_failed",
+							error: error instanceof Error ? error.message : String(error),
+						});
+					}
+					return;
+				}
+				case "cancel_folder_archive": {
+					if (!folderArchives.cancel(message.id)) {
+						sendTo(socket, {
+							type: "folder_archive_failed",
+							id: message.id,
+							error: t("打包任务不存在或已结束"),
+						});
+					}
+					return;
+				}
 				case "terminal_open": {
 					const project = runtime.snapshot().project;
 					if (!project) {
@@ -2620,6 +2747,68 @@ export async function startSentinelServer(
 				case "export_vulns": {
 					const report = runtime.exportVulns(message.filters);
 					sendTo(socket, { type: "vulns_export", filename: report.filename, markdown: report.markdown });
+					return;
+				}
+				case "list_assets": {
+					const view = runtime.listAssets(message.filters, message.page, message.pageSize);
+					sendTo(socket, {
+						type: "assets",
+						items: view.items,
+						stats: view.stats,
+						total: view.total,
+						page: view.page,
+						pageSize: view.pageSize,
+						hasMore: view.hasMore,
+					} satisfies SentinelServerMessage);
+					return;
+				}
+				case "get_asset": {
+					const detail = runtime.getAsset(message.id);
+					if (!detail) {
+						sendError(socket, t("该资产不存在（可能属于其他项目，或已被删除）"));
+						return;
+					}
+					sendTo(socket, { type: "asset", detail });
+					return;
+				}
+				case "update_asset": {
+					try {
+						const detail = runtime.updateAsset(message.id, message.patch);
+						if (!detail) {
+							sendTo(socket, {
+								type: "asset_result",
+								action: "更新",
+								id: message.id,
+								ok: false,
+								error: t("该资产不存在（可能属于其他项目，或已被删除）"),
+							} satisfies SentinelServerMessage);
+							return;
+						}
+						sendTo(socket, { type: "asset", detail });
+						sendTo(socket, { type: "asset_result", action: "更新", id: detail.asset.id, ok: true });
+					} catch (error) {
+						sendTo(socket, {
+							type: "asset_result",
+							action: "更新",
+							id: message.id,
+							ok: false,
+							error: error instanceof Error ? error.message : String(error),
+						} satisfies SentinelServerMessage);
+					}
+					return;
+				}
+				case "preview_asset_delete": {
+					sendTo(socket, { type: "asset_delete_preview", ...runtime.previewAssetDelete(message.ids) });
+					return;
+				}
+				case "delete_assets": {
+					const count = runtime.deleteAssets(message.ids);
+					sendTo(socket, { type: "assets_deleted", count });
+					return;
+				}
+				case "export_assets": {
+					const report = runtime.exportAssets(message.filters);
+					sendTo(socket, { type: "assets_export", filename: report.filename, markdown: report.markdown });
 					return;
 				}
 				case "list_pocs": {
@@ -3389,6 +3578,7 @@ export async function startSentinelServer(
 				close: () => {
 					subscriptionScheduler?.stop();
 					pocImports.close();
+					folderArchives.dispose();
 					iosGateway.close();
 					engines?.dispose();
 					terminal.dispose();

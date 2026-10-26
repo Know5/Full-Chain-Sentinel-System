@@ -62,6 +62,12 @@ export interface SubagentToolOptions {
 	 */
 	createVulnTools: (getSource: () => string) => ToolDefinition[];
 	/**
+	 * Builds this sub-agent's asset-inventory tools, with the same per-run source
+	 * label. Optional so older call sites and tests keep working; the console
+	 * always passes it.
+	 */
+	createAssetTools?: (getSource: () => string) => ToolDefinition[];
+	/**
 	 * Extra read-only tools the sub-agent may mount in addition to the hub
 	 * tools (e.g. the POC library), already reduced to its own permissions.
 	 */
@@ -142,7 +148,9 @@ export function createSubagentTool(options: SubagentToolOptions): ToolDefinition
 			// The hub tools label their records with the run id, which is assigned
 			// after the session exists; the closure reads it when a tool executes.
 			const runRef: { id?: string } = {};
-			const vulnTools = options.createVulnTools(() => `子代理 ${runRef.id ?? "unknown"}`);
+			const sourceLabel = () => `子代理 ${runRef.id ?? "unknown"}`;
+			const vulnTools = options.createVulnTools(sourceLabel);
+			const assetTools = options.createAssetTools?.(sourceLabel) ?? [];
 			const created = await createAgentSession({
 				cwd: options.cwd,
 				agentDir: options.agentDir,
@@ -152,7 +160,7 @@ export function createSubagentTool(options: SubagentToolOptions): ToolDefinition
 				resourceLoader,
 				sessionManager: SessionManager.inMemory(options.cwd),
 				baseToolsOverride,
-				customTools: [...vulnTools, ...(options.extraTools ?? [])],
+				customTools: [...vulnTools, ...assetTools, ...(options.extraTools ?? [])],
 				excludeTools: excludeToolsFor(permissions),
 			});
 			const session = created.session;

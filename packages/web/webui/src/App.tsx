@@ -14,7 +14,7 @@ import { DroidPage } from "./components/DroidPage.tsx";
 import { IosPage } from "./components/IosPage.tsx";
 import { EnginePage } from "./components/EnginePage.tsx";
 import { EnvironmentPanel } from "./components/EnvironmentPanel.tsx";
-import { FilePanel, type FilePanelState, saveDownload } from "./components/FilePanel.tsx";
+import { FilePanel, type FilePanelState, type FolderArchiveState, saveDownload } from "./components/FilePanel.tsx";
 import { TerminalPanel } from "./components/TerminalPanel.tsx";
 import { publishTerminal } from "./terminal-bus.ts";
 import { GateAuditPage } from "./components/GateAuditPage.tsx";
@@ -45,6 +45,7 @@ import { SubagentPanel } from "./components/SubagentPanel.tsx";
 import { SupervisorAuditPage } from "./components/SupervisorAuditPage.tsx";
 import { SupervisorSettingsPanel } from "./components/SupervisorSettingsPanel.tsx";
 import { SupervisorFloatingWindow } from "./components/SupervisorFloatingWindow.tsx";
+import { AssetLibraryPage } from "./components/AssetLibraryPage.tsx";
 import { OutputViewer, ToolCard } from "./components/ToolCard.tsx";
 import { VulnDetail, VulnPage } from "./components/VulnPage.tsx";
 import { groupRuns, messageKey, runFoldState, textFromContent } from "./transcript.ts";
@@ -62,6 +63,12 @@ import type {
 	SentinelApiModelFilters,
 	SentinelApiModelSummary,
 	SentinelAssetConfigView,
+	SentinelAssetDeletePreview,
+	SentinelAssetDetail,
+	SentinelAssetFilters,
+	SentinelAssetStats,
+	SentinelAssetSummary,
+	SentinelAssetUpdate,
 	SentinelBuiltinChannel,
 	SentinelBuiltinModelDefaults,
 	SentinelBuiltinModelPreset,
@@ -141,6 +148,20 @@ import { ProjectAction } from "./project-actions.ts";
 import { SentinelConnection } from "./ws.ts";
 import { getLanguage, storeLanguage, t } from "./i18n.ts";
 import { useNavigation } from "./useNavigation.ts";
+
+/**
+ * Start a browser download from the authenticated archive route. The server
+ * sets Content-Disposition; `download` keeps the filename when the browser
+ * ignores the header.
+ */
+function downloadFolderArchive(id: string, filename: string): void {
+	const anchor = document.createElement("a");
+	anchor.href = `/api/folder-archives/${encodeURIComponent(id)}`;
+	anchor.download = filename;
+	document.body.appendChild(anchor);
+	anchor.click();
+	anchor.remove();
+}
 
 interface LiveTool {
 	id: string;
@@ -378,6 +399,9 @@ export function App() {
 	const [fileEntries, setFileEntries] = useState<SentinelFileEntry[]>([]);
 	const [filePreview, setFilePreview] = useState<SentinelFilePreview | null>(null);
 	const [fileBusy, setFileBusy] = useState(false);
+	/** The async folder archive shown in the file panel; survives closing the panel. */
+	const [folderArchive, setFolderArchive] = useState<FolderArchiveState | null>(null);
+	const folderArchiveRef = useRef<FolderArchiveState | null>(null);
 	/** Loaded process steps per sub-agent run; a run absent here is not expanded. */
 	const [subagentTranscripts, setSubagentTranscripts] = useState<Record<string, SentinelSubagentEvent[]>>({});
 	const [subagentPage, setSubagentPage] = useState<{
@@ -404,6 +428,28 @@ export function App() {
 		evidence: number;
 		notes: number;
 	} | null>(null);
+	/** Asset inventory: paged list, project-wide counts, filters and open detail. */
+	const [assetItems, setAssetItems] = useState<SentinelAssetSummary[]>([]);
+	const [assetStats, setAssetStats] = useState<SentinelAssetStats>({
+		total: 0,
+		byKind: { domain: 0, ip: 0, service: 0, url: 0 },
+		byStatus: { pending: 0, testing: 0, tested: 0, out_of_scope: 0 },
+		tested: 0,
+		untested: 0,
+	});
+	const [assetTotal, setAssetTotal] = useState(0);
+	const [assetPage, setAssetPage] = useState(1);
+	const [assetPageSize, setAssetPageSize] = useState(50);
+	const [assetHasMore, setAssetHasMore] = useState(false);
+	const [assetFilters, setAssetFilters] = useState<SentinelAssetFilters>({});
+	const assetFiltersRef = useRef<SentinelAssetFilters>({});
+	const assetPageRef = useRef(1);
+	const assetPageSizeRef = useRef(50);
+	const [assetDetail, setAssetDetail] = useState<SentinelAssetDetail | null>(null);
+	const assetDetailRef = useRef<SentinelAssetDetail | null>(null);
+	const pageRef = useRef<SentinelPageId>("chat");
+	const [assetDeletePending, setAssetDeletePending] = useState<string[] | null>(null);
+	const [assetDeletePreview, setAssetDeletePreview] = useState<SentinelAssetDeletePreview | null>(null);
 	const [pocItems, setPocItems] = useState<SentinelPocSummary[]>([]);
 	const [pocStats, setPocStats] = useState<SentinelPocStats>({
 		total: 0,
@@ -573,6 +619,46 @@ export function App() {
 		setFilePreview(null);
 		previewPathRef.current = null;
 		connectionRef.current?.send({ type: "list_files", path });
+	}, []);
+
+	useEffect(() => {
+		folderArchiveRef.current = folderArchive;
+	}, [folderArchive]);
+
+	/** Start an async archive; only one runs at a time, enforced by the panel. */
+	const requestFolderArchive = useCallback(
+		(path: string) => {
+			const current = folderArchiveRef.current;
+			if (
+				current &&
+				(current.status === "starting" || current.status === "running" || current.status === "cancelling")
+			) {
+				return;
+			}
+			const name = path === "/work" ? "work" : (path.split("/").filter(Boolean).pop() ?? "work");
+			const next: FolderArchiveState = {
+				id: "",
+				path,
+				filename: `${name}.tar.gz`,
+				bytes: 0,
+				status: "starting",
+			};
+			// Update the ref synchronously so a second click in the same tick cannot
+			// start a second job before React has rendered the first state change.
+			folderArchiveRef.current = next;
+			setFolderArchive(next);
+			connectionRef.current?.send({ type: "download_folder", path });
+		},
+		[],
+	);
+
+	const cancelFolderArchive = useCallback(() => {
+		const current = folderArchiveRef.current;
+		if (!current?.id) return;
+		const next: FolderArchiveState = { ...current, status: "cancelling" };
+		folderArchiveRef.current = next;
+		setFolderArchive(next);
+		connectionRef.current?.send({ type: "cancel_folder_archive", id: current.id });
 	}, []);
 
 	const handleServerMessage = useCallback(
@@ -1100,6 +1186,48 @@ export function App() {
 					connectionRef.current?.send({ type: "list_files", path: filePathRef.current });
 					connectionRef.current?.send({ type: "get_state" });
 					break;
+				case "folder_archive_started":
+					setFolderArchive({
+						id: message.id,
+						path: message.path,
+						filename: message.filename,
+						bytes: 0,
+						status: "running",
+					});
+					break;
+				case "folder_archive_progress":
+					setFolderArchive((prev) =>
+						prev && prev.id === message.id ? { ...prev, bytes: message.bytes } : prev,
+					);
+					break;
+				case "folder_archive_ready":
+					setFolderArchive((prev) =>
+						prev && prev.id === message.id
+							? { ...prev, status: "ready", size: message.size, warning: message.warning }
+							: prev,
+					);
+					// The ready message is the async task's completion; start the
+					// browser download now, while the temp file is still retained.
+					downloadFolderArchive(message.id, message.filename);
+					break;
+				case "folder_archive_failed":
+					setFolderArchive((prev) => {
+						if (message.id && prev && prev.id !== message.id) return prev;
+						return {
+							id: message.id ?? prev?.id ?? "",
+							path: prev?.path ?? "",
+							filename: prev?.filename ?? "",
+							bytes: prev?.bytes ?? 0,
+							status: "failed",
+							error: message.error,
+						};
+					});
+					break;
+				case "folder_archive_cancelled":
+					setFolderArchive((prev) =>
+						prev && prev.id === message.id ? { ...prev, status: "cancelled" } : prev,
+					);
+					break;
 				case "terminal_state":
 					publishTerminal({
 						kind: "state",
@@ -1167,6 +1295,73 @@ export function App() {
 				case "vulns_export": {
 					// Markdown is text, so the download is built directly instead of
 					// going through the base64 path the file panel uses.
+					const url = URL.createObjectURL(new Blob([message.markdown], { type: "text/markdown;charset=utf-8" }));
+					const anchor = document.createElement("a");
+					anchor.href = url;
+					anchor.download = message.filename;
+					document.body.appendChild(anchor);
+					anchor.click();
+					anchor.remove();
+					URL.revokeObjectURL(url);
+					break;
+				}
+				case "assets": {
+					setAssetItems(message.items);
+					setAssetStats(message.stats);
+					setAssetTotal(message.total);
+					setAssetPage(message.page);
+					assetPageRef.current = message.page;
+					setAssetPageSize(message.pageSize);
+					assetPageSizeRef.current = message.pageSize;
+					setAssetHasMore(message.hasMore);
+					// A deletion can empty the last page; step back once instead of
+					// leaving the operator on a blank page with records behind it.
+					if (message.items.length === 0 && message.total > 0 && message.page > 1) {
+						send({
+							type: "list_assets",
+							filters: assetFiltersRef.current,
+							page: message.page - 1,
+							pageSize: message.pageSize,
+						});
+					}
+					break;
+				}
+				case "assets_changed": {
+					if (pageRef.current === "assets") {
+						send({
+							type: "list_assets",
+							filters: assetFiltersRef.current,
+							page: assetPageRef.current,
+							pageSize: assetPageSizeRef.current,
+						});
+					}
+					if (assetDetailRef.current) {
+						send({ type: "get_asset", id: assetDetailRef.current.asset.id });
+					}
+					break;
+				}
+				case "asset":
+					setAssetDetail(message.detail);
+					break;
+				case "asset_result":
+					if (!message.ok && message.error) pushError(message.error);
+					break;
+				case "asset_delete_preview":
+					setAssetDeletePreview({ count: message.count, records: message.records, vulns: message.vulns });
+					break;
+				case "assets_deleted": {
+					setAssetDeletePending(null);
+					setAssetDeletePreview(null);
+					setAssetDetail(null);
+					send({
+						type: "list_assets",
+						filters: assetFiltersRef.current,
+						page: assetPageRef.current,
+						pageSize: assetPageSizeRef.current,
+					});
+					break;
+				}
+				case "assets_export": {
 					const url = URL.createObjectURL(new Blob([message.markdown], { type: "text/markdown;charset=utf-8" }));
 					const anchor = document.createElement("a");
 					anchor.href = url;
@@ -1800,6 +1995,14 @@ export function App() {
 			case "vulns":
 				send({ type: "list_vulns", filters: vulnFilters });
 				break;
+			case "assets":
+				send({
+					type: "list_assets",
+					filters: assetFilters,
+					page: assetPage,
+					pageSize: assetPageSize,
+				});
+				break;
 			case "pocs":
 				send({ type: "list_pocs", filters: pocFilters });
 				break;
@@ -1875,6 +2078,9 @@ export function App() {
 		refreshStats,
 		loadFiles,
 		vulnFilters,
+		assetFilters,
+		assetPage,
+		assetPageSize,
 		pocFilters,
 		gateFilter,
 		gatePage,
@@ -1935,6 +2141,63 @@ export function App() {
 		if (connected) send({ type: "list_vulns" });
 	}, [snapshot?.project?.id, connected, send]);
 
+	// Refs are how message handlers read the page and the open asset without
+	// depending on a render; a socket handler registered once would otherwise
+	// close over the first values forever.
+	useEffect(() => {
+		pageRef.current = page;
+	}, [page]);
+	useEffect(() => {
+		assetDetailRef.current = assetDetail;
+	}, [assetDetail]);
+
+	/** A folder archive belongs to one project's container; drop it on a switch. */
+	useEffect(() => {
+		const current = folderArchiveRef.current;
+		if (
+			current?.id &&
+			(current.status === "starting" || current.status === "running" || current.status === "cancelling")
+		) {
+			connectionRef.current?.send({ type: "cancel_folder_archive", id: current.id });
+		}
+		folderArchiveRef.current = null;
+		setFolderArchive(null);
+	}, [snapshot?.project?.id]);
+
+	/** The inventory is project-scoped and starts on page 1 after a switch. */
+	useEffect(() => {
+		setAssetFilters({});
+		assetFiltersRef.current = {};
+		setAssetPage(1);
+		assetPageRef.current = 1;
+		setAssetPageSize(50);
+		assetPageSizeRef.current = 50;
+		setAssetItems([]);
+		setAssetStats({
+			total: 0,
+			byKind: { domain: 0, ip: 0, service: 0, url: 0 },
+			byStatus: { pending: 0, testing: 0, tested: 0, out_of_scope: 0 },
+			tested: 0,
+			untested: 0,
+		});
+		setAssetTotal(0);
+		setAssetHasMore(false);
+		setAssetDetail(null);
+		setAssetDeletePending(null);
+		setAssetDeletePreview(null);
+	}, [snapshot?.project?.id]);
+
+	/** Load one page of the inventory with the filters the page is showing. */
+	useEffect(() => {
+		if (!connected || page !== "assets") return;
+		send({
+			type: "list_assets",
+			filters: assetFiltersRef.current,
+			page: assetPageRef.current,
+			pageSize: assetPageSizeRef.current,
+		});
+	}, [page, connected, snapshot?.project?.id, send]);
+
 	/** Re-read the hub under the current filter. */
 	const loadVulns = useCallback(
 		(filters: SentinelVulnFilters) => {
@@ -1967,6 +2230,57 @@ export function App() {
 	const cancelVulnDelete = useCallback(() => {
 		setVulnDeletePending(null);
 		setVulnDeletePreview(null);
+	}, []);
+
+	/** Inventory page load; the filters and paging the page is showing are refs. */
+	const loadAssets = useCallback(
+		(filters: SentinelAssetFilters, page: number, pageSize: number) => {
+			setAssetFilters(filters);
+			assetFiltersRef.current = filters;
+			setAssetPage(page);
+			assetPageRef.current = page;
+			setAssetPageSize(pageSize);
+			assetPageSizeRef.current = pageSize;
+			send({ type: "list_assets", filters, page, pageSize });
+		},
+		[send],
+	);
+
+	const openAsset = useCallback(
+		(id: string) => {
+			send({ type: "get_asset", id });
+		},
+		[send],
+	);
+
+	const updateAsset = useCallback(
+		(id: string, patch: SentinelAssetUpdate) => {
+			send({ type: "update_asset", id, patch });
+		},
+		[send],
+	);
+
+	const requestAssetDelete = useCallback(
+		(ids: string[]) => {
+			if (ids.length === 0) return;
+			setAssetDeletePending(ids);
+			setAssetDeletePreview(null);
+			send({ type: "preview_asset_delete", ids });
+		},
+		[send],
+	);
+
+	const confirmAssetDelete = useCallback(
+		(ids: string[]) => {
+			if (ids.length === 0) return;
+			send({ type: "delete_assets", ids });
+		},
+		[send],
+	);
+
+	const cancelAssetDelete = useCallback(() => {
+		setAssetDeletePending(null);
+		setAssetDeletePreview(null);
 	}, []);
 
 	/**
@@ -2050,6 +2364,28 @@ export function App() {
 			setVulnPreview(null);
 			vulnPreviewPathRef.current = null;
 			send({ type: "get_vuln", id });
+		},
+		[send],
+	);
+
+	/** Cross-navigation: an asset's linked finding opens the hub's detail. */
+	const openVulnFromAsset = useCallback(
+		(id: string) => {
+			setAssetDetail(null);
+			setPage("vulns");
+			openVuln(id);
+		},
+		[openVuln],
+	);
+
+	/** Cross-navigation: a finding's linked asset opens the inventory detail. */
+	const openAssetFromVuln = useCallback(
+		(id: string) => {
+			setVulnDetail(null);
+			setVulnPreview(null);
+			vulnPreviewPathRef.current = null;
+			setPage("assets");
+			send({ type: "get_asset", id });
 		},
 		[send],
 	);
@@ -2721,6 +3057,30 @@ export function App() {
 							}
 							onReviewAllPending={() => send({ type: "review_pending_vulns" })}
 						/>
+					) : page === "assets" ? (
+						<AssetLibraryPage
+							items={assetItems}
+							stats={assetStats}
+							total={assetTotal}
+							page={assetPage}
+							pageSize={assetPageSize}
+							hasMore={assetHasMore}
+							filters={assetFilters}
+							detail={assetDetail}
+							deletePending={assetDeletePending}
+							deletePreview={assetDeletePreview}
+							projectName={snapshot?.project?.name ?? null}
+							hasProject={snapshot?.project !== null && snapshot?.project !== undefined}
+							onQuery={loadAssets}
+							onOpen={openAsset}
+							onCloseDetail={() => setAssetDetail(null)}
+							onUpdate={updateAsset}
+							onRequestDelete={requestAssetDelete}
+							onConfirmDelete={confirmAssetDelete}
+							onCancelDelete={cancelAssetDelete}
+							onExport={(filters) => send({ type: "export_assets", filters })}
+							onOpenVuln={openVulnFromAsset}
+						/>
 					) : page === "pocs" ? (
 						<PocPage
 							items={pocItems}
@@ -3364,6 +3724,9 @@ export function App() {
 							setFileBusy(true);
 							send({ type: "download_file", path });
 						}}
+						archive={folderArchive}
+						onDownloadFolder={requestFolderArchive}
+						onCancelArchive={cancelFolderArchive}
 					/>
 				</Overlay>
 			) : null}
@@ -3419,6 +3782,7 @@ export function App() {
 					onUpdate={(id, patch: SentinelVulnUpdate) => send({ type: "update_vuln", id, patch })}
 					onRetryReview={(id, force) => send({ type: "retry_vuln_review", id, ...(force ? { force: true } : {}) })}
 					onPreview={previewVulnFile}
+					onOpenAsset={openAssetFromVuln}
 				/>
 			) : null}
 			{branchOpen && page === "chat" ? (

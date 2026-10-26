@@ -81,6 +81,7 @@ test("a fresh install asks for setup, and setup both creates the account and log
 	// Everything else is closed: the API, the health route, the WebSocket.
 	expect((await json(url, "/api/auth/session")).status).toBe(401);
 	expect((await json(url, "/api/health")).status).toBe(401);
+	expect((await json(url, "/api/folder-archives/00000000-0000-0000-0000-000000000000")).status).toBe(401);
 	await expect(openSocket(url, "")).rejects.toMatchObject({ message: "Unexpected server response: 401" });
 
 	// The bundle itself stays open: the login screen is part of it.

@@ -262,6 +262,7 @@ test("the detail pane shows provenance names and no single delete", () => {
 			onUpdate: () => {},
 			onPreview: () => {},
 			onRetryReview: () => {},
+			onOpenAsset: () => {},
 		}),
 	);
 	expect(html).toContain("内网打点 / Web 面侦察");

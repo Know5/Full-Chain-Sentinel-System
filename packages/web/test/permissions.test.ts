@@ -123,3 +123,17 @@ test("the effective sub-agent map is the intersection of both agents", () => {
 	});
 	expect(merged).toEqual({ "a/one": true, "a/two": false, "a/three": false });
 });
+
+test("asset library switches exist, default on, and recon is read-only", () => {
+	const fresh = defaultPermissions();
+	expect(fresh.main.asset_library_write).toBe(true);
+	expect(fresh.main.asset_library_read).toBe(true);
+	const byId = new Map(PERMISSION_PRESETS.map((preset) => [preset.id, preset]));
+	expect(byId.get("recon")?.main.asset_library_write).toBe(false);
+	expect(byId.get("recon")?.main.asset_library_read).toBe(true);
+	expect(byId.get("locked")?.main.asset_library_write).toBe(false);
+	expect(byId.get("locked")?.main.asset_library_read).toBe(false);
+	// A disabled switch must actually remove the tools, not just hide a button.
+	const off = excludeToolsFor({ ...fresh.main, asset_library_write: false, asset_library_read: false });
+	expect(off).toEqual(expect.arrayContaining(["asset_report", "asset_note", "asset_list", "asset_get"]));
+});

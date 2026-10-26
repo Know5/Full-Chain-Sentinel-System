@@ -99,6 +99,10 @@ export interface SentinelVulnCreateInput {
 	taskId?: string;
 	/** Display name of the session at submission time, for records whose session is gone. */
 	sessionName?: string;
+	/** Inventory asset this finding is linked to, when the submitter named one. */
+	assetId?: string;
+	/** Asset label snapshot, so the hub can show it after the asset is gone. */
+	assetLabel?: string;
 	/** Who submitted it, e.g. "主代理" or "子代理 <runId>". */
 	source: string;
 	title: string;
@@ -131,6 +135,8 @@ CREATE TABLE IF NOT EXISTS vulnerabilities (
   engine_id TEXT,
   task_id TEXT,
   session_name TEXT,
+  asset_id TEXT,
+  asset_label TEXT,
   source TEXT NOT NULL,
   title TEXT NOT NULL,
   severity TEXT NOT NULL,
@@ -185,6 +191,8 @@ interface VulnRow {
 	engine_id: string | null;
 	task_id: string | null;
 	session_name: string | null;
+	asset_id: string | null;
+	asset_label: string | null;
 	source: string;
 	title: string;
 	severity: string;
@@ -271,6 +279,7 @@ export class VulnerabilityStore {
 		this.addReviewColumn();
 		this.addDroidColumns();
 		this.addProvenanceColumns();
+		this.addAssetColumns();
 	}
 
 	/**
@@ -291,6 +300,17 @@ export class VulnerabilityStore {
 		}
 		if (!names.includes("task_id")) this.db.exec("ALTER TABLE vulnerabilities ADD COLUMN task_id TEXT");
 		if (!names.includes("session_name")) this.db.exec("ALTER TABLE vulnerabilities ADD COLUMN session_name TEXT");
+	}
+
+	/** Databases created before the asset inventory existed have no link columns. */
+	private addAssetColumns(): void {
+		const columns = this.db.prepare("PRAGMA table_info(vulnerabilities)").all() as unknown as Array<{ name: string }>;
+		const names = columns.map((column) => column.name);
+		if (!names.includes("asset_id")) this.db.exec("ALTER TABLE vulnerabilities ADD COLUMN asset_id TEXT");
+		if (!names.includes("asset_label")) this.db.exec("ALTER TABLE vulnerabilities ADD COLUMN asset_label TEXT");
+		// The index is created after the columns, so an old database that gains
+		// them in this pass does not fail on a missing column.
+		this.db.exec("CREATE INDEX IF NOT EXISTS idx_vulns_asset ON vulnerabilities(project_id, asset_id)");
 	}
 
 	/** Databases created before the Droid plugin existed have no platform columns. */
@@ -343,10 +363,10 @@ export class VulnerabilityStore {
 			.prepare(
 				`INSERT INTO vulnerabilities (
 					id, label, number, project_id, project_name, session_id, engine_id, task_id, session_name,
-					source, title, severity, cvss,
+					asset_id, asset_label, source, title, severity, cvss,
 					cvss_vector, status, target, category, platform, app_package, app_version, description, packet,
 					repro, remediation, refs, review, created_at, updated_at
-				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			)
 			.run(
 				id,
@@ -358,6 +378,8 @@ export class VulnerabilityStore {
 				input.engineId ?? null,
 				input.taskId ?? null,
 				input.sessionName ?? null,
+				input.assetId ?? null,
+				input.assetLabel ?? null,
 				input.source,
 				input.title,
 				input.severity,
@@ -603,6 +625,10 @@ export class VulnerabilityStore {
 			conditions.push("task_id = ?");
 			params.push(filters.taskId.trim());
 		}
+		if (filters.assetId?.trim()) {
+			conditions.push("asset_id = ?");
+			params.push(filters.assetId.trim());
+		}
 		if (filters.search?.trim()) {
 			const pattern = likePattern(filters.search.trim());
 			// `source` is included so an operator can search the origin text
@@ -615,10 +641,66 @@ export class VulnerabilityStore {
 		const rows = this.db
 			.prepare(`SELECT * FROM vulnerabilities WHERE ${conditions.join(" AND ")} ORDER BY number DESC`)
 			.all(...params) as unknown as VulnRow[];
-		return rows.map((row) => {
-			const { packet: _packet, evidence: _evidence, notes: _notes, ...summary } = toVulnerability(row, [], []);
-			return summary;
-		});
+		return rows.map(summaryOf);
+	}
+
+	/** Findings linked to one inventory asset, newest first. */
+	listByAsset(projectId: string, assetId: string): SentinelVulnSummary[] {
+		const rows = this.db
+			.prepare("SELECT * FROM vulnerabilities WHERE project_id = ? AND asset_id = ? ORDER BY number DESC")
+			.all(projectId, assetId) as unknown as VulnRow[];
+		return rows.map((row) => summaryOf(row));
+	}
+
+	/** Every linked finding of one project, grouped by asset id. */
+	linkedByAsset(projectId: string): Map<string, SentinelVulnSummary[]> {
+		const rows = this.db
+			.prepare("SELECT * FROM vulnerabilities WHERE project_id = ? AND asset_id IS NOT NULL ORDER BY number DESC")
+			.all(projectId) as unknown as VulnRow[];
+		const grouped = new Map<string, SentinelVulnSummary[]>();
+		for (const row of rows) {
+			if (!row.asset_id) continue;
+			const list = grouped.get(row.asset_id) ?? [];
+			list.push(summaryOf(row));
+			grouped.set(row.asset_id, list);
+		}
+		return grouped;
+	}
+
+	/** How many findings point at these assets, for the delete preview. */
+	countLinkedToAssets(projectId: string, assetIds: readonly string[]): number {
+		const selected = [...new Set(assetIds.map((id) => id.trim()).filter(Boolean))];
+		if (selected.length === 0) return 0;
+		const row = this.db
+			.prepare(
+				`SELECT COUNT(*) AS n FROM vulnerabilities
+				 WHERE project_id = ? AND asset_id IN (${selected.map(() => "?").join(", ")})`,
+			)
+			.get(projectId, ...selected) as unknown as { n: number };
+		return Number(row.n);
+	}
+
+	/** Clear every asset link of one project; used when the project's inventory is purged. */
+	unlinkAllAssets(projectId: string): number {
+		const result = this.db
+			.prepare(
+				"UPDATE vulnerabilities SET asset_id = NULL, asset_label = NULL WHERE project_id = ? AND asset_id IS NOT NULL",
+			)
+			.run(projectId);
+		return Number(result.changes ?? 0);
+	}
+
+	/** Clear the asset link on findings of these assets; the findings themselves stay. */
+	unlinkAssets(projectId: string, assetIds: readonly string[]): number {
+		const selected = [...new Set(assetIds.map((id) => id.trim()).filter(Boolean))];
+		if (selected.length === 0) return 0;
+		const result = this.db
+			.prepare(
+				`UPDATE vulnerabilities SET asset_id = NULL, asset_label = NULL
+				 WHERE project_id = ? AND asset_id IN (${selected.map(() => "?").join(", ")})`,
+			)
+			.run(projectId, ...selected);
+		return Number(result.changes ?? 0);
 	}
 
 	stats(projectId: string): SentinelVulnStats {
@@ -883,6 +965,12 @@ function scopedIds(ids: readonly string[]): string[] {
 	return [...new Set(ids.map((id) => id.trim()).filter(Boolean))];
 }
 
+/** A row without its heavy fields; the list and the asset view share this shape. */
+function summaryOf(row: VulnRow): SentinelVulnSummary {
+	const { packet: _packet, evidence: _evidence, notes: _notes, ...summary } = toVulnerability(row, [], []);
+	return summary;
+}
+
 function toVulnerability(row: VulnRow, evidence: EvidenceRow[], notes: NoteRow[]): SentinelVulnerability {
 	const severity = row.severity as SentinelVulnSeverity;
 	const cvss = Number(row.cvss);
@@ -897,6 +985,8 @@ function toVulnerability(row: VulnRow, evidence: EvidenceRow[], notes: NoteRow[]
 		...(optional(row.engine_id) ? { engineId: row.engine_id as string } : {}),
 		...(optional(row.task_id) ? { taskId: row.task_id as string } : {}),
 		...(optional(row.session_name) ? { sessionName: row.session_name as string } : {}),
+		...(optional(row.asset_id) ? { assetId: row.asset_id as string } : {}),
+		...(optional(row.asset_label) ? { assetLabel: row.asset_label as string } : {}),
 		source: row.source,
 		title: row.title,
 		severity,

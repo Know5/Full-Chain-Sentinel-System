@@ -266,7 +266,7 @@ export function createReplayTools(ctx: ReplayToolContext): ToolDefinition[] {
 			const rawProxy = (params.proxy ?? "").trim();
 			if (rawProxy !== "") {
 				if (!/^socks5h?:\/\//i.test(rawProxy)) {
-					return failure("proxy 只支持 SOCKS5：socks5://[user:password@]host:port（收到 " + rawProxy + "）");
+					return failure(`proxy 只支持 SOCKS5：socks5://[user:password@]host:port（收到 ${rawProxy}）`);
 				}
 				proxy = rawProxy;
 			}

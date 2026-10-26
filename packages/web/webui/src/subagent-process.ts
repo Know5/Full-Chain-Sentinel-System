@@ -42,6 +42,10 @@ const SUMMARY_FIELDS: Record<string, string[]> = {
 	vuln_submit: ["title"],
 	vuln_get: ["id"],
 	vuln_list: ["target"],
+	asset_report: ["url", "ip", "domain"],
+	asset_note: ["asset", "result"],
+	asset_list: ["search"],
+	asset_get: ["asset"],
 };
 
 /** Compact duration for a step, a turn or a whole run. */

@@ -53,6 +53,8 @@ function config(mcp: boolean): SentinelPermissionsConfig {
 		vuln_read: true,
 		poc_read: true,
 		asset_read: true,
+		asset_library_write: true,
+		asset_library_read: true,
 		web_search: true,
 	};
 	return {

@@ -71,11 +71,12 @@ export function ProjectDeleteDialog({
 				{t("容器")} <code>{project.container ?? t("无容器")}</code>
 				{sessionCount === undefined ? "" : ` · ${t("{count} 个会话", { count: sessionCount })}`}
 				{` · ${t("{count} 条漏洞记录", { count: project.vulnCount ?? 0 })}`}
+				{` · ${t("{count} 条资产库记录", { count: project.assetCount ?? 0 })}`}
 				{` · ${t("{count} 条审批记录", { count: project.gateCount ?? 0 })}`}
 			</div>
 			<p className="confirm-note">
 				{t("仅删除容器只删掉容器本身，项目、工作目录、会话与记录都保留，下次「启动容器」按当前设置重建；")}
-				{t("删除项目数据会连项目条目、工作目录 /work 里的文件、会话文件与漏洞/审批等记录一起删除，不可恢复。")}
+				{t("删除项目数据会连项目条目、工作目录 /work 里的文件、会话文件与漏洞/资产库/审批等记录一起删除，不可恢复。")}
 			</p>
 			<label className="confirm-field">
 				<span className="confirm-field__label">

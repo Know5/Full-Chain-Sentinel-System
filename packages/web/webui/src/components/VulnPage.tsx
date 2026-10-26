@@ -620,6 +620,7 @@ export function VulnPage({
 								</span>
 								<span className="data-mono" title={item.target}>
 									{item.target}
+									{item.assetLabel ? <span className="vuln-asset-tag">{item.assetLabel}</span> : null}
 								</span>
 								<span className="data-name" title={item.title}>
 									{item.title}
@@ -736,6 +737,7 @@ export function VulnDetail({
 	onUpdate,
 	onPreview,
 	onRetryReview,
+	onOpenAsset,
 }: {
 	vuln: SentinelVulnerability;
 	/** Preview of a file referenced by this record's evidence, when one was requested. */
@@ -746,6 +748,7 @@ export function VulnDetail({
 	onUpdate: (id: string, patch: SentinelVulnUpdate) => void;
 	onPreview: (path: string) => void;
 	onRetryReview: (id: string, force: boolean) => void;
+	onOpenAsset: (id: string) => void;
 }) {
 	const [severity, setSeverity] = useState<SentinelVulnSeverity>(vuln.severity);
 	const [cvss, setCvss] = useState(String(vuln.cvss));
@@ -833,6 +836,20 @@ export function VulnDetail({
 							<span>{t("目标")}</span>
 							<code>{vuln.target}</code>
 						</div>
+						{vuln.assetId ? (
+							<div>
+								<span>{t("关联资产")}</span>
+								<span>
+									<button
+										type="button"
+										className="link"
+										onClick={() => onOpenAsset(vuln.assetId as string)}
+									>
+										{vuln.assetLabel ?? vuln.assetId}
+									</button>
+								</span>
+							</div>
+						) : null}
 						<div>
 							<span>{t("类型")}</span>
 							<span>{vuln.category ?? "—"}</span>

@@ -1,12 +1,12 @@
 /* Shared polish for operational pages. Keep the existing data flows and
    component vocabulary; this layer improves hierarchy and narrow layouts. */
-.app-content :is(.gate-audit-page, .vuln-page, .poc-page, .projects-page, .engine-page, .proxy-page,
+.app-content :is(.gate-audit-page, .vuln-page, .asset-lib-page, .poc-page, .projects-page, .engine-page, .proxy-page,
 	.droid-page, .supervisor-audit-page, .business-model-page, .about-page) {
 	--page-accent-wash: color-mix(in srgb, var(--accent) 4%, var(--card));
 	box-shadow: 0 1px 2px rgb(16 24 40 / 4%), 0 8px 24px rgb(16 24 40 / 3%);
 }
 
-.app-content :is(.gate-audit-page, .vuln-page, .poc-page, .projects-page, .engine-page, .proxy-page,
+.app-content :is(.gate-audit-page, .vuln-page, .asset-lib-page, .poc-page, .projects-page, .engine-page, .proxy-page,
 	.droid-page, .supervisor-audit-page, .business-model-page, .about-page) > .ws-panel__head {
 	min-height: 56px;
 	padding: 12px 16px;
@@ -16,39 +16,39 @@
 	background: linear-gradient(105deg, var(--page-accent-wash), var(--card) 52%);
 }
 
-.app-content :is(.gate-audit-page, .vuln-page, .poc-page, .projects-page, .engine-page, .proxy-page,
+.app-content :is(.gate-audit-page, .vuln-page, .asset-lib-page, .poc-page, .projects-page, .engine-page, .proxy-page,
 	.droid-page, .supervisor-audit-page, .business-model-page, .about-page) .ws-panel__title {
 	color: var(--text-bright);
 	font-size: 15px;
 	letter-spacing: -0.01em;
 }
 
-.app-content :is(.gate-audit-page, .vuln-page, .poc-page, .projects-page, .engine-page, .proxy-page,
+.app-content :is(.gate-audit-page, .vuln-page, .asset-lib-page, .poc-page, .projects-page, .engine-page, .proxy-page,
 	.droid-page, .supervisor-audit-page, .business-model-page, .about-page) .ws-panel__sub {
 	padding-left: 10px;
 	border-left: 1px solid var(--border-strong);
 	font-size: 12px;
 }
 
-.app-content :is(.gate-audit-page, .vuln-page, .poc-page, .projects-page, .engine-page, .proxy-page,
+.app-content :is(.gate-audit-page, .vuln-page, .asset-lib-page, .poc-page, .projects-page, .engine-page, .proxy-page,
 	.droid-page, .supervisor-audit-page, .business-model-page, .about-page) > .ws-panel__body {
 	padding: 16px 2px 2px;
 }
 
-.app-content :is(.vuln-page, .poc-page, .projects-page, .engine-page, .proxy-page,
+.app-content :is(.vuln-page, .asset-lib-page, .poc-page, .projects-page, .engine-page, .proxy-page,
 	.droid-page, .supervisor-audit-page, .business-model-page, .about-page) .ws-panel__actions {
 	gap: 8px;
 }
 
 /* Data ledgers */
-.app-content :is(.projects-page, .engine-page, .proxy-page, .vuln-page) .data-table {
+.app-content :is(.projects-page, .engine-page, .proxy-page, .vuln-page, .asset-lib-page) .data-table {
 	border: 1px solid var(--border);
 	border-radius: 8px;
 	background: var(--card);
 	box-shadow: 0 1px 2px rgb(16 24 40 / 3%);
 }
 
-.app-content :is(.projects-page, .engine-page, .proxy-page, .vuln-page) .data-head {
+.app-content :is(.projects-page, .engine-page, .proxy-page, .vuln-page, .asset-lib-page) .data-head {
 	min-height: 38px;
 	background: #f5f7fa;
 	color: var(--dim);
@@ -58,16 +58,16 @@
 	text-transform: uppercase;
 }
 
-.app-content :is(.projects-page, .engine-page, .proxy-page, .vuln-page) .data-row:not(.data-head) {
+.app-content :is(.projects-page, .engine-page, .proxy-page, .vuln-page, .asset-lib-page) .data-row:not(.data-head) {
 	min-height: 52px;
 	transition: background 120ms ease;
 }
 
-.app-content :is(.projects-page, .engine-page, .proxy-page, .vuln-page) .data-row:not(.data-head):hover {
+.app-content :is(.projects-page, .engine-page, .proxy-page, .vuln-page, .asset-lib-page) .data-row:not(.data-head):hover {
 	background: var(--page-accent-wash);
 }
 
-.app-content :is(.projects-page, .engine-page, .proxy-page, .vuln-page) .data-row:focus-visible {
+.app-content :is(.projects-page, .engine-page, .proxy-page, .vuln-page, .asset-lib-page) .data-row:focus-visible {
 	position: relative;
 	z-index: 1;
 	outline: 2px solid var(--accent);
@@ -440,19 +440,19 @@
 }
 
 @media (max-width: 760px) {
-	.app-content :is(.gate-audit-page, .vuln-page, .poc-page, .projects-page, .engine-page, .proxy-page,
+	.app-content :is(.gate-audit-page, .vuln-page, .asset-lib-page, .poc-page, .projects-page, .engine-page, .proxy-page,
 		.droid-page, .supervisor-audit-page, .business-model-page, .about-page) > .ws-panel__head {
 		margin-inline: calc(-1 * var(--gutter));
 		padding-inline: 12px;
 	}
 
-	.app-content :is(.gate-audit-page, .vuln-page, .poc-page, .projects-page, .engine-page, .proxy-page,
+	.app-content :is(.gate-audit-page, .vuln-page, .asset-lib-page, .poc-page, .projects-page, .engine-page, .proxy-page,
 		.droid-page, .supervisor-audit-page, .business-model-page, .about-page) .ws-panel__title {
 		flex-wrap: wrap;
 		gap: 5px 8px;
 	}
 
-	.app-content :is(.vuln-page, .poc-page, .projects-page, .engine-page, .proxy-page,
+	.app-content :is(.vuln-page, .asset-lib-page, .poc-page, .projects-page, .engine-page, .proxy-page,
 		.droid-page, .supervisor-audit-page, .business-model-page, .about-page) .ws-panel__sub {
 		padding-left: 0;
 		border-left: 0;
@@ -503,7 +503,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-	.app-content :is(.projects-page, .engine-page, .proxy-page, .vuln-page) .data-row,
+	.app-content :is(.projects-page, .engine-page, .proxy-page, .vuln-page, .asset-lib-page) .data-row,
 	.droid-page .droid-device {
 		transition: none;
 	}

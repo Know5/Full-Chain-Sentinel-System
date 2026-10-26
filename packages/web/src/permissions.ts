@@ -31,6 +31,8 @@ export type SentinelPermissionKey =
 	| "vuln_read"
 	| "poc_read"
 	| "asset_read"
+	| "asset_library_write"
+	| "asset_library_read"
 	| "web_search";
 
 export const PERMISSION_KEYS: readonly SentinelPermissionKey[] = [
@@ -46,6 +48,8 @@ export const PERMISSION_KEYS: readonly SentinelPermissionKey[] = [
 	"vuln_read",
 	"poc_read",
 	"asset_read",
+	"asset_library_write",
+	"asset_library_read",
 	"web_search",
 ];
 
@@ -132,6 +136,8 @@ export const PERMISSION_LABELS: Record<SentinelPermissionKey, string> = {
 	vuln_read: "vuln_list / vuln_get 查询漏洞",
 	poc_read: "poc_search / poc_read 检索 POC 库",
 	asset_read: "fofa_search / quake_search / hunter_search 资产测绘",
+	asset_library_write: "asset_report / asset_note 资产库上报",
+	asset_library_read: "asset_list / asset_get 资产库查询",
 	web_search: "web_search / web_extract 公网 Web 搜索",
 };
 
@@ -149,6 +155,9 @@ export const PERMISSION_HINTS: Record<SentinelPermissionKey, string> = {
 	poc_read: "检索操作员导入的 Nuclei POC 库（只读参考；要执行需自己写 yaml 并用 bash 跑 nuclei）",
 	asset_read:
 		"用操作员配置的 FOFA / 360 Quake / 奇安信 Hunter 账号做互联网资产测绘（由控制台代发请求，密钥不进容器；只有已启用并通过验证的平台才会挂载）",
+	asset_library_write:
+		"把实际接触过的域名、IP、端口服务与 URL 上报到当前项目的资产库，并追加测试记录（同一资产自动合并；不发起网络请求）",
+	asset_library_read: "查询当前项目已收录的资产与测试记录，避免重复上报并在总结中引用编号",
 	web_search:
 		"用操作员配置的 Tavily Key 池做公网 Web 搜索与页面抓取（web_search / web_extract，由控制台代发请求；号池按剩余额度自动轮换）",
 };
@@ -167,6 +176,8 @@ function fullSet(): SentinelPermissionSet {
 		vuln_read: true,
 		poc_read: true,
 		asset_read: true,
+		asset_library_write: true,
+		asset_library_read: true,
 		web_search: true,
 	};
 }
@@ -185,6 +196,8 @@ function emptySet(): SentinelPermissionSet {
 		vuln_read: false,
 		poc_read: false,
 		asset_read: false,
+		asset_library_write: false,
+		asset_library_read: false,
 		web_search: false,
 	};
 }
@@ -205,6 +218,7 @@ function reconSet(): SentinelPermissionSet {
 		vuln_read: true,
 		poc_read: true,
 		asset_read: true,
+		asset_library_read: true,
 		web_search: true,
 	};
 }
@@ -380,6 +394,8 @@ export function excludeToolsFor(set: SentinelPermissionSet): string[] {
 	if (!set.vuln_read) excluded.push("vuln_list", "vuln_get");
 	if (!set.poc_read) excluded.push("poc_search", "poc_read");
 	if (!set.asset_read) excluded.push("fofa_search", "quake_search", "hunter_search");
+	if (!set.asset_library_write) excluded.push("asset_report", "asset_note");
+	if (!set.asset_library_read) excluded.push("asset_list", "asset_get");
 	if (!set.web_search) excluded.push("web_search", "web_extract");
 	if (!set.mcp) excluded.push("mcp__*", ...MCP_RESOURCE_TOOLS);
 	return excluded;

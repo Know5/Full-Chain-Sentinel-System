@@ -534,6 +534,8 @@ export interface SentinelProjectInfo {
 	manualStop?: boolean;
 	/** Findings recorded for this project, so its deletion can state what it takes. */
 	vulnCount?: number;
+	/** Inventory assets recorded for this project, for the same reason. */
+	assetCount?: number;
 	/** Gatekeeper judgments recorded for this project, for the same reason. */
 	gateCount?: number;
 	/**
@@ -710,6 +712,10 @@ export interface SentinelVulnerability {
 	taskId?: string;
 	/** Session display name at submission time, for records whose session is gone. */
 	sessionName?: string;
+	/** Inventory asset this finding was linked to, when the submitter named one. */
+	assetId?: string;
+	/** Asset label snapshot, so the hub can show it after the asset is gone. */
+	assetLabel?: string;
 	/** Who submitted it: "主代理" or "子代理 <runId>". */
 	source: string;
 	title: string;
@@ -759,6 +765,8 @@ export interface SentinelVulnFilters {
 	engineId?: string;
 	/** Exact engineering task inside that engine. */
 	taskId?: string;
+	/** Exact inventory asset the finding is linked to. */
+	assetId?: string;
 	/** Only records the reviewer marked as dubious (hallucination suspects). */
 	dubious?: boolean;
 }
@@ -777,6 +785,131 @@ export interface SentinelVulnStats {
 	total: number;
 	bySeverity: Record<SentinelVulnSeverity, number>;
 	byStatus: Record<SentinelVulnStatus, number>;
+}
+
+// ---------------------------------------------------------------------------
+// 资产库（Agent 上报的资产台账）
+// ---------------------------------------------------------------------------
+
+/**
+ * What one inventory row describes. A row is one reachable endpoint, not a
+ * container for every field: a URL, an IP:port service, a bare IP, or a bare
+ * domain. The agent reports what it actually touched; the operator decides what
+ * it means.
+ */
+export type SentinelAssetKind = "domain" | "ip" | "service" | "url";
+
+/** Operator workflow state; the agent never writes it directly. */
+export type SentinelAssetState = "pending" | "testing" | "tested" | "out_of_scope";
+
+/** One test record's conclusion; `note` is an observation, not a conclusion. */
+export type SentinelAssetOutcome = "note" | "clean" | "suspicious" | "vulnerable" | "unreachable";
+
+/** One entry of an asset's timeline. */
+export interface SentinelAssetEntry {
+	seq: number;
+	/** record = test/remark (counted); status = operator state change (not counted). */
+	kind: "record" | "status";
+	at: string;
+	author: "agent" | "operator";
+	/** Agent-side provenance, e.g. "主代理" or "子代理 <runId>". */
+	source?: string;
+	outcome: SentinelAssetOutcome;
+	/** Command or method used, e.g. "nmap -sV". */
+	method?: string;
+	/** Observation text; may be empty for a bare outcome. */
+	text: string;
+	/** Set on the entry created by linking a hub finding. */
+	vulnLabel?: string;
+}
+
+/** One asset without its timeline, for lists and for the agent's query. */
+export interface SentinelAssetSummary {
+	id: string;
+	/** Human-readable id, `<project prefix>-A<sequence>`, e.g. "E2E-A0001". */
+	label: string;
+	number: number;
+	projectId: string;
+	projectName: string;
+	kind: SentinelAssetKind;
+	/** Canonical identifier: domain, IP, IP:port, or URL. */
+	name: string;
+	/** Owning host: the domain/IP, or the URL host including a non-default port. */
+	host: string;
+	domain?: string;
+	ip?: string;
+	port?: number;
+	transport?: "tcp" | "udp";
+	protocol?: string;
+	url?: string;
+	title?: string;
+	server?: string;
+	tech?: string;
+	tags: string[];
+	status: SentinelAssetState;
+	/** Who first reported it: "主代理" / "子代理 <runId>" / "工程任务「…」". */
+	source: string;
+	sessionId?: string;
+	engineId?: string;
+	taskId?: string;
+	sessionName?: string;
+	/** Number of timeline records, excluding status changes. */
+	testCount: number;
+	/** Latest conclusive outcome; notes never overwrite it. */
+	lastOutcome?: SentinelAssetOutcome;
+	lastTestedAt?: string;
+	firstSeenAt: string;
+	lastSeenAt: string;
+	createdAt: string;
+	updatedAt: string;
+}
+
+export interface SentinelAsset extends SentinelAssetSummary {
+	entries: SentinelAssetEntry[];
+}
+
+/** One asset with the findings linked to it. */
+export interface SentinelAssetDetail {
+	asset: SentinelAsset;
+	vulns: SentinelVulnSummary[];
+}
+
+/** List filters; every field is optional and they combine with AND. */
+export interface SentinelAssetFilters {
+	kind?: SentinelAssetKind;
+	status?: SentinelAssetState;
+	/** true = has a conclusive record; false = none. Notes do not count. */
+	tested?: boolean;
+	/** Case-insensitive substring on label, name, host, URL, title, tags and source. */
+	search?: string;
+}
+
+/** Operator edits; the agent writes through asset_report / asset_note instead. */
+export interface SentinelAssetUpdate {
+	status?: SentinelAssetState;
+	/** Replaces the whole tag list; an empty array clears it. */
+	tags?: string[];
+	/** Appended as an operator record; defaults to note when outcome is absent. */
+	outcome?: SentinelAssetOutcome;
+	note?: string;
+}
+
+/** Counts for the inventory page header. */
+export interface SentinelAssetStats {
+	total: number;
+	byKind: Record<SentinelAssetKind, number>;
+	byStatus: Record<SentinelAssetState, number>;
+	/** Assets with at least one conclusive record, regardless of status. */
+	tested: number;
+	untested: number;
+}
+
+/** What deleting the selected assets would take with them. */
+export interface SentinelAssetDeletePreview {
+	count: number;
+	records: number;
+	/** Findings whose asset link would be cleared (the findings themselves stay). */
+	vulns: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -1599,6 +1732,9 @@ export type SentinelClientMessage =
 	| { type: "delete_path"; path: string }
 	| { type: "rename_path"; from: string; to: string }
 	| { type: "make_directory"; path: string }
+	/** Start an async tar.gz of one folder; progress and completion arrive as messages. */
+	| { type: "download_folder"; path: string }
+	| { type: "cancel_folder_archive"; id: string }
 	/** Open (or attach to) the operator's shell in a project container. */
 	| { type: "terminal_open"; projectId: string; cols: number; rows: number }
 	| { type: "terminal_input"; projectId: string; data: string }
@@ -1618,6 +1754,13 @@ export type SentinelClientMessage =
 	/** `force` is the hub's manual re-review: it overwrites an already-settled verdict. */
 	| { type: "retry_vuln_review"; id: string; force?: boolean }
 	| { type: "review_pending_vulns" }
+	| { type: "list_assets"; filters?: SentinelAssetFilters; page?: number; pageSize?: number }
+	| { type: "get_asset"; id: string }
+	| { type: "update_asset"; id: string; patch: SentinelAssetUpdate }
+	/** How much deleting these assets would take with them, for the dialog. */
+	| { type: "preview_asset_delete"; ids: string[] }
+	| { type: "delete_assets"; ids: string[] }
+	| { type: "export_assets"; filters?: SentinelAssetFilters }
 	| { type: "list_pocs"; filters?: SentinelPocFilters; page?: number; pageSize?: number }
 	| { type: "get_poc"; id: string }
 	| { type: "delete_poc"; id: string }
@@ -1921,6 +2064,11 @@ export type SentinelServerMessage =
 	| { type: "file_preview"; preview: SentinelFilePreview }
 	| { type: "file_download"; path: string; size: number; data: string; mimeType: string }
 	| { type: "file_result"; action: string; path: string; ok: boolean; error?: string }
+	| { type: "folder_archive_started"; id: string; path: string; filename: string }
+	| { type: "folder_archive_progress"; id: string; bytes: number }
+	| { type: "folder_archive_ready"; id: string; filename: string; size: number; warning?: string }
+	| { type: "folder_archive_failed"; id?: string; error: string }
+	| { type: "folder_archive_cancelled"; id: string }
 	/**
 	 * The answer to `terminal_open`, and the broadcast when a shell ends. `opened`
 	 * carries the scrollback the panel missed while it was closed.
@@ -1948,6 +2096,23 @@ export type SentinelServerMessage =
 	| { type: "vulns_deleted"; count: number }
 	| { type: "vulns_export"; filename: string; markdown: string }
 	| { type: "vuln_review_result"; id: string; ok: boolean; error?: string }
+	| {
+			type: "assets";
+			items: SentinelAssetSummary[];
+			stats: SentinelAssetStats;
+			/** Matches for the current filter, not the page size. */
+			total: number;
+			page: number;
+			pageSize: number;
+			hasMore: boolean;
+	  }
+	/** A write changed the library; clients re-query with their own page. */
+	| { type: "assets_changed" }
+	| { type: "asset"; detail: SentinelAssetDetail }
+	| { type: "asset_result"; action: string; id?: string; ok: boolean; error?: string }
+	| { type: "asset_delete_preview"; count: number; records: number; vulns: number }
+	| { type: "assets_deleted"; count: number }
+	| { type: "assets_export"; filename: string; markdown: string }
 	| {
 			type: "pocs";
 			items: SentinelPocSummary[];

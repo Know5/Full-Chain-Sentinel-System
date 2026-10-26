@@ -7,11 +7,12 @@
  * evidence persist outside the container lifecycle.
  */
 
-import { spawn } from "node:child_process";
+import { type ChildProcessByStdio, spawn } from "node:child_process";
 import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
+import type { Readable } from "node:stream";
 import type { BashOperations } from "@earendil-works/pi-coding-agent";
 import { embeddedDockerfile } from "./assets.ts";
 import { containerNetworkFlags, sidecarNetworkFlags } from "./container-network.ts";
@@ -207,6 +208,23 @@ export function execInContainer(
 			stderr = String(error);
 			finish(1);
 		});
+	});
+}
+
+/**
+ * Like `execInContainer`, but leaves stdout as a live stream.
+ *
+ * Folder archives can be gigabytes; buffering them in a Buffer or a string only
+ * to write them to disk would double the memory and block the process. The
+ * caller pipes stdout into a file and applies backpressure.
+ */
+export function spawnInContainer(
+	containerName: string,
+	script: string,
+	args: string[] = [],
+): ChildProcessByStdio<null, Readable, Readable> {
+	return spawn("docker", ["exec", "-i", containerName, "sh", "-c", script, "zg", ...args], {
+		stdio: ["ignore", "pipe", "pipe"],
 	});
 }
 

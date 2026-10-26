@@ -2,7 +2,22 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { getLanguage, t } from "../i18n.ts";
 import { formatSize } from "../transcript.ts";
 import type { SentinelFileEntry, SentinelFilePreview } from "../types.ts";
-import { DirIcon, FileIcon, ParentDirIcon } from "./icons.tsx";
+import { DirIcon, DownloadIcon, FileIcon, ParentDirIcon } from "./icons.tsx";
+
+/** The asynchronous folder archive shown in the file panel. */
+export type FolderArchivePhase = "starting" | "running" | "cancelling" | "ready" | "failed" | "cancelled";
+
+export interface FolderArchiveState {
+	/** Empty while the server has not answered `download_folder` yet. */
+	id: string;
+	path: string;
+	filename: string;
+	bytes: number;
+	status: FolderArchivePhase;
+	size?: number;
+	warning?: string;
+	error?: string;
+}
 
 /** Bytes of the container work directory the panel is currently showing. */
 export interface FilePanelState {
@@ -68,6 +83,9 @@ export function FilePanel({
 	onRename,
 	onMkdir,
 	onDownload,
+	archive,
+	onDownloadFolder,
+	onCancelArchive,
 }: {
 	state: FilePanelState;
 	onOpen: (path: string) => void;
@@ -78,6 +96,9 @@ export function FilePanel({
 	onRename: (from: string, to: string) => void;
 	onMkdir: (path: string) => void;
 	onDownload: (path: string) => void;
+	archive: FolderArchiveState | null;
+	onDownloadFolder: (path: string) => void;
+	onCancelArchive: () => void;
 }) {
 	const [editing, setEditing] = useState<string | null>(null);
 	const [draft, setDraft] = useState("");
@@ -86,6 +107,8 @@ export function FilePanel({
 	const [newDir, setNewDir] = useState<string | null>(null);
 	const [uploadError, setUploadError] = useState<string | null>(null);
 	const uploadRef = useRef<HTMLInputElement | null>(null);
+	const archiveBusy =
+		archive?.status === "starting" || archive?.status === "running" || archive?.status === "cancelling";
 
 	// Leaving the directory (or reloading it) abandons an in-progress edit buffer.
 	useEffect(() => {
@@ -142,6 +165,15 @@ export function FilePanel({
 				<button type="button" onClick={() => setNewDir("")}>
 					{t("新建目录")}
 				</button>
+				<button
+					type="button"
+					title={t("后台打包，完成后自动下载")}
+					disabled={archiveBusy}
+					onClick={() => onDownloadFolder(state.path)}
+				>
+					<DownloadIcon />
+					{t("下载当前文件夹")}
+				</button>
 				<input
 					ref={uploadRef}
 					type="file"
@@ -161,6 +193,41 @@ export function FilePanel({
 					</span>
 				))}
 			</div>
+
+			{archive ? (
+				<div className={`file-archive is-${archive.status}`}>
+					{archive.status === "starting" || archive.status === "running" ? (
+						<>
+							<span>
+								{archive.filename
+									? t("正在打包 {name}…", { name: archive.filename })
+									: t("正在准备打包…")}
+							</span>
+							<span className="file-archive__size">{formatSize(archive.bytes)}</span>
+							<span className="file-archive__bar">
+								<span />
+							</span>
+							{archive.status === "running" ? (
+								<button type="button" onClick={onCancelArchive}>
+									{t("取消打包")}
+								</button>
+							) : null}
+						</>
+					) : archive.status === "cancelling" ? (
+						<span>{t("正在取消打包…")}</span>
+					) : archive.status === "ready" ? (
+						<>
+							<span>{t("打包完成，已开始下载")}</span>
+							<span className="file-archive__size">{formatSize(archive.size ?? archive.bytes)}</span>
+							{archive.warning ? <span className="file-archive__warning">{archive.warning}</span> : null}
+						</>
+					) : archive.status === "failed" ? (
+						<span>{t("打包失败：{error}", { error: archive.error ?? t("未知错误") })}</span>
+					) : (
+						<span>{t("已取消打包")}</span>
+					)}
+				</div>
+			) : null}
 
 			{uploadError ? <div className="file-error">{uploadError}</div> : null}
 
@@ -244,6 +311,17 @@ export function FilePanel({
 										{entry.type === "dir" ? t("目录") : formatSize(entry.size)} · {formatTime(entry.mtime)}
 									</span>
 								</button>
+								{entry.type === "dir" ? (
+									<button
+										type="button"
+										className="file-action"
+										title={t("后台打包整个目录，完成后自动下载")}
+										disabled={archiveBusy}
+										onClick={() => onDownloadFolder(entry.path)}
+									>
+										{t("下载")}
+									</button>
+								) : null}
 								<button
 									type="button"
 									className="file-action"

@@ -67,6 +67,9 @@ import {
 	saveAssetPlatform as writeAssetPlatform,
 	setAssetQueryLimit as writeAssetQueryLimit,
 } from "./asset-config.ts";
+import { AssetLibraryStore, assetLibraryDbPath, emptyAssetStats, MAX_ASSET_PAGE_SIZE } from "./asset-library.ts";
+import { createAssetLibraryTools } from "./asset-library-tool.ts";
+import { buildAssetReport } from "./asset-markdown.ts";
 import { probeAssetPlatform, searchAssets } from "./asset-platforms.ts";
 import { AssetStore, assetsDbPath } from "./asset-store.ts";
 import { type AssetQueryReport, type AssetToolContext, createAssetTools, writeAssetEvidence } from "./asset-tool.ts";
@@ -84,6 +87,7 @@ import {
 	makeDirectory,
 	readFilePreview,
 	renamePath,
+	requireDirectory,
 	toContainerWorkPath,
 	writeFile,
 } from "./files.ts";
@@ -205,9 +209,16 @@ import type {
 	SentinelApiModelFilters,
 	SentinelApiModelStatus,
 	SentinelApiModelSummary,
+	SentinelAsset,
 	SentinelAssetConfigView,
+	SentinelAssetDeletePreview,
+	SentinelAssetDetail,
+	SentinelAssetFilters,
 	SentinelAssetPlatform,
 	SentinelAssetPlatformInput,
+	SentinelAssetStats,
+	SentinelAssetSummary,
+	SentinelAssetUpdate,
 	SentinelBuiltinChannel,
 	SentinelBuiltinModelDefaults,
 	SentinelBuiltinModelPreset,
@@ -333,6 +344,8 @@ export interface SentinelRuntimeHooks {
 	onNotifyStatus(status: SentinelNotifyStatus): void;
 	/** A finding was submitted or reviewed; connected consoles refresh the hub page. */
 	onVulnChange(): void;
+	/** An asset or its timeline changed; consoles re-query with their own page. */
+	onAssetChange(): void;
 	/** A session's name changed (operator or agent); consoles refresh the list. */
 	onSessionRenamed(): void;
 	/** A finding reached the hub; the reviewer LLM queues it for calibration. */
@@ -558,6 +571,7 @@ export class SentinelRuntime {
 	private readonly ios: IosStore;
 	private readonly captures: CaptureStore;
 	private readonly assets: AssetStore;
+	private readonly assetLibrary: AssetLibraryStore;
 	private readonly webSearchLog: WebSearchStore;
 	/** Per-key usage cache: remaining credits at `at`; -1 marks a dead probe. */
 	private readonly webUsageCache = new Map<string, { at: number; remaining: number; limit: number | null }>();
@@ -612,6 +626,7 @@ export class SentinelRuntime {
 		this.ios = new IosStore(iosDbPath(this.agentDir));
 		this.captures = new CaptureStore(capturesDbPath(this.agentDir));
 		this.assets = new AssetStore(assetsDbPath(this.agentDir));
+		this.assetLibrary = new AssetLibraryStore(assetLibraryDbPath(this.agentDir));
 		this.webSearchLog = new WebSearchStore(websearchDbPath(this.agentDir));
 		this.subscriptions = new PocSubscriptions(this.agentDir, this.pocs, {
 			onChange: () => this.hooks.onPocSourceChange(),
@@ -940,6 +955,14 @@ export class SentinelRuntime {
 				// agent or one of its sub-agents submitted it.
 				onSubmit: task ? task.onFinding : () => this.noteGoalFinding(managed),
 			}),
+			...this.createAssetTools({
+				project: sessionProject,
+				permissions,
+				getSessionId: () => manager.getSessionId(),
+				getSessionName: () => managed.manager.getSessionName(),
+				...(task ? { getEngineRef: () => ({ engineId: task.engineId, taskId: task.taskId }) } : {}),
+				getSource: () => (task ? `工程任务「${task.taskTitle}」` : "主代理"),
+			}),
 			// The POC library is read-only reference; the switch controls both of
 			// its tools, and sub-agents inherit it through the subset rule.
 			...(permissions.poc_read ? createPocTools({ store: this.pocs }) : []),
@@ -1026,6 +1049,15 @@ export class SentinelRuntime {
 									// A task session's goal is the worker's, not managed.goal:
 									// route it to the same counter the main agent uses.
 									onSubmit: task ? task.onFinding : () => this.noteGoalFinding(managed),
+								}),
+							createAssetTools: (getSource) =>
+								this.createAssetTools({
+									project: sessionProject,
+									permissions: subagentPermissions,
+									getSessionId: () => manager.getSessionId(),
+									getSessionName: () => managed.manager.getSessionName(),
+									...(task ? { getEngineRef: () => ({ engineId: task.engineId, taskId: task.taskId }) } : {}),
+									getSource,
 								}),
 							extraTools: [
 								...(subagentPermissions.poc_read ? createPocTools({ store: this.pocs }) : []),
@@ -1357,6 +1389,7 @@ export class SentinelRuntime {
 		onSubmit: () => void;
 	}): ToolDefinition[] {
 		if (!options.permissions.vuln_submit && !options.permissions.vuln_read) return [];
+		const project = options.project;
 		const tools = createVulnerabilityTools({
 			store: this.vulnerabilities,
 			getProject: () => options.project,
@@ -1365,6 +1398,25 @@ export class SentinelRuntime {
 			...(options.getEngineRef ? { getEngineRef: options.getEngineRef } : {}),
 			getSource: options.getSource,
 			getWorkDir: () => options.workDir,
+			...(options.permissions.asset_library_write && project
+				? {
+						resolveAsset: (ref: string) => {
+							const asset = this.assetLibrary.find(project.id, ref);
+							return asset ? { id: asset.id, label: asset.label } : undefined;
+						},
+						linkAsset: (assetId: string, vuln: SentinelVulnerability) => {
+							this.assetLibrary.appendEntry(assetId, {
+								author: "agent",
+								source: vuln.source,
+								outcome: "vulnerable",
+								method: "vuln_submit",
+								text: `提交漏洞 ${vuln.label}：${vuln.title}`,
+								vulnLabel: vuln.label,
+							});
+							this.hooks.onAssetChange();
+						},
+					}
+				: {}),
 			onHighSeverity: (vuln) => this.notifyHighSeverity(vuln),
 			onChange: () => this.hooks.onVulnChange(),
 			onSubmit: (vuln) => {
@@ -1383,6 +1435,36 @@ export class SentinelRuntime {
 		return tools.filter((tool) =>
 			tool.name === "vuln_submit" ? options.permissions.vuln_submit : options.permissions.vuln_read,
 		);
+	}
+
+	/**
+	 * Inventory tools for one session. The factory applies the permission filter;
+	 * the project is captured at session creation so a later project switch does
+	 * not move a background session's reports into another project's ledger.
+	 */
+	private createAssetTools(options: {
+		project: { id: string; name: string } | undefined;
+		permissions: SentinelPermissionSet;
+		getSessionId: () => string | undefined;
+		getSessionName: () => string | undefined;
+		getEngineRef?: () => { engineId: string; taskId: string } | undefined;
+		getSource: () => string;
+	}): ToolDefinition[] {
+		if (!options.permissions.asset_library_write && !options.permissions.asset_library_read) return [];
+		const project = options.project;
+		return createAssetLibraryTools({
+			store: this.assetLibrary,
+			getProject: () => options.project,
+			permissions: options.permissions,
+			getSessionId: options.getSessionId,
+			getSessionName: options.getSessionName,
+			...(options.getEngineRef ? { getEngineRef: options.getEngineRef } : {}),
+			getSource: options.getSource,
+			...(options.permissions.vuln_read && project
+				? { listVulnsByAsset: (assetId: string) => this.vulnerabilities.listByAsset(project.id, assetId) }
+				: {}),
+			onChange: () => this.hooks.onAssetChange(),
+		});
 	}
 
 	/**
@@ -1870,7 +1952,7 @@ export class SentinelRuntime {
 	}
 
 	/** Asset-mapping queries a removed project takes with it. */
-	purgeProjectAssets(projectId: string): number {
+	purgeProjectAssetQueries(projectId: string): number {
 		return this.assets.purgeProject(projectId);
 	}
 
@@ -4479,6 +4561,20 @@ export class SentinelRuntime {
 		return await downloadFile(this.requireContainer(), path);
 	}
 
+	/**
+	 * Validate and describe a folder for the folder-archive job. The actual tar
+	 * runs later, in the server's manager, so the container name is captured
+	 * here while the request is tied to this project.
+	 */
+	async prepareFolderArchive(path: string): Promise<{ container: string; path: string; projectName: string }> {
+		const container = this.requireContainer();
+		return {
+			container,
+			path: await requireDirectory(container, path),
+			projectName: this.snapshot().project?.name ?? "work",
+		};
+	}
+
 	async deletePath(path: string): Promise<void> {
 		await deletePath(this.requireContainer(), path);
 	}
@@ -4617,6 +4713,126 @@ export class SentinelRuntime {
 		});
 	}
 
+	// --- 资产库（Agent 上报的资产台账） ---
+
+	/** Page of the active project's inventory plus project-wide counts. */
+	listAssets(
+		filters: SentinelAssetFilters = {},
+		page = 1,
+		pageSize = 50,
+	): {
+		items: SentinelAssetSummary[];
+		stats: SentinelAssetStats;
+		total: number;
+		page: number;
+		pageSize: number;
+		hasMore: boolean;
+	} {
+		const projectId = this.activeProjectId;
+		if (!projectId) {
+			return {
+				items: [],
+				stats: emptyAssetStats(),
+				total: 0,
+				page: 1,
+				pageSize: Math.max(1, pageSize),
+				hasMore: false,
+			};
+		}
+		return {
+			...this.assetLibrary.list(projectId, filters, page, pageSize),
+			stats: this.assetLibrary.stats(projectId),
+		};
+	}
+
+	/** One asset with its full timeline and the findings linked to it. */
+	getAsset(id: string): SentinelAssetDetail | undefined {
+		const projectId = this.activeProjectId;
+		if (!projectId) return undefined;
+		const asset = this.assetLibrary.find(projectId, id);
+		if (!asset) return undefined;
+		return { asset, vulns: this.vulnerabilities.listByAsset(projectId, asset.id) };
+	}
+
+	/** Operator edit: status, tags, or one record. The agent writes through its tools. */
+	updateAsset(id: string, patch: SentinelAssetUpdate): SentinelAssetDetail | undefined {
+		const projectId = this.activeProjectId;
+		if (!projectId) return undefined;
+		const existing = this.assetLibrary.find(projectId, id);
+		if (!existing) return undefined;
+		const updated = this.assetLibrary.update(existing.id, patch);
+		if (!updated) return undefined;
+		this.hooks.onAssetChange();
+		return { asset: updated, vulns: this.vulnerabilities.listByAsset(projectId, updated.id) };
+	}
+
+	/** What deleting these assets would take: timeline rows and linked findings. */
+	previewAssetDelete(ids: readonly string[]): SentinelAssetDeletePreview {
+		const projectId = this.activeProjectId;
+		if (!projectId) return { count: 0, records: 0, vulns: 0 };
+		return {
+			...this.assetLibrary.deletePreview(projectId, ids),
+			vulns: this.vulnerabilities.countLinkedToAssets(projectId, ids),
+		};
+	}
+
+	/**
+	 * Delete inventory rows of the active project. Linked findings survive: the
+	 * link is cleared first, then the asset and its timeline go.
+	 */
+	deleteAssets(ids: readonly string[]): number {
+		const projectId = this.activeProjectId;
+		if (!projectId) return 0;
+		const existed = this.assetLibrary.deletePreview(projectId, ids).count;
+		if (existed === 0) return 0;
+		const unlinked = this.vulnerabilities.unlinkAssets(projectId, ids);
+		const deleted = this.assetLibrary.deleteMany(projectId, ids);
+		if (deleted > 0) this.hooks.onAssetChange();
+		if (unlinked > 0) this.hooks.onVulnChange();
+		return deleted;
+	}
+
+	/** Markdown inventory of every asset matching the filter; never a partial page. */
+	exportAssets(filters: SentinelAssetFilters = {}): { filename: string; markdown: string } {
+		const projectId = this.activeProjectId;
+		const projectName = this.activeProjectName ?? t("未命名项目");
+		const assets: SentinelAsset[] = [];
+		if (projectId) {
+			// Export is complete, not a page: walk every page until the store says
+			// there is no more. The page size is a query detail, not a cap.
+			for (let page = 1; ; page += 1) {
+				const view = this.assetLibrary.list(projectId, filters, page, MAX_ASSET_PAGE_SIZE);
+				for (const summary of view.items) {
+					const asset = this.assetLibrary.get(summary.id);
+					if (asset) assets.push(asset);
+				}
+				// A concurrent deletion can make a page empty while total still says
+				// there is more; stop rather than loop on the same offset.
+				if (!view.hasMore || view.items.length === 0) break;
+			}
+		}
+		return buildAssetReport({
+			projectName,
+			assets,
+			vulnsByAsset: projectId ? this.vulnerabilities.linkedByAsset(projectId) : new Map(),
+		});
+	}
+
+	/** How many inventory rows a project holds, for the delete dialog. */
+	countProjectAssets(projectId: string): number {
+		return this.assetLibrary.countByProject(projectId);
+	}
+
+	/** Deleting a project deletes its inventory and clears any surviving links. */
+	purgeProjectAssetLibrary(projectId: string): number {
+		const deleted = this.assetLibrary.deleteByProject(projectId);
+		// The server's project deletion also purges the hub, but this method's
+		// contract is that no dangling asset link survives it either way.
+		this.vulnerabilities.unlinkAllAssets(projectId);
+		if (deleted > 0) this.hooks.onAssetChange();
+		return deleted;
+	}
+
 	// --- POC 订阅（远程 zip 源；设置页管理，库只增不减） ---
 
 	listPocSources(): SentinelPocSource[] {
@@ -4731,6 +4947,7 @@ export class SentinelRuntime {
 		this.ios.close();
 		this.captures.close();
 		this.assets.close();
+		this.assetLibrary.close();
 		this.webSearchLog.close();
 		this.subscriptions.stop();
 		this.supervisor.close();

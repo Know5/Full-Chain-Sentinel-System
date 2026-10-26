@@ -52,9 +52,39 @@ const SWITCHES: { key: SentinelPermissionKey; label: string; hint: string; subag
 	},
 	{ key: "spawn_agent", label: "spawn_agent", hint: t("派生子代理并行执行；子代理永远不能再派生"), subagent: false },
 	{
+		key: "vuln_submit",
+		label: "vuln_submit",
+		hint: t("把已验证的漏洞提交到当前项目的漏洞中枢（原始数据包与评分一并提交）"),
+		subagent: true,
+	},
+	{
+		key: "vuln_read",
+		label: "vuln_list / vuln_get",
+		hint: t("查询当前项目已记录的漏洞，避免重复提交并在总结中引用编号"),
+		subagent: true,
+	},
+	{
+		key: "asset_library_write",
+		label: "asset_report / asset_note",
+		hint: t("把实际接触过的域名、IP、端口服务与 URL 上报到资产库，并追加测试记录（同一资产自动合并）"),
+		subagent: true,
+	},
+	{
+		key: "asset_library_read",
+		label: "asset_list / asset_get",
+		hint: t("查询当前项目已收录的资产与测试记录，避免重复上报"),
+		subagent: true,
+	},
+	{
 		key: "poc_read",
 		label: "poc_search / poc_read",
 		hint: t("检索 POC 库（只读参考：模板不进容器，要执行需自己写 yaml 后用 bash 跑 nuclei）"),
+		subagent: true,
+	},
+	{
+		key: "asset_read",
+		label: "fofa_search / quake_search / hunter_search",
+		hint: t("用 FOFA / 360 Quake / 奇安信 Hunter 做互联网资产测绘（设置 → 资产测绘 管理平台与密钥）"),
 		subagent: true,
 	},
 	{

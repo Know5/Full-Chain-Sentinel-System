@@ -134,7 +134,9 @@ function renderFull(vuln: SentinelVulnerability): string {
 			`平台：安卓${vuln.appPackage ? ` · 包名 ${vuln.appPackage}${vuln.appVersion ? `（${vuln.appVersion}）` : ""}` : ""}`,
 		);
 	}
-	lines.push(`来源：${vuln.source}`, `提交时间：${vuln.createdAt}`, "", "漏洞详情：", vuln.description);
+	lines.push(`来源：${vuln.source}`, `提交时间：${vuln.createdAt}`);
+	if (vuln.assetLabel) lines.push(`关联资产：${vuln.assetLabel}`);
+	lines.push("", "漏洞详情：", vuln.description);
 	if (vuln.packet.trim()) lines.push("", "原始数据包：", vuln.packet);
 	if (vuln.repro) lines.push("", "复现步骤：", vuln.repro);
 	if (vuln.evidence.length > 0) {
@@ -199,6 +201,10 @@ export interface VulnerabilityToolOptions {
 	onChange?: () => void;
 	/** Called once per created record, so a running goal can count it as its own finding. */
 	onSubmit?: (vuln: SentinelVulnerability) => void;
+	/** Resolve an inventory asset id/label; absent when asset_library_write is off. */
+	resolveAsset?: (ref: string) => { id: string; label: string } | undefined;
+	/** Append the hub link to the asset timeline, after the finding is stored. */
+	linkAsset?: (assetId: string, vuln: SentinelVulnerability) => void;
 }
 
 const evidenceSchema = Type.Object({
@@ -257,6 +263,12 @@ const submitSchema = Type.Object({
 		Type.String({ description: "android only: target app package name, e.g. com.example.app" }),
 	),
 	appVersion: Type.Optional(Type.String({ description: "android only: target app versionName" })),
+	asset: Type.Optional(
+		Type.String({
+			description:
+				"Optional inventory asset id or label from asset_report (e.g. E2E-A0001). Links this finding to that asset; the asset detail then lists it.",
+		}),
+	),
 });
 
 const listSchema = Type.Object({
@@ -309,6 +321,7 @@ export function createVulnerabilityTools(options: VulnerabilityToolOptions): Too
 			"Check vuln_list before submitting so an already-recorded finding is updated in your notes instead of submitted twice",
 			"Keep the vuln_submit title to one line of at most 40 characters: the flaw plus what it affects. Plan numbers, rounds, corrected verdicts and fix advice go into description, never into the title",
 			"Cite evidence files as /work/... container paths. The file tools' host project directory is accepted and normalized, but any other host path is rejected",
+			"When the finding belongs to an asset you reported, pass that asset's label as asset so the inventory and the hub link both ways",
 		],
 		parameters: submitSchema,
 		async execute(_toolCallId, params): Promise<AgentToolResult<SubmitDetails>> {
@@ -349,6 +362,35 @@ export function createVulnerabilityTools(options: VulnerabilityToolOptions): Too
 					isError: true,
 				};
 			}
+			const assetRef = params.asset?.trim();
+			let linkedAsset: { id: string; label: string } | undefined;
+			if (assetRef) {
+				if (!options.resolveAsset) {
+					return {
+						content: [
+							{
+								type: "text",
+								text: "资产库上报未开启（asset_library_write），不能把漏洞关联到资产；去掉 asset 参数后重试，或让操作员开启该权限。",
+							},
+						],
+						details: { ok: false, error: "asset-write-disabled" },
+						isError: true,
+					};
+				}
+				linkedAsset = options.resolveAsset(assetRef);
+				if (!linkedAsset) {
+					return {
+						content: [
+							{
+								type: "text",
+								text: `当前项目没有编号为 ${assetRef} 的资产。先用 asset_report 上报，或 asset_list 查编号。`,
+							},
+						],
+						details: { ok: false, error: "asset-not-found" },
+						isError: true,
+					};
+				}
+			}
 			// Provenance is captured at submission time: filtering the hub by
 			// 工程/任务/会话 must keep working after the session file is gone.
 			const engineRef = options.getEngineRef?.();
@@ -375,7 +417,16 @@ export function createVulnerabilityTools(options: VulnerabilityToolOptions): Too
 				...(params.platform ? { platform: params.platform } : {}),
 				...(params.appPackage?.trim() ? { appPackage: params.appPackage.trim() } : {}),
 				...(params.appVersion?.trim() ? { appVersion: params.appVersion.trim() } : {}),
+				...(linkedAsset ? { assetId: linkedAsset.id, assetLabel: linkedAsset.label } : {}),
 			});
+			if (linkedAsset) {
+				try {
+					options.linkAsset?.(linkedAsset.id, vuln);
+				} catch {
+					// The finding is already stored; a failed timeline append must not
+					// turn a successful submission into an error.
+				}
+			}
 			if (vuln.severity === "critical" || vuln.severity === "high") {
 				options.onHighSeverity?.(vuln);
 			}
@@ -389,7 +440,7 @@ export function createVulnerabilityTools(options: VulnerabilityToolOptions): Too
 				content: [
 					{
 						type: "text",
-						text: `已提交到漏洞中枢：${vuln.label} ${vuln.title}（${severityTag(vuln.severity, vuln.cvss)}），状态：待确认。${titleNote}${warning}`,
+						text: `已提交到漏洞中枢：${vuln.label} ${vuln.title}（${severityTag(vuln.severity, vuln.cvss)}），状态：待确认。${linkedAsset ? `已关联资产 ${linkedAsset.label}。` : ""}${titleNote}${warning}`,
 					},
 				],
 				details: { ok: true, id: vuln.id, label: vuln.label, severity: vuln.severity, status: vuln.status },
@@ -421,7 +472,7 @@ export function createVulnerabilityTools(options: VulnerabilityToolOptions): Too
 			}
 			const lines = items.map(
 				(item) =>
-					`${item.label} | ${item.severity} | CVSS ${item.cvss.toFixed(1)} | ${SENTINEL_VULN_STATUS_LABELS[item.status]} | ${item.target} | ${item.title}`,
+					`${item.label} | ${item.severity} | CVSS ${item.cvss.toFixed(1)} | ${SENTINEL_VULN_STATUS_LABELS[item.status]} | ${item.target} | ${item.title}${item.assetLabel ? ` | 资产 ${item.assetLabel}` : ""}`,
 			);
 			return {
 				content: [
