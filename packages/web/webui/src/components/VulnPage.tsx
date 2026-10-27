@@ -144,6 +144,7 @@ export function VulnPage({
 	deletePreview,
 	onFiltersChange,
 	onOpen,
+	onOpenSession,
 	onExport,
 	onRetryReview,
 	onReviewAllPending,
@@ -168,6 +169,8 @@ export function VulnPage({
 	deletePreview: { count: number; evidence: number; notes: number } | null;
 	onFiltersChange: (filters: SentinelVulnFilters) => void;
 	onOpen: (id: string) => void;
+	/** Switch to the chat page and load the session that reported a finding. */
+	onOpenSession: (sessionId: string) => void;
 	onExport: (filters: SentinelVulnFilters) => void;
 	onRetryReview: (id: string, force: boolean) => void;
 	onReviewAllPending: () => void;
@@ -571,6 +574,7 @@ export function VulnPage({
 							<span>{t("标题")}</span>
 							<span>{t("来源")}</span>
 							<span>{t("提交时间")}</span>
+							<span />
 						</div>
 						{items.map((item) => (
 							<div
@@ -627,6 +631,39 @@ export function VulnPage({
 								</span>
 								<span className="data-mono">{vulnSource(item.source)}</span>
 								<span className="data-mono">{formatWhen(item.createdAt)}</span>
+								<span className="vuln-session-jump">
+									{(() => {
+										const hasSession = Boolean(
+											item.sessionId && sessions.some((session) => session.id === item.sessionId),
+										);
+										const reason = item.sessionId
+											? hasSession
+												? t("打开对应对话")
+												: t("对应会话已删除")
+											: t("该漏洞没有关联会话");
+										return (
+											<button
+												type="button"
+												className="vuln-jump"
+												disabled={!hasSession}
+												title={reason}
+												aria-label={reason}
+												onClick={(event) => {
+													// The row click opens the finding; this only navigates.
+													event.stopPropagation();
+													if (item.sessionId) onOpenSession(item.sessionId);
+												}}
+												onKeyDown={(event) => {
+													// Enter/Space on the button must not also reach the row's
+													// key handler, which would open the detail at the same time.
+													event.stopPropagation();
+												}}
+											>
+												›
+											</button>
+										);
+									})()}
+								</span>
 							</div>
 						))}
 					</div>

@@ -2369,6 +2369,24 @@ export function App() {
 		[send],
 	);
 
+	/**
+	 * Jump from a finding to the conversation that reported it. Findings carry
+	 * the session id; the path is what switch_session needs, and the sessions
+	 * list is refreshed with the project.
+	 */
+	const openVulnSession = useCallback(
+		(sessionId: string) => {
+			const path = sessions.find((session) => session.id === sessionId)?.path;
+			if (!path) {
+				pushError(t("对应会话已删除，无法跳转"));
+				return;
+			}
+			openPage("chat");
+			send({ type: "switch_session", path });
+		},
+		[sessions, openPage, pushError, send],
+	);
+
 	/** Cross-navigation: an asset's linked finding opens the hub's detail. */
 	const openVulnFromAsset = useCallback(
 		(id: string) => {
@@ -3052,6 +3070,7 @@ export function App() {
 							hasProject={snapshot?.project !== null && snapshot?.project !== undefined}
 							onFiltersChange={loadVulns}
 							onOpen={openVuln}
+							onOpenSession={openVulnSession}
 							onExport={(filters) => send({ type: "export_vulns", filters })}
 							onRetryReview={(id, force) =>
 								send({ type: "retry_vuln_review", id, ...(force ? { force: true } : {}) })

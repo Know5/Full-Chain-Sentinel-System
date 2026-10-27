@@ -9480,10 +9480,52 @@ button.link {
 }
 
 .vuln-table .data-row {
-	/* The leading column is the deletion checkbox. */
-	grid-template-columns: 26px 96px 120px 78px minmax(140px, 1fr) minmax(260px, 1.7fr) 108px 96px;
+	/* The leading column is the deletion checkbox; the trailing one jumps to
+	   the conversation that reported the finding. */
+	grid-template-columns: 26px 96px 120px 78px minmax(140px, 1fr) minmax(260px, 1.7fr) 108px 96px 32px;
 	padding: 5px 12px;
 	font-size: 12.5px;
+}
+
+.vuln-session-jump {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+}
+
+/* Fixed position per row: scanning the list, the arrow is always in the same
+   place. It opens the chat, while the row itself still opens the finding. */
+.vuln-jump {
+	width: 24px;
+	height: 24px;
+	padding: 0;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border: 1px solid transparent;
+	border-radius: 4px;
+	background: transparent;
+	color: var(--faint);
+	font-size: 16px;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.vuln-row:hover .vuln-jump:not(:disabled) {
+	color: var(--accent);
+	border-color: var(--accent-border);
+	background: var(--card);
+}
+
+.vuln-jump:hover:not(:disabled) {
+	color: #fff;
+	background: var(--accent);
+	border-color: var(--accent);
+}
+
+.vuln-jump:disabled {
+	color: var(--disabled);
+	cursor: not-allowed;
 }
 
 /* A ticked row is visibly part of the pending deletion. */

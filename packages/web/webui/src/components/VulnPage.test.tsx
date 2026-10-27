@@ -133,10 +133,15 @@ const sessions: SessionInfoView[] = [
 	},
 ];
 
-function renderPage(options: { filters?: Record<string, string>; deletePending?: string[] | null; preview?: { count: number; evidence: number; notes: number } | null } = {}): string {
+function renderPage(options: {
+	filters?: Record<string, string>;
+	deletePending?: string[] | null;
+	preview?: { count: number; evidence: number; notes: number } | null;
+	items?: SentinelVulnSummary[];
+} = {}): string {
 	return renderToStaticMarkup(
 		createElement(VulnPage, {
-			items: [summary(), summary({ id: "v2", label: "E2E-0002", number: 2 })],
+			items: options.items ?? [summary(), summary({ id: "v2", label: "E2E-0002", number: 2 })],
 			stats,
 			filters: options.filters ?? {},
 			projectName: "靶场",
@@ -148,6 +153,7 @@ function renderPage(options: { filters?: Record<string, string>; deletePending?:
 			deletePreview: options.preview ?? null,
 			onFiltersChange: () => {},
 			onOpen: () => {},
+			onOpenSession: () => {},
 			onExport: () => {},
 			onRetryReview: () => {},
 			onReviewAllPending: () => {},
@@ -209,6 +215,7 @@ test("without a project id no engine is offered, even when engines exist", () =>
 			deletePreview: null,
 			onFiltersChange: () => {},
 			onOpen: () => {},
+			onOpenSession: () => {},
 			onExport: () => {},
 			onRetryReview: () => {},
 			onReviewAllPending: () => {},
@@ -268,4 +275,18 @@ test("the detail pane shows provenance names and no single delete", () => {
 	expect(html).toContain("内网打点 / Web 面侦察");
 	expect(html).toContain("10.0.0.5 侦察");
 	expect(html).not.toContain("删除");
+});
+
+test("each row offers a jump to its reporting session, and a deleted session disables it", () => {
+	const html = renderPage();
+	expect(html).toContain('title="打开对应对话"');
+	expect(html).toContain('aria-label="打开对应对话"');
+	expect(html).toContain("vuln-session-jump");
+
+	const gone = renderPage({ items: [summary({ sessionId: "deleted", sessionName: "旧会话" })] });
+	expect(gone).toContain('title="对应会话已删除"');
+	expect(gone).toMatch(/class="vuln-jump" disabled/);
+
+	const legacy = renderPage({ items: [summary({ sessionId: undefined, sessionName: undefined })] });
+	expect(legacy).toContain("该漏洞没有关联会话");
 });

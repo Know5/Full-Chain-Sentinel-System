@@ -3648,6 +3648,10 @@ export const EN_MESSAGES: Record<string, string> = {
 		"Over the WeCom per-message limit; truncated, {length} characters in total",
 	"任务结束后把结果推送到团队群。钉钉、飞书和企业微信可同时启用；在群的机器人设置里添加自定义机器人并填入 webhook。钉钉/飞书的加签与关键词按机器人安全设置选填。":
 		"Push results to a team chat when a task ends. DingTalk, Feishu, and WeCom can be enabled together; add a custom robot in the chat's robot settings and paste its webhook. Signing and keywords for DingTalk/Feishu follow each robot's security setting.",
+	打开对应对话: "Open conversation",
+	对应会话已删除: "The reporting conversation was deleted",
+	该漏洞没有关联会话: "This finding has no linked conversation",
+	"对应会话已删除，无法跳转": "The reporting conversation was deleted; cannot open it",
 };
 
 export function translate(language: UiLanguage, source: string, vars?: Record<string, string | number>): string {
