@@ -473,29 +473,28 @@ export function VulnPage({
 			title: t("编号"),
 			dataIndex: "label",
 			key: "label",
-			width: 104,
+			width: 96,
 			render: (_, item) => <Text className="table-mono">{item.label}</Text>,
 		},
 		{
 			title: t("等级"),
 			dataIndex: "severity",
 			key: "severity",
-			width: 196,
+			width: 124,
 			render: (_, item) => (
-				<Space size={6} wrap>
+				<Space size={4} className="vulnhub-severity">
 					<Tag color={SEVERITY_COLORS[item.severity]} variant="filled">
 						{SENTINEL_VULN_SEVERITY_LABELS[item.severity]}
 					</Tag>
-					<Text type="secondary" className="vulnhub-cvss">
+					<Text type="secondary" className="vulnhub-cvss" title={isAgentRating(item.review) ? t("Agent 自评") : undefined}>
 						{isAgentRating(item.review) ? `${t("自评")} ` : ""}
 						{item.cvss.toFixed(1)}
 					</Text>
-					<ReviewChip review={item.review} />
 					{item.severityMismatch ? (
 						<Tooltip title={t("等级与 CVSS 分数不一致")}>
-							<Tag color="warning" variant="filled">
+							<Text type="warning" className="vulnhub-mismatch">
 								!
-							</Tag>
+							</Text>
 						</Tooltip>
 					) : null}
 				</Space>
@@ -505,18 +504,21 @@ export function VulnPage({
 			title: t("状态"),
 			dataIndex: "status",
 			key: "status",
-			width: 88,
+			width: 132,
 			render: (_, item) => (
-				<Tag color={STATUS_COLORS[item.status]} variant="filled">
-					{SENTINEL_VULN_STATUS_LABELS[item.status]}
-				</Tag>
+				<Space size={4} className="vulnhub-status">
+					<Tag color={STATUS_COLORS[item.status]} variant="filled">
+						{SENTINEL_VULN_STATUS_LABELS[item.status]}
+					</Tag>
+					<ReviewChip review={item.review} />
+				</Space>
 			),
 		},
 		{
 			title: t("目标"),
 			dataIndex: "target",
 			key: "target",
-			width: 168,
+			width: 130,
 			ellipsis: true,
 			render: (_, item) => (
 				<Text className="table-mono" title={item.target}>
@@ -528,7 +530,7 @@ export function VulnPage({
 			title: t("关联资产"),
 			dataIndex: "assetLabel",
 			key: "asset",
-			width: 120,
+			width: 104,
 			ellipsis: true,
 			render: (_, item) =>
 				item.assetLabel ? (
@@ -547,7 +549,7 @@ export function VulnPage({
 			title: t("来源"),
 			dataIndex: "source",
 			key: "source",
-			width: 156,
+			width: 120,
 			ellipsis: { showTitle: true },
 			render: (_, item) => <Text type="secondary">{vulnSource(item.source)}</Text>,
 		},
@@ -555,13 +557,13 @@ export function VulnPage({
 			title: t("提交时间"),
 			dataIndex: "createdAt",
 			key: "createdAt",
-			width: 112,
+			width: 100,
 			render: (_, item) => <Text type="secondary">{formatWhen(item.createdAt)}</Text>,
 		},
 		{
 			title: t("操作"),
 			key: "actions",
-			width: 88,
+			width: 76,
 			render: (_, item) => {
 				const hasSession = Boolean(item.sessionId && sessions.some((session) => session.id === item.sessionId));
 				const reason = item.sessionId

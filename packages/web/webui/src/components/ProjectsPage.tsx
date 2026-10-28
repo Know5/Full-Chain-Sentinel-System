@@ -12,10 +12,10 @@
  * container's current state.
  */
 
-import { DeleteOutlined, EllipsisOutlined, GlobalOutlined, PlayCircleOutlined, PlusOutlined, ReloadOutlined, StopOutlined } from "@ant-design/icons";
+import { DeleteOutlined, GlobalOutlined, PlayCircleOutlined, PlusOutlined, ReloadOutlined, StopOutlined } from "@ant-design/icons";
 import { ProTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
-import { Alert, App, Badge, Button, Dropdown, Form, Input, Modal, Radio, Space, Tag, Tooltip, Typography } from "antd";
+import { Alert, App, Badge, Button, Form, Input, Modal, Radio, Space, Tag, Tooltip, Typography } from "antd";
 
 import { useState } from "react";
 import { t } from "../i18n.ts";
@@ -161,6 +161,7 @@ export function ProjectsPage({
 			title: t("项目名"),
 			dataIndex: "name",
 			key: "name",
+			width: 200,
 			ellipsis: { showTitle: true },
 			render: (_, project) => (
 				<Space size={6}>
@@ -186,11 +187,10 @@ export function ProjectsPage({
 						<Badge status={stateStatus(project)} />
 					</Tooltip>
 					{project.container ? (
-						<Tooltip title={project.container}>
-							<Text className="table-mono">{shortContainer(project.container)}</Text>
-						</Tooltip>
-					) : null}
-					{project.state === "running" ? null : (
+						<Text className="table-mono" title={`${project.container} · ${stateLabel(project)}`}>
+							{shortContainer(project.container)}
+						</Text>
+					) : (
 						<Text type="secondary">{stateLabel(project)}</Text>
 					)}
 				</Space>
@@ -240,7 +240,7 @@ export function ProjectsPage({
 		{
 			title: t("操作"),
 			key: "actions",
-			width: 200,
+			width: 420,
 			render: (_, project) => {
 				const running = project.state === "running";
 				return (
@@ -269,35 +269,25 @@ export function ProjectsPage({
 								{t("启动")}
 							</Button>
 						)}
-						<Dropdown
-							trigger={["click"]}
-							menu={{
-								items: [
-									{
-										key: "recreate",
-										icon: <ReloadOutlined />,
-										label: t("重建容器"),
-										onClick: () => recreate(project),
-									},
-									{
-										key: "proxy",
-										icon: <GlobalOutlined />,
-										label: t("代理设置"),
-										onClick: () => setProxyFor(project),
-									},
-									{ type: "divider" },
-									{
-										key: "delete",
-										icon: <DeleteOutlined />,
-										danger: true,
-										label: t("删除项目"),
-										onClick: () => openDelete(project),
-									},
-								],
-							}}
+						<Button
+							size="small"
+							icon={<ReloadOutlined />}
+							disabled={busy || actionBusy}
+							onClick={() => recreate(project)}
 						>
-							<Button size="small" type="text" icon={<EllipsisOutlined />} aria-label={t("更多操作")} />
-						</Dropdown>
+							{t("重建容器")}
+						</Button>
+						<Button size="small" icon={<GlobalOutlined />} onClick={() => setProxyFor(project)}>
+							{t("代理设置")}
+						</Button>
+						<Button
+							size="small"
+							danger
+							icon={<DeleteOutlined />}
+							onClick={() => openDelete(project)}
+						>
+							{t("删除项目")}
+						</Button>
 					</Space>
 				);
 			},

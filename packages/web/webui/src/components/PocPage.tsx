@@ -15,7 +15,7 @@
 
 import { CopyOutlined, DeleteOutlined, DownloadOutlined, SearchOutlined, UploadOutlined } from "@ant-design/icons";
 import { ProTable } from "@ant-design/pro-components";
-import { Alert, Button, Input, Popconfirm, Select, Space, Tag, Tooltip, Typography } from "antd";
+import { Alert, Button, Drawer, Input, Popconfirm, Select, Space, Tag, Tooltip, Typography } from "antd";
 import type { ProColumns } from "@ant-design/pro-components";
 import { useRef, useState } from "react";
 import { t } from "../i18n.ts";
@@ -113,6 +113,8 @@ export function PocPage({
 	const [search, setSearch] = useState(filters.search ?? "");
 	const [tag, setTag] = useState(filters.tag ?? "");
 	const [openId, setOpenId] = useState<string | null>(null);
+	const openItem = items.find((item) => item.id === openId) ?? null;
+	const loadedDetail = detail && detail.id === openId ? detail : null;
 	const fileInput = useRef<HTMLInputElement | null>(null);
 
 	const apply = (patch: SentinelPocFilters): void => {
@@ -384,62 +386,13 @@ export function PocPage({
 					onChange: (next) => onPageChange(next),
 				}}
 				scroll={{ x: 1080 }}
-				expandable={{
-					expandedRowKeys: openId ? [openId] : [],
-					onExpandedRowsChange: (keys) => {
-						const key = keys[0];
-						if (key === undefined) setOpenId(null);
+				onRow={(record) => ({
+					onClick: () => {
+						setOpenId(record.id);
+						onOpen(record.id);
 					},
-					onExpand: (expanded, record) => {
-						if (expanded) {
-							setOpenId(record.id);
-							onOpen(record.id);
-						}
-					},
-					expandRowByClick: true,
-					expandedRowRender: (record) => {
-						const loaded = detail?.id === record.id ? detail : null;
-						return (
-							<div className="poc-yaml">
-								<div className="poc-yaml__head">
-									<Text type="secondary" className="poc-yaml__meta">
-										{record.sourceFile} · {t("导入")} {shortWhen(record.importedAt)}
-										{record.tags.length > 0 ? ` · ${record.tags.join(", ")}` : ""}
-									</Text>
-									<Space size={4}>
-										<Button
-											size="small"
-											type="text"
-											icon={<CopyOutlined />}
-											disabled={!loaded}
-											onClick={() => {
-												if (loaded) void navigator.clipboard.writeText(loaded.content).catch(() => {});
-											}}
-										>
-											{t("复制全文")}
-										</Button>
-										<Popconfirm
-											title={t("删除模板")}
-											description={t("删除「{id}」？该操作不可恢复。", { id: record.id })}
-											okText={t("删除")}
-											okButtonProps={{ danger: true }}
-											cancelText={t("取消")}
-											onConfirm={() => {
-												setOpenId(null);
-												onDelete(record.id);
-											}}
-										>
-											<Button size="small" type="text" danger icon={<DeleteOutlined />}>
-												{t("删除模板")}
-											</Button>
-										</Popconfirm>
-									</Space>
-								</div>
-								<pre className="poc-yaml__code">{loaded ? loaded.content : t("加载模板全文…")}</pre>
-							</div>
-						);
-					},
-				}}
+					style: { cursor: "pointer" },
+				})}
 				locale={{
 					emptyText: t(
 						"暂无模板。点右上「导入 POC」上传 nuclei 模板（可多选 yaml 或 zip）；导入后 Agent 可用 poc_search / poc_read 只读检索。",
@@ -453,6 +406,62 @@ export function PocPage({
 				</Text>
 				<Text type="secondary">{totalLine}</Text>
 			</div>
+
+			<Drawer
+				open={openItem !== null}
+				width={780}
+				onClose={() => setOpenId(null)}
+				destroyOnHidden
+				className="poc-drawer"
+				title={
+					<Space size={8} wrap>
+						<Text className="table-mono">{openItem?.id ?? ""}</Text>
+						{openItem ? <Tag variant="filled">{openItem.severity}</Tag> : null}
+					</Space>
+				}
+			>
+				{openItem ? (
+					<div className="poc-yaml">
+						<div className="poc-yaml__head">
+							<Text type="secondary" className="poc-yaml__meta">
+								{openItem.name} · {openItem.sourceFile} · {t("导入")} {shortWhen(openItem.importedAt)}
+								{openItem.tags.length > 0 ? ` · ${openItem.tags.join(", ")}` : ""}
+							</Text>
+							<Space size={4}>
+								<Button
+									size="small"
+									icon={<CopyOutlined />}
+									disabled={!loadedDetail}
+									onClick={() => {
+										if (loadedDetail) void navigator.clipboard.writeText(loadedDetail.content).catch(() => {});
+									}}
+								>
+									{t("复制全文")}
+								</Button>
+								<Popconfirm
+									title={t("删除模板")}
+									description={t("删除「{id}」？该操作不可恢复。", { id: openItem.id })}
+									okText={t("删除")}
+									okButtonProps={{ danger: true }}
+									cancelText={t("取消")}
+									onConfirm={() => {
+										const id = openItem.id;
+										setOpenId(null);
+										onDelete(id);
+									}}
+								>
+									<Button size="small" danger icon={<DeleteOutlined />}>
+										{t("删除模板")}
+									</Button>
+								</Popconfirm>
+							</Space>
+						</div>
+						<pre className="poc-yaml__code">
+							{loadedDetail ? loadedDetail.content : t("加载模板全文…")}
+						</pre>
+					</div>
+				) : null}
+			</Drawer>
 		</Page>
 	);
 }

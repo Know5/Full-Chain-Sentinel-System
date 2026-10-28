@@ -330,7 +330,8 @@ export function EnginePage(props: EnginePageProps) {
 
 	if (view === "create") {
 		return (
-			<CreateEngineForm
+			<div className="ui-page enginewiz-page">
+				<CreateEngineForm
 					doctrines={props.doctrines}
 					presets={props.presets}
 					hasProject={props.hasProject}
@@ -341,6 +342,7 @@ export function EnginePage(props: EnginePageProps) {
 						setView("list");
 					}}
 				/>
+			</div>
 		);
 	}
 

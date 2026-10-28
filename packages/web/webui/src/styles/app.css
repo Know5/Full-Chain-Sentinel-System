@@ -302,7 +302,7 @@ body {
 .console-page > .ui-page {
 	flex: 0 1 auto;
 	width: 100%;
-	max-width: 1200px;
+	max-width: 1600px;
 	margin-inline: auto;
 	max-height: 100%;
 	min-height: 0;
@@ -3197,13 +3197,27 @@ body {
 
 .proxyhub-name {
 	display: flex;
-	flex-direction: column;
-	align-items: flex-start;
-	gap: 2px;
+	flex-direction: row;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
 }
 
 .proxyhub-name .ant-typography {
 	font-size: 12.5px;
+}
+
+.proxyhub-name > .ant-typography,
+.proxyhub-name .ant-space-item {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.proxyhub-name > .ant-typography.ant-typography-secondary {
+	flex: 1 1 auto;
 }
 
 .proxyhub-num {
@@ -7200,4 +7214,44 @@ body {
 
 .gatehub-source > .ant-btn {
 	flex: none;
+}
+
+
+.vulnhub-severity,
+.vulnhub-status {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	min-width: 0;
+	overflow: hidden;
+	flex-wrap: nowrap;
+}
+
+.vulnhub-mismatch {
+	font-weight: 600;
+}
+
+
+/* The new-engine wizard is a long form: it gets the page sheet and its own
+   scroll, so step 2 (doctrines + presets) can be scrolled through. */
+.console-page > .ui-page.enginewiz-page {
+	flex: 1;
+	min-height: 0;
+	overflow: auto;
+}
+
+
+/* Detail drawers for the gatekeeper audit and the POC library. */
+.gatehub-drawer .ant-drawer-body,
+.poc-drawer .ant-drawer-body {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.poc-drawer .poc-yaml__head {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px;
 }

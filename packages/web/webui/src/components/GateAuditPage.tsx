@@ -14,7 +14,7 @@
 import { ReloadOutlined, SearchOutlined } from "@ant-design/icons";
 import { ProTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
-import { Alert, Button, Empty, Input, Select, Space, Statistic, Tabs, Tag, Typography } from "antd";
+import { Alert, Button, Drawer, Empty, Input, Select, Space, Statistic, Tabs, Tag, Typography } from "antd";
 import { useMemo, useState } from "react";
 import { getLanguage, t } from "../i18n.ts";
 import type {
@@ -133,6 +133,7 @@ export function GateAuditPage({
 	const [search, setSearch] = useState(filter.search ?? "");
 	const [windowIndex, setWindowIndex] = useState(0);
 	const [expanded, setExpanded] = useState<string | null>(null);
+	const detailItem = items.find((item) => item.id === expanded) ?? null;
 
 	/**
 	 * Which tab the filter selects. An absent or empty list reads as the first
@@ -465,35 +466,10 @@ export function GateAuditPage({
 						</div>
 					),
 				}}
-				expandable={{
-					expandedRowKeys: expanded ? [expanded] : [],
-					onExpandedRowsChange: (keys) => {
-						const key = keys[0];
-						if (key === undefined) setExpanded(null);
-					},
-					onExpand: (open, record) => {
-						if (open) setExpanded(record.id);
-					},
-					expandRowByClick: true,
-					expandedRowRender: (item) => (
-						<div className="gatehub-detail">
-							{item.tool !== "bash" ? <div>{t("工具：{tool}", { tool: item.tool })}</div> : null}
-							<div>{t("方式：{mode}", { mode: SENTINEL_GATE_APPROVAL_LABELS[item.approval] })}</div>
-							{item.reason ? <div>{t("理由：{reason}", { reason: item.reason })}</div> : null}
-							{item.error ? (
-								<div className="gatehub-detail__error">{t("失败：{error}", { error: item.error })}</div>
-							) : null}
-							<div>{t("工作目录：{cwd}", { cwd: item.cwd ?? "-" })}</div>
-							<div>
-								{t("tokens：{count}", { count: item.totalTokens ?? "-" })}
-								{item.modelFrom ? t(" · 来源 {from}", { from: item.modelFrom }) : ""}
-								{item.commandTruncated ? t(" · 命令已截断存储") : ""}
-							</div>
-							{item.commandTruncated ? <div>{t("（记录里的命令超过 8 KB，已截断）")}</div> : null}
-							<pre className="gatehub-command-full">{item.command}</pre>
-						</div>
-					),
-				}}
+				onRow={(item) => ({
+					onClick: () => setExpanded(item.id),
+					style: { cursor: "pointer" },
+				})}
 				locale={{
 					emptyText: (
 						<Empty
@@ -522,6 +498,44 @@ export function GateAuditPage({
 					),
 				}}
 			/>
+
+			<Drawer
+				open={detailItem !== null}
+				width={720}
+				onClose={() => setExpanded(null)}
+				destroyOnHidden
+				className="gatehub-drawer"
+				title={
+					<Space size={8} wrap>
+						<Text strong>{detailItem ? SENTINEL_GATE_DECISION_LABELS[detailItem.decision] : ""}</Text>
+						{detailItem ? (
+							<Text type="secondary">{formatClock(detailItem.at)}</Text>
+						) : null}
+					</Space>
+				}
+			>
+				{detailItem ? (
+					<div className="gatehub-detail">
+						<div>{t("调用：{tool}", { tool: detailItem.tool })}</div>
+						<div>{t("方式：{mode}", { mode: SENTINEL_GATE_APPROVAL_LABELS[detailItem.approval] })}</div>
+						{detailItem.reason ? <div>{t("理由：{reason}", { reason: detailItem.reason })}</div> : null}
+						{detailItem.error ? (
+							<div className="gatehub-detail__error">
+								{t("失败：{error}", { error: detailItem.error })}
+							</div>
+						) : null}
+						<div>{t("来源：{source}", { source: detailItem.source })}</div>
+						<div>{t("工作目录：{cwd}", { cwd: detailItem.cwd ?? "-" })}</div>
+						<div>
+							{t("tokens：{count}", { count: detailItem.totalTokens ?? "-" })}
+							{detailItem.modelFrom ? t(" · 来源 {from}", { from: detailItem.modelFrom }) : ""}
+							{detailItem.commandTruncated ? t(" · 命令已截断存储") : ""}
+						</div>
+						{detailItem.commandTruncated ? <div>{t("（记录里的命令超过 8 KB，已截断）")}</div> : null}
+						<pre className="gatehub-command-full">{detailItem.command}</pre>
+					</div>
+				) : null}
+			</Drawer>
 		</Page>
 	);
 }
