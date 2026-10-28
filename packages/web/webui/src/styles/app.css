@@ -356,11 +356,11 @@ body {
 	flex-direction: column;
 	min-width: 0;
 	min-height: 0;
-	padding: 12px 14px 14px;
-	background: #fff;
-	border: 1px solid var(--console-border);
-	border-radius: 10px;
-	box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+	padding: 0;
+	background: transparent;
+	border: 0;
+	border-radius: 0;
+	box-shadow: none;
 }
 
 .ui-page__head {
@@ -764,10 +764,11 @@ body {
 /* ---------- Chat page ---------- */
 
 .chat-main > .page-card {
-	padding: 10px 12px;
-	border-radius: 10px;
-	border-color: var(--console-border);
-	box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+	padding: 0;
+	background: transparent;
+	border: 0;
+	border-radius: 0;
+	box-shadow: none;
 }
 
 .chat-head {
@@ -5124,16 +5125,19 @@ body {
 	height: 100%;
 	overflow: hidden;
 }
+/* Pages are not boxes: the content sits directly on the console canvas, so a
+   table or a transcript does not float inside a second white frame. */
 .page-card {
 	flex: 1;
 	min-height: 0;
 	min-width: 0;
 	display: flex;
 	flex-direction: column;
-	padding: var(--gutter);
-	background: var(--card);
-	border: 1px solid var(--border);
-	border-radius: var(--radius);
+	padding: 0;
+	background: transparent;
+	border: 0;
+	border-radius: 0;
+	box-shadow: none;
 }
 .ws-panel__body {
 	flex: 1;
