@@ -7142,3 +7142,35 @@ body {
 	white-space: nowrap;
 	vertical-align: bottom;
 }
+
+
+/* Target and source cells: a mono value plus a tag, or a long source name plus
+   a link, on one line; the text truncates and the full value is in the title. */
+.vulnhub-target,
+.gatehub-source {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	overflow: hidden;
+	flex-wrap: nowrap;
+}
+
+.vulnhub-target .ant-space-item,
+.gatehub-source .ant-space-item {
+	min-width: 0;
+	overflow: hidden;
+}
+
+.vulnhub-target .ant-typography,
+.gatehub-source .ant-typography {
+	display: block;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gatehub-source > .ant-btn {
+	flex: none;
+}

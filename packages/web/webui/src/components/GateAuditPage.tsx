@@ -224,12 +224,15 @@ export function GateAuditPage({
 			title: t("来源"),
 			dataIndex: "source",
 			key: "source",
-			width: 156,
+			width: 200,
+			ellipsis: true,
 			render: (_, item) => {
 				const sessionPath = item.sessionId ? sessionPathOf(item.sessionId) : null;
 				return (
-					<Space size={6}>
-						<Text type="secondary">{item.source}</Text>
+					<Space size={6} className="gatehub-source">
+						<Text type="secondary" title={item.source}>
+							{item.source}
+						</Text>
 						{sessionPath ? (
 							<Button
 								type="link"

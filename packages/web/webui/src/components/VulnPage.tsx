@@ -474,7 +474,7 @@ export function VulnPage({
 			dataIndex: "label",
 			key: "label",
 			width: 104,
-			render: (_, item) => <Text code>{item.label}</Text>,
+			render: (_, item) => <Text className="table-mono">{item.label}</Text>,
 		},
 		{
 			title: t("等级"),
@@ -519,8 +519,10 @@ export function VulnPage({
 			width: 168,
 			ellipsis: true,
 			render: (_, item) => (
-				<Space size={6}>
-					<Text code>{item.target}</Text>
+				<Space size={6} className="vulnhub-target">
+					<Text className="table-mono" title={item.target}>
+						{item.target}
+					</Text>
 					{item.assetLabel ? <Tag variant="filled">{item.assetLabel}</Tag> : null}
 				</Space>
 			),
