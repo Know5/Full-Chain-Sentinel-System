@@ -368,8 +368,8 @@ export function PocPage({
 				columns={columns}
 				dataSource={items}
 				search={false}
+				options={false}
 				toolbar={{ title: <Space size={8}>{toolbarFilters}</Space> }}
-				options={{ density: true, setting: true, fullScreen: true, reload: false }}
 				pagination={{
 					current: Math.max(1, page),
 					pageSize,

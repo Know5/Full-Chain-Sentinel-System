@@ -618,6 +618,7 @@ export function AssetLibraryPage({
 				columns={columns}
 				dataSource={items}
 				search={false}
+				options={false}
 				scroll={{ x: 980 }}
 				rowSelection={{
 					selectedRowKeys: selectedIds,

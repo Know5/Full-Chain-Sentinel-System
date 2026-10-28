@@ -435,6 +435,7 @@ export function SupervisorAuditPage({
 				dataSource={page?.items ?? []}
 				loading={!page}
 				search={false}
+				options={false}
 				scroll={{ x: 1080 }}
 				pagination={
 					page

@@ -375,6 +375,7 @@ export function GateAuditPage({
 				columns={columns}
 				dataSource={items}
 				search={false}
+				options={false}
 				scroll={{ x: 900 }}
 				pagination={{
 					current: Math.max(1, page),

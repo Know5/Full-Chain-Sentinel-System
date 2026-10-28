@@ -319,6 +319,7 @@ export function PocSourcesPanel({
 				columns={columns}
 				dataSource={sources}
 				search={false}
+				options={false}
 				pagination={false}
 				scroll={{ x: 1080 }}
 				toolbar={{

@@ -428,6 +428,7 @@ export function ApiModelPage({
 				columns={columns}
 				dataSource={visible}
 				search={false}
+				options={false}
 				pagination={false}
 				scroll={{ x: 900 }}
 				toolbar={{

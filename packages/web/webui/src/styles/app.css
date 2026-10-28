@@ -5801,22 +5801,6 @@ body {
 	font-size: 12px;
 	line-height: 1.6;
 }
-.markdown-body table {
-	border-collapse: collapse;
-	margin: 6px 0;
-	font-size: 12.5px;
-	width: 100%;
-}
-.markdown-body th,
-.markdown-body td {
-	border: 1px solid var(--border);
-	padding: 5px 10px;
-	text-align: left;
-}
-.markdown-body th {
-	background: var(--raised);
-	color: var(--text-bright);
-}
 .markdown-body blockquote {
 	border-left: 3px solid var(--border-strong);
 	margin: 6px 0;
@@ -7028,4 +7012,24 @@ body {
 .projstats__label {
 	font-size: 12px;
 	color: #667085;
+}
+
+
+/* ---------- One table look ---------- */
+
+.ant-table-tbody > tr:last-child > td {
+	border-bottom: 0;
+}
+
+.ant-table-placeholder .ant-empty {
+	margin-block: 12px;
+}
+
+.ant-table-pagination.ant-pagination {
+	font-size: 12.5px;
+}
+
+.ant-table-tbody > tr > td .ant-btn-link,
+.ant-table-tbody > tr > td a {
+	font-size: 12.5px;
 }

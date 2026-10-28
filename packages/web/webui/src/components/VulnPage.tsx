@@ -660,6 +660,7 @@ export function VulnPage({
 				columns={columns}
 				dataSource={items}
 				search={false}
+				options={false}
 				pagination={false}
 				scroll={{ x: 1010 }}
 				rowSelection={{

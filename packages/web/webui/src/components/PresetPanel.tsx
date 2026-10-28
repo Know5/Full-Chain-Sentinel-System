@@ -248,6 +248,7 @@ export function PresetPanel({
 				columns={columns}
 				dataSource={presets}
 				search={false}
+				options={false}
 				pagination={false}
 				scroll={{ x: 1000 }}
 				toolbar={{
