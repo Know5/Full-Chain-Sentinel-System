@@ -1446,9 +1446,18 @@ body {
 
 .assethub-name {
 	display: flex;
-	flex-direction: column;
-	gap: 2px;
+	flex-direction: row;
+	align-items: center;
+	gap: 8px;
 	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+}
+
+.assethub-name > .ant-typography {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .assethub-name .ant-typography-secondary {
@@ -1591,8 +1600,13 @@ body {
 
 .gatehub-model {
 	display: flex;
-	flex-direction: column;
+	flex-direction: row;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	overflow: hidden;
 	font-size: 12px;
+	white-space: nowrap;
 }
 
 .gatehub-detail {
@@ -7115,9 +7129,9 @@ body {
 	white-space: nowrap;
 }
 
-/* The POC id is an identifier, not code: mono text on one line, full value on
-   hover, instead of a bordered chip that truncates mid-word. */
-.poc-id {
+/* Identifiers (POC id, asset label, command line) are mono text on one line,
+   full value on hover, instead of a bordered code chip that truncates mid-word. */
+.table-mono {
 	display: inline-block;
 	max-width: 100%;
 	overflow: hidden;

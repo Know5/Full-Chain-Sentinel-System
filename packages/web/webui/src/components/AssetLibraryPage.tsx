@@ -496,7 +496,7 @@ export function AssetLibraryPage({
 			dataIndex: "label",
 			key: "label",
 			width: 108,
-			render: (_, item) => <Text code>{item.label}</Text>,
+			render: (_, item) => <Text className="table-mono">{item.label}</Text>,
 		},
 		{
 			title: t("类型"),
@@ -516,7 +516,9 @@ export function AssetLibraryPage({
 			ellipsis: { showTitle: true },
 			render: (_, item) => (
 				<div className="assethub-name">
-					<Text code>{item.name}</Text>
+					<Text className="table-mono" title={item.name}>
+						{item.name}
+					</Text>
 					{item.title ? <Text type="secondary">{item.title}</Text> : null}
 				</div>
 			),

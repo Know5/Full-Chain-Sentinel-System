@@ -214,8 +214,8 @@ export function GateAuditPage({
 							{toolLabel(item.tool)}
 						</Tag>
 					) : null}
-					<Text code className="gatehub-command">
-						{item.command.split("\n")[0]?.slice(0, 200)}
+					<Text className="table-mono gatehub-command" title={item.command}>
+						{item.command.split("\n")[0]}
 					</Text>
 				</div>
 			),

@@ -144,7 +144,7 @@ export function PocPage({
 			sorter: (left, right) => left.id.localeCompare(right.id),
 			render: (_, item) => (
 				<Tooltip title={item.id}>
-					<Text className="poc-id">{item.id}</Text>
+					<Text className="table-mono">{item.id}</Text>
 				</Tooltip>
 			),
 		},
