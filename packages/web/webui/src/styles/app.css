@@ -297,11 +297,14 @@ body {
 /* The card keeps the height of the window (a half-height card over grey read as
    unfinished), but its width is capped so a five-column table is not stretched
    across an ultrawide monitor. */
+/* A content page is a sheet, not a viewport: it ends where its content ends,
+   so a three-row table does not leave half a screen of empty white. */
 .console-page > .ui-page {
-	flex: 1;
+	flex: 0 1 auto;
 	width: 100%;
 	max-width: 1200px;
 	margin-inline: auto;
+	max-height: 100%;
 	min-height: 0;
 }
 
@@ -356,16 +359,17 @@ body {
 	flex-direction: column;
 	min-width: 0;
 	min-height: 0;
-	padding: 0;
-	background: transparent;
+	padding: 12px 14px 14px;
+	background: #fff;
 	border: 0;
-	border-radius: 0;
+	border-radius: 12px;
 	box-shadow: none;
 }
 
 .ui-page__head {
 	flex: none;
-	padding-bottom: 8px;
+	padding-bottom: 10px;
+	background: transparent;
 	border-bottom: 1px solid var(--console-border);
 }
 
@@ -587,9 +591,8 @@ body {
 	padding: 10px;
 	min-height: 0;
 	background: #fff;
-	border: 1px solid var(--console-border);
+	border: 0;
 	border-radius: 12px;
-	box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
 }
 
 .session-panel__head {
@@ -764,10 +767,10 @@ body {
 /* ---------- Chat page ---------- */
 
 .chat-main > .page-card {
-	padding: 0;
-	background: transparent;
+	padding: 10px 12px;
+	background: #fff;
 	border: 0;
-	border-radius: 0;
+	border-radius: 12px;
 	box-shadow: none;
 }
 
@@ -5133,10 +5136,10 @@ body {
 	min-width: 0;
 	display: flex;
 	flex-direction: column;
-	padding: 0;
-	background: transparent;
+	padding: 10px 12px;
+	background: #fff;
 	border: 0;
-	border-radius: 0;
+	border-radius: 12px;
 	box-shadow: none;
 }
 .ws-panel__body {
