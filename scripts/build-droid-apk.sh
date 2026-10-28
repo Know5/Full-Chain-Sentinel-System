@@ -6,7 +6,8 @@
 #   - Gradle 8.7:  mirrors.cloud.tencent.com/gradle/gradle-8.7-bin.zip
 #   - platform-34: mirrors.cloud.tencent.com/AndroidSDK/platform-34-ext7_r03.zip
 #   - build-tools: mirrors.cloud.tencent.com/AndroidSDK/build-tools_r34-macosx.zip
-# AGP/Kotlin/依赖走 settings.gradle.kts 里的阿里云 maven 镜像。
+# AGP/Kotlin/依赖走 settings.gradle.kts 里的阿里云 maven 镜像；镜像故障时用
+# SENTINEL_GRADLE_MIRROR=off 让这次构建走官方 google() / mavenCentral()。
 set -euo pipefail
 
 TOOLS_DIR="${HOME}/sentinel-tools"

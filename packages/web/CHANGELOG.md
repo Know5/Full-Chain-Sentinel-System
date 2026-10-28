@@ -271,6 +271,7 @@
 
 ### Fixed
 
+- DroidBridge APK 的 CI 构建不再依赖阿里云 `gradle-plugin` 镜像：该镜像对 `com.android.tools.build:gradle-settings-api:8.5.2` 返回 502 时，Gradle 不会把它当 404 继续尝试 `google()`，整次发布直接失败。CI 现在使用官方 `google()` / `mavenCentral()`；本地构建仍默认走镜像，镜像故障时可用 `SENTINEL_GRADLE_MIRROR=off` 切回官方仓库。
 - 项目页的「停止容器」「重建容器」「删除项目…」恢复可用：这三项此前只把状态写进页面，对应的确认弹窗根本没渲染，点了没有任何反应（看起来像摆设）。同时把四个并列的 `pending*` 状态合并成一个 `{action, id}`，让「菜单项没有对应弹窗」变成类型错误而不是静默失效；`.data-table` 的 `overflow: hidden` 也去掉了——行内 `⋯` 菜单是绝对定位的，被表格裁掉后最后一行整菜单都看不见，圆角改由首尾行自己承担。
 
 - iOS 真机验收修复：Frida 17 移除 `Module.findExportByName`/`Process.exit`，内建脚本改用兼容 helper 与 C `exit()`；Mach-O 解析按实际小端读取（TS 与 Swift），`app_info` 不再把 arm64 报成未知架构；daemon `posix_spawn` 关闭子进程继承的管道写端，后台 tcpdump 不再让 `ios_shell`/`ios_capture_start` 等到超时；抓包改用 pidfile，不再依赖设备上没有的 `pgrep`/`pkill`；tshark JSON 兼容嵌套协议对象、`--no-duplicate-keys` 与冒号分隔 hex body，并先判 response 再判 request，避免响应被当成幽灵请求。

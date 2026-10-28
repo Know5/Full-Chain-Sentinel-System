@@ -246,6 +246,10 @@ jobs:
       - name: Build the debug APK
         env:
           JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
+          # The Aliyun gradle-plugin mirror answered 502 for gradle-settings-api and
+          # Gradle aborts instead of falling through to google(); CI uses the official
+          # repositories.
+          SENTINEL_GRADLE_MIRROR: "off"
         run: gradle -p packages/droid-apk --no-daemon assembleDebug
 
       - name: Upload the APK
