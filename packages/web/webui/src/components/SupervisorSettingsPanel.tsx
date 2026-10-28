@@ -1,5 +1,24 @@
+import { DeleteOutlined, EditOutlined, PlusOutlined, SwapOutlined } from "@ant-design/icons";
+import {
+	Alert,
+	Button,
+	Card,
+	Checkbox,
+	Col,
+	Form,
+	Input,
+	InputNumber,
+	List,
+	Modal,
+	Row,
+	Select,
+	Space,
+	Tag,
+	Typography,
+} from "antd";
 import { useEffect, useState } from "react";
 import { t } from "../i18n.ts";
+import { SUPERVISOR_STRATEGY_OPTIONS, supervisorStrategyKey } from "../supervisor-strategy.ts";
 import type {
 	SentinelModelLibraryView,
 	SentinelSupervisorConfig,
@@ -8,9 +27,10 @@ import type {
 	SentinelSupervisorStrategyRef,
 	SentinelTestResult,
 } from "../types.ts";
-import { SUPERVISOR_STRATEGY_OPTIONS, supervisorStrategyKey } from "../supervisor-strategy.ts";
-import { ModelRolePicker } from "./ModelRolePicker.tsx";
 import { capabilityChips, hostOf } from "./model-ui.tsx";
+import { ModelRolePicker } from "./ModelRolePicker.tsx";
+
+const { Text } = Typography;
 
 interface CustomStrategyDraft {
 	id?: string;
@@ -44,6 +64,7 @@ export function SupervisorSettingsPanel({
 	const [supervisorTest, setSupervisorTest] = useState<SentinelTestResult | null>(null);
 	const [customStrategyDraft, setCustomStrategyDraft] = useState<CustomStrategyDraft | null>(null);
 	const [pickerOpen, setPickerOpen] = useState(false);
+
 	useEffect(() => {
 		// Snapshots arrive while a run is active; they must not wipe an unsaved edit.
 		if (!supervisorDirty) setSupervisorDraft(supervisorConfig);
@@ -131,328 +152,250 @@ export function SupervisorSettingsPanel({
 	const resolved = library?.resolved.supervisor ?? null;
 	const entry = library?.entries.find((candidate) => candidate.id === resolved?.entryId) ?? null;
 
-	return (
-		<div className="settings settings--wide cockpit">
-			<div className="cockpit-sec cockpit-sec--first">
-				<h3>{t("监督模型")}</h3>
-				<span className="cockpit-sec__meta">{t("观察模式总结与介入判断使用的端点")}</span>
-			</div>
-			<div className="cockpit-sup">
-				<div className="cockpit-sup__main">
-					<div className="cockpit-sup__name">
-						{entry?.name ?? t("未选择监督模型")}
-						{resolved?.followedMain ? <span className="cockpit-tag is-accent">{t("跟随主模型")}</span> : null}
-					</div>
-					<div className="cockpit-sup__sub">
-						{entry ? `${entry.modelId} · ${hostOf(entry.baseUrl)}` : t("尚未解析到可用端点")}
-					</div>
-					<div className="cockpit-chips">
-						{entry ? (
-							capabilityChips(entry).map((chip) => (
-								<span className="cockpit-chip" key={chip}>
-									{chip}
-								</span>
-							))
-						) : null}
-					</div>
-				</div>
-				<button type="button" className="cockpit-mini-btn" onClick={() => setPickerOpen(true)}>
-					{t("更换模型")}
-				</button>
-			</div>
-			<p className="cockpit-hint">
-				{t(
-					"建议使用低成本的独立模型，避免和监督对象共用同一端点。监督模型在「设置 → 模型」的模型库里维护。",
-				)}
-			</p>
+	const strategyOptions = [
+		...SUPERVISOR_STRATEGY_OPTIONS.map((option) => ({
+			ref: { strategy: option.id, customStrategyId: null } as SentinelSupervisorStrategyRef,
+			label: option.label,
+			hint: option.hint,
+			key: `preset-${option.id}`,
+		})),
+		...customStrategies.map((custom) => ({
+			ref: { strategy: custom.base, customStrategyId: custom.id } as SentinelSupervisorStrategyRef,
+			label: custom.name,
+			hint: custom.description,
+			key: custom.id,
+		})),
+	];
 
-			<div className="cockpit-sec">
-				<h3>{t("监督策略")}</h3>
-				<span className="cockpit-sec__meta">{t("全局阈值与新会话的默认值")}</span>
-			</div>
-			<p className="settings-hint">
-				{t(
-					"监督是会话级功能：开始对话前在输入框上方点「监督」才会生效。这里配置全局阈值、批大小、新会话的默认策略（可多选）和自定义策略；模式、策略和补充说明在对话里选。",
-				)}
-			</p>
-			<div className="supervisor-settings">
-				<label className="cockpit-check">
-					<input
-						type="checkbox"
-						checked={supervisorDraft.enabled}
-						onChange={(event) => updateSupervisor({ enabled: event.target.checked })}
-					/>
-					<span>{t("允许在对话中开启监督")}</span>
-				</label>
-				<div className="supervisor-settings__strategy">
-					<div className="supervisor-settings__strategy-head">
-						<span>{t("默认监督策略")}</span>
-						<span>{t("可多选 · {count} 个", { count: defaultStrategies.length })}</span>
+	return (
+		<>
+			<Card
+				size="small"
+				title={t("监督模型")}
+				extra={<Text type="secondary">{t("观察模式总结与介入判断使用的端点")}</Text>}
+			>
+				<div className="superset-model">
+					<div>
+						<Space size={6} wrap>
+							<Text strong>{entry?.name ?? t("未选择监督模型")}</Text>
+							{resolved?.followedMain ? (
+								<Tag color="blue" variant="filled">
+									{t("跟随主模型")}
+								</Tag>
+							) : null}
+						</Space>
+						<Text type="secondary" className="superset-model__sub">
+							{entry ? `${entry.modelId} · ${hostOf(entry.baseUrl)}` : t("尚未解析到可用端点")}
+						</Text>
+						<Space size={4} wrap>
+							{entry
+								? capabilityChips(entry).map((chip) => (
+										<Tag key={chip} variant="filled">
+											{chip}
+										</Tag>
+									))
+								: null}
+						</Space>
 					</div>
-					<div className="supervisor-strategy-grid">
-						{SUPERVISOR_STRATEGY_OPTIONS.map((option) => {
-							const ref: SentinelSupervisorStrategyRef = {
-								strategy: option.id,
-								customStrategyId: null,
-							};
+					<Button icon={<SwapOutlined />} onClick={() => setPickerOpen(true)}>
+						{t("更换模型")}
+					</Button>
+				</div>
+				<Text type="secondary" className="superset-note">
+					{t("建议使用低成本的独立模型，避免和监督对象共用同一端点。监督模型在「设置 → 模型」的模型库里维护。")}
+				</Text>
+			</Card>
+
+			<Card
+				size="small"
+				title={t("监督策略")}
+				extra={<Text type="secondary">{t("全局阈值与新会话的默认值")}</Text>}
+			>
+				<Text type="secondary" className="superset-note">
+					{t(
+						"监督是会话级功能：开始对话前在输入框上方点「监督」才会生效。这里配置全局阈值、批大小、新会话的默认策略（可多选）和自定义策略；模式、策略和补充说明在对话里选。",
+					)}
+				</Text>
+
+				<Checkbox
+					checked={supervisorDraft.enabled}
+					onChange={(event) => updateSupervisor({ enabled: event.target.checked })}
+				>
+					{t("允许在对话中开启监督")}
+				</Checkbox>
+
+				<div className="superset-section">
+					<Space size={8}>
+						<Text strong>{t("默认监督策略")}</Text>
+						<Text type="secondary">{t("可多选 · {count} 个", { count: defaultStrategies.length })}</Text>
+					</Space>
+					<div className="superset-strategies">
+						{strategyOptions.map((option) => {
 							const selected = defaultStrategies.some(
-								(entry) => supervisorStrategyKey(entry) === supervisorStrategyKey(ref),
+								(entry) => supervisorStrategyKey(entry) === supervisorStrategyKey(option.ref),
 							);
 							return (
-								<label
-									className={`supervisor-strategy-option ${selected ? "on" : ""}`}
-									key={option.id}
+								<Checkbox
+									key={option.key}
+									checked={selected}
+									className={selected ? "superset-strategy is-on" : "superset-strategy"}
+									onChange={() => toggleDefaultStrategy(option.ref)}
 								>
-									<input
-										type="checkbox"
-										checked={selected}
-										onChange={() => toggleDefaultStrategy(ref)}
-									/>
-									<span>
-										<b>{option.label}</b>
-										<small>{option.hint}</small>
+									<span className="superset-strategy__copy">
+										<Text strong>{option.label}</Text>
+										<Text type="secondary">{option.hint}</Text>
 									</span>
-								</label>
-							);
-						})}
-						{customStrategies.map((custom) => {
-							const ref: SentinelSupervisorStrategyRef = {
-								strategy: custom.base,
-								customStrategyId: custom.id,
-							};
-							const selected = defaultStrategies.some(
-								(entry) => supervisorStrategyKey(entry) === supervisorStrategyKey(ref),
-							);
-							return (
-								<label
-									className={`supervisor-strategy-option ${selected ? "on" : ""}`}
-									key={custom.id}
-								>
-									<input
-										type="checkbox"
-										checked={selected}
-										onChange={() => toggleDefaultStrategy(ref)}
-									/>
-									<span>
-										<b>{custom.name}</b>
-										<small>{custom.description}</small>
-									</span>
-								</label>
+								</Checkbox>
 							);
 						})}
 					</div>
-					<span className="hint">
+					<Text type="secondary" className="superset-note">
 						{t(
 							"可同时选择多个策略，开启监督时会合并生效；至少保留一个。这里只决定新会话的默认值，对话里仍可调整。",
 						)}
-					</span>
+					</Text>
 				</div>
-				<div className="supervisor-custom">
-					<div className="supervisor-custom__head">
-						<div>
-							<strong>{t("自定义策略")}</strong>
-							<span>{customStrategies.length} / 12</span>
-						</div>
-						<button
-							type="button"
+
+				<div className="superset-section">
+					<div className="superset-custom__head">
+						<Space size={8}>
+							<Text strong>{t("自定义策略")}</Text>
+							<Text type="secondary">
+								{customStrategies.length} / 12
+							</Text>
+						</Space>
+						<Button
+							size="small"
+							icon={<PlusOutlined />}
+							disabled={customStrategies.length >= 12 || customStrategyDraft !== null}
 							onClick={() =>
 								setCustomStrategyDraft({ name: "", base: "steady", description: "", instructions: "" })
 							}
-							disabled={customStrategies.length >= 12 || customStrategyDraft !== null}
 						>
-							{t("+ 新建")}
-						</button>
+							{t("新建")}
+						</Button>
 					</div>
-					{customStrategies.length === 0 && !customStrategyDraft ? (
-						<p className="supervisor-custom__empty">
-							{t("还没有自定义策略。可以基于五种预设，追加自己的关注点。")}
-						</p>
-					) : null}
-					{customStrategies.map((custom) => (
-						<div className="supervisor-custom__row" key={custom.id}>
-							<div>
-								<strong>{custom.name}</strong>
-								<span>
-									{SUPERVISOR_STRATEGY_OPTIONS.find((option) => option.id === custom.base)?.label ??
-										custom.base}{" "}
-									· {custom.description}
-								</span>
-							</div>
-							<div className="supervisor-custom__actions">
-								<button
-									type="button"
-									onClick={() =>
-										setCustomStrategyDraft({
-											id: custom.id,
-											name: custom.name,
-											base: custom.base,
-											description: custom.description,
-											instructions: custom.instructions,
-										})
-									}
+					{customStrategies.length === 0 ? (
+						<Text type="secondary">{t("还没有自定义策略。可以基于五种预设，追加自己的关注点。")}</Text>
+					) : (
+						<List
+							size="small"
+							dataSource={customStrategies}
+							renderItem={(custom) => (
+								<List.Item
+									actions={[
+										<Button
+											key="edit"
+											size="small"
+											type="link"
+											icon={<EditOutlined />}
+											onClick={() =>
+												setCustomStrategyDraft({
+													id: custom.id,
+													name: custom.name,
+													base: custom.base,
+													description: custom.description,
+													instructions: custom.instructions,
+												})
+											}
+										>
+											{t("编辑")}
+										</Button>,
+										<Button
+											key="delete"
+											size="small"
+											type="link"
+											danger
+											icon={<DeleteOutlined />}
+											onClick={() => removeCustomStrategy(custom.id)}
+										>
+											{t("删除")}
+										</Button>,
+									]}
 								>
-									{t("编辑")}
-								</button>
-								<button type="button" className="danger" onClick={() => removeCustomStrategy(custom.id)}>
-									{t("删除")}
-								</button>
-							</div>
-						</div>
-					))}
-					{customStrategyDraft ? (
-						<div className="supervisor-custom__editor">
-							<div className="supervisor-custom__editor-title">
-								{customStrategyDraft.id ? t("编辑自定义策略") : t("新建自定义策略")}
-							</div>
-							<label>
-								{t("名称")}
-								<input
-									value={customStrategyDraft.name}
-									maxLength={30}
-									onChange={(event) =>
-										setCustomStrategyDraft({ ...customStrategyDraft, name: event.target.value })
-									}
-									placeholder={t("例如：支付网关专用")}
-								/>
-							</label>
-							<label>
-								{t("基础预设")}
-								<select
-									value={customStrategyDraft.base}
-									onChange={(event) =>
-										setCustomStrategyDraft({
-											...customStrategyDraft,
-											base: event.target.value as SentinelSupervisorStrategy,
-										})
-									}
-								>
-									{SUPERVISOR_STRATEGY_OPTIONS.map((option) => (
-										<option value={option.id} key={option.id}>
-											{option.label}
-										</option>
-									))}
-								</select>
-							</label>
-							<label>
-								{t("一句话说明")}
-								<input
-									value={customStrategyDraft.description}
-									maxLength={80}
-									onChange={(event) =>
-										setCustomStrategyDraft({
-											...customStrategyDraft,
-											description: event.target.value,
-										})
-									}
-									placeholder={t("例如：先看授权边界，再验证越权")}
-								/>
-							</label>
-							<label>
-								{t("关注点与建议风格")}
-								<textarea
-									value={customStrategyDraft.instructions}
-									maxLength={500}
-									onChange={(event) =>
-										setCustomStrategyDraft({
-											...customStrategyDraft,
-											instructions: event.target.value,
-										})
-									}
-									placeholder={t("例如：优先验证 IDOR；不做目录爆破；建议必须给出对照请求。")}
-								/>
-							</label>
-							<p className="hint">
-								{t("自定义说明只改变监督关注点和建议风格，不能放宽授权范围或安全规则。")}
-							</p>
-							<div className="supervisor-custom__editor-actions">
-								<button type="button" onClick={() => setCustomStrategyDraft(null)}>
-									{t("取消")}
-								</button>
-								<button
-									type="button"
-									className="primary"
-									disabled={!customStrategyDraft.name.trim() || !customStrategyDraft.instructions.trim()}
-									onClick={commitCustomStrategy}
-								>
-									{t("保存到列表")}
-								</button>
-							</div>
-						</div>
-					) : null}
-					<p className="hint">
+									<List.Item.Meta
+										title={custom.name}
+										description={`${
+											SUPERVISOR_STRATEGY_OPTIONS.find((option) => option.id === custom.base)?.label ??
+											custom.base
+										} · ${custom.description}`}
+									/>
+								</List.Item>
+							)}
+						/>
+					)}
+					<Text type="secondary" className="superset-note">
 						{t("先保存到列表，再点下方「保存监督设置」写入配置。")}
-					</p>
+					</Text>
 				</div>
-				<div className="supervisor-settings__grid">
-					<label>
-						{t("每批调用数")}
-						<input
-							type="number"
-							min={5}
-							max={100}
-							value={supervisorDraft.batchToolCalls}
-							onChange={(event) => updateSupervisor({ batchToolCalls: Number(event.target.value) || 20 })}
-						/>
-					</label>
-					<label>
-						{t("重复阈值")}
-						<input
-							type="number"
-							min={2}
-							max={50}
-							value={supervisorDraft.duplicateThreshold}
-							onChange={(event) =>
-								updateSupervisor({ duplicateThreshold: Number(event.target.value) || 3 })
-							}
-						/>
-					</label>
-					<label>
-						{t("无新证据阈值")}
-						<input
-							type="number"
-							min={2}
-							max={50}
-							value={supervisorDraft.noProgressCalls}
-							onChange={(event) => updateSupervisor({ noProgressCalls: Number(event.target.value) || 10 })}
-						/>
-					</label>
-					<label>
-						{t("连续报错阈值")}
-						<input
-							type="number"
-							min={2}
-							max={50}
-							value={supervisorDraft.errorStreak}
-							onChange={(event) => updateSupervisor({ errorStreak: Number(event.target.value) || 3 })}
-						/>
-					</label>
-					<label>
-						{t("超时（秒）")}
-						<input
-							type="number"
-							min={5}
-							max={300}
-							value={Math.round(supervisorDraft.timeoutMs / 1000)}
-							onChange={(event) =>
-								updateSupervisor({ timeoutMs: (Number(event.target.value) || 180) * 1000 })
-							}
-						/>
-					</label>
+
+				<div className="superset-section">
+					<Row gutter={[12, 12]}>
+						<Col xs={12} md={8} lg={4}>
+							<Text type="secondary">{t("每批调用数")}</Text>
+							<InputNumber
+								min={5}
+								max={100}
+								style={{ width: "100%" }}
+								value={supervisorDraft.batchToolCalls}
+								onChange={(value) => updateSupervisor({ batchToolCalls: value ?? 20 })}
+							/>
+						</Col>
+						<Col xs={12} md={8} lg={4}>
+							<Text type="secondary">{t("重复阈值")}</Text>
+							<InputNumber
+								min={2}
+								max={50}
+								style={{ width: "100%" }}
+								value={supervisorDraft.duplicateThreshold}
+								onChange={(value) => updateSupervisor({ duplicateThreshold: value ?? 3 })}
+							/>
+						</Col>
+						<Col xs={12} md={8} lg={4}>
+							<Text type="secondary">{t("无新证据阈值")}</Text>
+							<InputNumber
+								min={2}
+								max={50}
+								style={{ width: "100%" }}
+								value={supervisorDraft.noProgressCalls}
+								onChange={(value) => updateSupervisor({ noProgressCalls: value ?? 10 })}
+							/>
+						</Col>
+						<Col xs={12} md={8} lg={4}>
+							<Text type="secondary">{t("连续报错阈值")}</Text>
+							<InputNumber
+								min={2}
+								max={50}
+								style={{ width: "100%" }}
+								value={supervisorDraft.errorStreak}
+								onChange={(value) => updateSupervisor({ errorStreak: value ?? 3 })}
+							/>
+						</Col>
+						<Col xs={12} md={8} lg={4}>
+							<Text type="secondary">{t("超时（秒）")}</Text>
+							<InputNumber
+								min={5}
+								max={300}
+								style={{ width: "100%" }}
+								value={Math.round(supervisorDraft.timeoutMs / 1000)}
+								onChange={(value) => updateSupervisor({ timeoutMs: (value ?? 180) * 1000 })}
+							/>
+						</Col>
+					</Row>
 				</div>
-				<div className="supervisor-settings__actions">
-					<button
-						type="button"
-						className="primary"
+
+				<Space size={8} wrap className="superset-actions">
+					<Button
+						type="primary"
 						onClick={() => {
 							onSaveSupervisorConfig(supervisorDraft);
 							setSupervisorDirty(false);
 						}}
 					>
 						{t("保存监督设置")}
-					</button>
-					<button
-						type="button"
-						disabled={supervisorTesting}
+					</Button>
+					<Button
+						loading={supervisorTesting}
 						onClick={async () => {
 							setSupervisorTesting(true);
 							try {
@@ -464,14 +407,89 @@ export function SupervisorSettingsPanel({
 						}}
 					>
 						{supervisorTesting ? t("测试中…") : t("测试监督模型")}
-					</button>
+					</Button>
 					{supervisorTest ? (
-						<span className={supervisorTest.ok ? "tag tag-ok" : "tag tag-bad"}>
-							{supervisorTest.message}
-						</span>
+						<Alert
+							type={supervisorTest.ok ? "success" : "error"}
+							showIcon
+							title={supervisorTest.message}
+							className="superset-test"
+						/>
 					) : null}
-				</div>
-			</div>
+				</Space>
+			</Card>
+
+			<Modal
+				title={customStrategyDraft?.id ? t("编辑自定义策略") : t("新建自定义策略")}
+				open={customStrategyDraft !== null}
+				okText={t("保存到列表")}
+				cancelText={t("取消")}
+				width={640}
+				okButtonProps={{
+					disabled: !customStrategyDraft?.name.trim() || !customStrategyDraft?.instructions.trim(),
+				}}
+				onOk={commitCustomStrategy}
+				onCancel={() => setCustomStrategyDraft(null)}
+				destroyOnHidden
+			>
+				{customStrategyDraft ? (
+					<Form layout="vertical" requiredMark={false}>
+						<Row gutter={12}>
+							<Col span={14}>
+								<Form.Item label={t("名称")} required>
+									<Input
+										value={customStrategyDraft.name}
+										maxLength={30}
+										onChange={(event) =>
+											setCustomStrategyDraft({ ...customStrategyDraft, name: event.target.value })
+										}
+										placeholder={t("例如：支付网关专用")}
+									/>
+								</Form.Item>
+							</Col>
+							<Col span={10}>
+								<Form.Item label={t("基础预设")}>
+									<Select
+										value={customStrategyDraft.base}
+										onChange={(value) =>
+											setCustomStrategyDraft({ ...customStrategyDraft, base: value as SentinelSupervisorStrategy })
+										}
+										options={SUPERVISOR_STRATEGY_OPTIONS.map((option) => ({
+											value: option.id,
+											label: option.label,
+										}))}
+									/>
+								</Form.Item>
+							</Col>
+						</Row>
+						<Form.Item label={t("一句话说明")}>
+							<Input
+								value={customStrategyDraft.description}
+								maxLength={80}
+								onChange={(event) =>
+									setCustomStrategyDraft({ ...customStrategyDraft, description: event.target.value })
+								}
+								placeholder={t("例如：先看授权边界，再验证越权")}
+							/>
+						</Form.Item>
+						<Form.Item
+							label={t("关注点与建议风格")}
+							required
+							extra={t("自定义说明只改变监督关注点和建议风格，不能放宽授权范围或安全规则。")}
+						>
+							<Input.TextArea
+								value={customStrategyDraft.instructions}
+								maxLength={500}
+								autoSize={{ minRows: 5, maxRows: 12 }}
+								onChange={(event) =>
+									setCustomStrategyDraft({ ...customStrategyDraft, instructions: event.target.value })
+								}
+								placeholder={t("例如：优先验证 IDOR；不做目录爆破；建议必须给出对照请求。")}
+							/>
+						</Form.Item>
+					</Form>
+				) : null}
+			</Modal>
 
 			{pickerOpen && library ? (
 				<ModelRolePicker
@@ -485,6 +503,6 @@ export function SupervisorSettingsPanel({
 					onClose={() => setPickerOpen(false)}
 				/>
 			) : null}
-		</div>
+		</>
 	);
 }

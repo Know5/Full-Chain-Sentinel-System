@@ -1,6 +1,8 @@
+import { Space } from "antd";
 import type { ComponentType, ReactNode } from "react";
 import { t } from "../i18n.ts";
 import type { SentinelPageId } from "../types.ts";
+import { Page } from "../ui/Page.tsx";
 import {
 	AssetIcon,
 	EnvironmentIcon,
@@ -36,25 +38,22 @@ const PAGES: Record<SettingsPageId, { title: string; description: string; icon: 
 export function SettingsPage({ page, status, children }: { page: SettingsPageId; status?: ReactNode; children: ReactNode }) {
 	const { title, description, icon: Icon } = PAGES[page];
 	return (
-		<section className="page-card settings-page" data-settings-page={page} aria-labelledby="settings-page-title">
-			<header className="settings-page__header">
-				<div className="settings-page__header-inner">
-					<div className="settings-page__heading">
-						<span className="settings-page__icon" aria-hidden="true">
-							<Icon size={16} />
-						</span>
-						<div>
-							<div className="settings-page__breadcrumb">{t("设置")}</div>
-							<h1 id="settings-page-title">{t(title)}</h1>
-							<p>{t(description)}</p>
-						</div>
-					</div>
-					{status ? <div className="settings-page__status">{status}</div> : null}
-				</div>
-			</header>
-			<div className="settings-page__body">
-				<div className="settings-page__content">{children}</div>
+		<Page
+			className="settings-page"
+			title={
+				<Space size={8}>
+					<span className="settings-page__icon" aria-hidden="true">
+						<Icon size={16} />
+					</span>
+					{t(title)}
+				</Space>
+			}
+			description={t(description)}
+			extra={status}
+		>
+			<div className="settings-page__content" data-settings-page={page}>
+				{children}
 			</div>
-		</section>
+		</Page>
 	);
 }

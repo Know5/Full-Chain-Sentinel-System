@@ -1,6 +1,9 @@
+import { Button, Card, Modal, Result, Space, Spin, Tag, Typography } from "antd";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { SentinelPluginView } from "../types.ts";
 import { t } from "../i18n.ts";
+
+const { Text } = Typography;
 
 /** Everything the iframe may know at handshake time. Keep it non-secret. */
 export interface PluginUiContext {
@@ -134,91 +137,88 @@ export function PluginUiOverlay({
 		return () => window.removeEventListener("message", onMessage);
 	}, [context, nonce]);
 
-	// Escape closes the overlay; the iframe cannot take it away from the operator.
-	// The page variant lives in the content area, so it has no close affordance.
-	useEffect(() => {
-		if (variant !== "overlay") return;
-		const onKeyDown = (event: KeyboardEvent): void => {
-			if (event.key === "Escape") onClose();
-		};
-		window.addEventListener("keydown", onKeyDown);
-		return () => window.removeEventListener("keydown", onKeyDown);
-	}, [onClose, variant]);
-
-	useEffect(() => {
-		if (variant !== "overlay") return;
-		const previous = document.body.style.overflow;
-		document.body.style.overflow = "hidden";
-		return () => {
-			document.body.style.overflow = previous;
-		};
-	}, [variant]);
-
-	return (
-		<div
-			className={`plugin-ui-layer${variant === "page" ? " plugin-ui-layer--page" : ""}`}
-			role="dialog"
-			aria-modal={variant === "overlay"}
-		>
-			<div className="plugin-ui-head">
-				<div className="plugin-ui-id">
-					<div className="plugin-ui-title">
-						{plugin.manifest.name}
-						<span className="plugin-ui-version mono">v{plugin.manifest.version}</span>
-					</div>
-					<div className="plugin-ui-sub">
-						{plugin.manifest.id} · {plugin.hostName}
-						{plugin.hostLocal ? t("（本机）") : ""} · {t("第三方插件界面，不要在这里输入控制台密码")}
-					</div>
+	const header = (
+		<Space size={10} wrap>
+			<Text strong>{plugin.manifest.name}</Text>
+			<Text type="secondary">v{plugin.manifest.version}</Text>
+			<Text type="secondary">
+				{plugin.manifest.id} · {plugin.hostName}
+				{plugin.hostLocal ? t("（本机）") : ""} · {t("第三方插件界面，不要在这里输入控制台密码")}
+			</Text>
+		</Space>
+	);
+	const actions = (
+		<Space size={8}>
+			<Tag color={status === "ready" ? "green" : status === "error" ? "red" : "processing"} variant="filled">
+				{status === "ready" ? t("已连接") : status === "error" ? t("未连接") : t("连接中")}
+			</Tag>
+			<Button size="small" onClick={retry} title={t("重新加载界面")}>
+				{t("重载")}
+			</Button>
+			{variant === "overlay" ? (
+				<Button size="small" onClick={onClose}>
+					{t("关闭")}
+				</Button>
+			) : null}
+		</Space>
+	);
+	const body = (
+		<div className="plugui-body">
+			<iframe
+				key={attempt}
+				ref={frame}
+				className={status === "ready" ? "plugui-frame" : "plugui-frame is-hidden"}
+				title={t("{name} 界面", { name: plugin.manifest.name })}
+				sandbox="allow-scripts"
+				referrerPolicy="no-referrer"
+				src={src}
+			/>
+			{status === "loading" ? (
+				<div className="plugui-state">
+					<Spin />
+					<Text strong>{t("正在加载插件界面")}</Text>
+					<Text type="secondary">{t("首次打开会向插件主机取静态资源。")}</Text>
 				</div>
-				<div className="plugin-ui-head__right">
-					<span className={`plugin-ui-state-dot ${status}`}>
-						{status === "ready" ? t("已连接") : status === "error" ? t("未连接") : t("连接中")}
-					</span>
-					<button type="button" className="plugin-ui-reload" onClick={retry} title={t("重新加载界面")}>
-						{t("重载")}
-					</button>
-					{variant === "overlay" ? (
-						<button type="button" className="plugin-ui-close" onClick={onClose}>
-							{t("关闭")}
-						</button>
-					) : null}
-				</div>
-			</div>
-			<div className="plugin-ui-body">
-				<iframe
-					key={attempt}
-					ref={frame}
-					className={`plugin-ui-frame${status === "ready" ? "" : " is-hidden"}`}
-					title={t("{name} 界面", { name: plugin.manifest.name })}
-					sandbox="allow-scripts"
-					referrerPolicy="no-referrer"
-					src={src}
-				/>
-				{status === "loading" ? (
-					<div className="plugin-ui-state">
-						<span className="plugin-ui-spinner" aria-hidden="true" />
-						<h3>{t("正在加载插件界面")}</h3>
-						<p className="muted">{t("首次打开会向插件主机取静态资源。")}</p>
-					</div>
-				) : null}
-				{status === "error" ? (
-					<div className="plugin-ui-state">
-						<span className="plugin-ui-state-mark">!</span>
-						<h3>{t("插件界面没有响应")}</h3>
-						<p>{error}</p>
-						<p className="muted mono">{ui?.entry ?? "/ui/index.html"}</p>
-						<div className="plugin-ui-state-actions">
-							<button type="button" className="primary" onClick={retry}>
+			) : null}
+			{status === "error" ? (
+				<Result
+					status="warning"
+					title={t("插件界面没有响应")}
+					subTitle={error}
+					extra={
+						<Space size={8}>
+							<Button type="primary" onClick={retry}>
 								{t("重试")}
-							</button>
-							<button type="button" onClick={onClose}>
-								{t("关闭")}
-							</button>
-						</div>
-					</div>
-				) : null}
-			</div>
+							</Button>
+							<Button onClick={onClose}>{t("关闭")}</Button>
+						</Space>
+					}
+				>
+					<Text code>{ui?.entry ?? "/ui/index.html"}</Text>
+				</Result>
+			) : null}
 		</div>
+	);
+
+	if (variant === "page") {
+		return (
+			<Card size="small" className="plugui" title={header} extra={actions}>
+				{body}
+			</Card>
+		);
+	}
+	return (
+		<Modal
+			open
+			width="92vw"
+			footer={null}
+			onCancel={onClose}
+			destroyOnHidden
+			className="plugui"
+			title={header}
+			styles={{ body: { height: "74vh", padding: 0, overflow: "hidden" } }}
+		>
+			{body}
+		</Modal>
 	);
 }

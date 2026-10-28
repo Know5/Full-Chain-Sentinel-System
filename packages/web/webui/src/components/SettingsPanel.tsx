@@ -1,6 +1,28 @@
+import { DeleteOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
+import { ProTable } from "@ant-design/pro-components";
+import type { ProColumns } from "@ant-design/pro-components";
+import {
+	Alert,
+	Button,
+	Card,
+	Checkbox,
+	Col,
+	Drawer,
+	Form,
+	Input,
+	InputNumber,
+	Popconfirm,
+	Row,
+	Select,
+	Space,
+	Tabs,
+	Tag,
+	Typography,
+} from "antd";
 import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { t } from "../i18n.ts";
+
+const { Text } = Typography;
 import type {
 	SentinelBuiltinChannel,
 	SentinelBuiltinModelDefaults,
@@ -12,7 +34,6 @@ import type {
 	SentinelModelRoleName,
 	SentinelTestResult,
 } from "../types.ts";
-import { CloseIcon, DeleteIcon } from "./icons.tsx";
 import { ModelRolePicker } from "./ModelRolePicker.tsx";
 import {
 	capabilityChips,
@@ -273,16 +294,12 @@ export function SettingsPanel({
 	const [channelOptions, setChannelOptions] = useState<SentinelBuiltinChannel[] | null>(null);
 	const [channelsLoading, setChannelsLoading] = useState(false);
 	const [channelsError, setChannelsError] = useState("");
-	const [channelSearch, setChannelSearch] = useState("");
-	const [channelPickerOpen, setChannelPickerOpen] = useState(false);
 	const [channel, setChannel] = useState<SentinelBuiltinChannel | null>(null);
 	const [customChannel, setCustomChannel] = useState(false);
 	/** Models of the chosen channel, filtered in the browser by the second picker. */
 	const [models, setModels] = useState<SentinelBuiltinModelPreset[] | null>(null);
 	const [modelsLoading, setModelsLoading] = useState(false);
 	const [modelsError, setModelsError] = useState("");
-	const [modelPickerOpen, setModelPickerOpen] = useState(false);
-	const [modelSearch, setModelSearch] = useState("");
 	const [customModel, setCustomModel] = useState(false);
 	const [capsSource, setCapsSource] = useState<"catalog" | "current" | "manual" | "">("");
 	/** Stale replies lose to the newer keystroke, not the other way around. */
@@ -295,11 +312,6 @@ export function SettingsPanel({
 	/** An edit infers its channel from the endpoint exactly once. */
 	const inferenceRef = useRef(false);
 	const modelCacheRef = useRef(new Map<string, SentinelBuiltinModelPreset[]>());
-	const channelBlockRef = useRef<HTMLDivElement | null>(null);
-	const modelBlockRef = useRef<HTMLDivElement | null>(null);
-	const customModelInputRef = useRef<HTMLInputElement | null>(null);
-	/** Focus target while the drawer is open; also the element focus returns from. */
-	const drawerRef = useRef<HTMLElement | null>(null);
 	/** Name that came from a model, so switching models replaces it but a typed name survives. */
 	const autoNameRef = useRef<string | null>(null);
 	const drawerOpen = draft !== null;
@@ -344,9 +356,9 @@ export function SettingsPanel({
 
 	useEffect(() => {
 		if (!drawerOpen) return;
-		const timer = window.setTimeout(() => void loadChannels(channelSearch), 220);
+		const timer = window.setTimeout(() => void loadChannels(""), 220);
 		return () => window.clearTimeout(timer);
-	}, [channelSearch, drawerOpen]);
+	}, [drawerOpen]);
 
 	/** An existing entry opens on its own channel when the endpoint matches one. */
 	useEffect(() => {
@@ -387,48 +399,13 @@ export function SettingsPanel({
 	}, [channelsError, channelOptions, drawerOpen]);
 
 	useEffect(() => {
-		if (!channelPickerOpen && !modelPickerOpen) return;
-		const closeOutside = (event: MouseEvent) => {
-			const target = event.target as Node;
-			if (channelPickerOpen && channelBlockRef.current && !channelBlockRef.current.contains(target)) {
-				setChannelPickerOpen(false);
-			}
-			if (modelPickerOpen && modelBlockRef.current && !modelBlockRef.current.contains(target)) {
-				setModelPickerOpen(false);
-			}
-		};
-		const closeOnEscape = (event: KeyboardEvent) => {
-			if (event.key !== "Escape") return;
-			setChannelPickerOpen(false);
-			setModelPickerOpen(false);
-		};
-		document.addEventListener("mousedown", closeOutside);
-		document.addEventListener("keydown", closeOnEscape);
-		return () => {
-			document.removeEventListener("mousedown", closeOutside);
-			document.removeEventListener("keydown", closeOnEscape);
-		};
-	}, [channelPickerOpen, modelPickerOpen]);
-
-	/** Move focus into the dialog and give it back to the row that opened it. */
-	useEffect(() => {
-		if (!drawerOpen) return;
-		const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-		drawerRef.current?.focus();
-		return () => previous?.focus();
-	}, [drawerOpen]);
-
-	useEffect(() => {
 		if (!drawerOpen) return;
 		const closeOnEscape = (event: KeyboardEvent) => {
-			if (event.key !== "Escape") return;
-			// An open picker consumes Escape and closes only itself.
-			if (channelPickerOpen || modelPickerOpen) return;
-			closeDraft();
+			if (event.key === "Escape") closeDraft();
 		};
 		document.addEventListener("keydown", closeOnEscape);
 		return () => document.removeEventListener("keydown", closeOnEscape);
-	}, [drawerOpen, channelPickerOpen, modelPickerOpen]);
+	}, [drawerOpen]);
 
 	if (!library) {
 		return (
@@ -472,15 +449,11 @@ export function SettingsPanel({
 		setChannelOptions(null);
 		setChannel(null);
 		setCustomChannel(false);
-		setChannelPickerOpen(false);
-		setChannelSearch("");
 		setChannelsError("");
 		setChannelsLoading(false);
 		setModels(null);
 		setModelsLoading(false);
 		setModelsError("");
-		setModelPickerOpen(false);
-		setModelSearch("");
 		setCustomModel(false);
 		setCapsSource("");
 	};
@@ -569,18 +542,12 @@ export function SettingsPanel({
 
 	const pickBuiltinChannel = (next: SentinelBuiltinChannel): void => {
 		if (!customChannel && channel?.provider === next.provider) {
-			setChannelPickerOpen(false);
-			setChannelSearch("");
 			return;
 		}
 		channelTouchedRef.current = true;
 		channelRef.current = next;
 		setChannel(next);
 		setCustomChannel(false);
-		setChannelPickerOpen(false);
-		setChannelSearch("");
-		setModelPickerOpen(false);
-		setModelSearch("");
 		setModels(null);
 		setModelsError("");
 		setCustomModel(false);
@@ -604,29 +571,20 @@ export function SettingsPanel({
 			if (presets === null) return;
 			if (presets.length === 0) {
 				setCustomModel(true);
-				window.setTimeout(() => customModelInputRef.current?.focus(), 0);
 				return;
 			}
-			// Continue the flow: the second picker is the next step.
-			setModelPickerOpen(true);
 		});
 	};
 
 	const pickCustomChannel = (): void => {
 		channelTouchedRef.current = true;
 		if (customChannel) {
-			setChannelPickerOpen(false);
-			setChannelSearch("");
 			return;
 		}
 		const previous = channelRef.current;
 		channelRef.current = null;
 		setChannel(null);
 		setCustomChannel(true);
-		setChannelPickerOpen(false);
-		setChannelSearch("");
-		setModelPickerOpen(false);
-		setModelSearch("");
 		setModels(null);
 		setModelsError("");
 		setCustomModel(false);
@@ -653,8 +611,6 @@ export function SettingsPanel({
 			name: nameAfterSelection(draft, preset.name),
 		});
 		setCustomModel(false);
-		setModelPickerOpen(false);
-		setModelSearch("");
 		setCapsSource("catalog");
 		setDefaultsMatches(null);
 		setDefaultsNote("");
@@ -663,13 +619,9 @@ export function SettingsPanel({
 
 	const pickCustomModel = (): void => {
 		if (customModel) {
-			setModelPickerOpen(false);
-			window.setTimeout(() => customModelInputRef.current?.focus(), 0);
 			return;
 		}
 		setCustomModel(true);
-		setModelPickerOpen(false);
-		setModelSearch("");
 		setCapsSource("manual");
 		setDefaultsMatches(null);
 		setDefaultsNote("");
@@ -677,7 +629,6 @@ export function SettingsPanel({
 		if (draft) {
 			setDraft({ ...clearCapabilities(draft), modelId: "", name: nameAfterSelection(draft, "") });
 		}
-		window.setTimeout(() => customModelInputRef.current?.focus(), 0);
 	};
 
 	const retryModels = (): void => {
@@ -740,12 +691,6 @@ export function SettingsPanel({
 		capabilityError === null;
 
 	const modelOptions = models ?? [];
-	const modelTokens = modelSearch.trim().toLowerCase().split(/\s+/u).filter(Boolean);
-	const visibleModels = modelOptions.filter((preset) => {
-		if (modelTokens.length === 0) return true;
-		const haystack = `${preset.name} ${preset.modelId}`.toLowerCase();
-		return modelTokens.every((token) => haystack.includes(token));
-	});
 	const selectedModel =
 		!customChannel && !customModel && draft?.modelId.trim()
 			? (modelOptions.find((preset) => preset.modelId === draft.modelId.trim()) ?? null)
@@ -779,9 +724,8 @@ export function SettingsPanel({
 					roles: editingEntry.roles.map((role) => ROLE_LABELS[role]).join("、"),
 				})}
 				<div className="cockpit-warn__actions">
-					<button
-						type="button"
-						className="cockpit-mini-btn"
+					<Button
+						size="small"
 						onClick={() => {
 							const role = editingEntry.roles[0];
 							closeDraft();
@@ -789,18 +733,38 @@ export function SettingsPanel({
 						}}
 					>
 						{t("去更换「{role}」", { role: ROLE_LABELS[editingEntry.roles[0]] })}
-					</button>
-					<button type="button" className="cockpit-link" onClick={() => setDeleteWarn(false)}>
+					</Button>
+					<Button size="small" onClick={() => setDeleteWarn(false)}>
 						{t("取消")}
-					</button>
+					</Button>
 				</div>
 			</div>
 		) : null;
 
 	const keyField = () => (
-		<div className="cockpit-field">
-			<span>{customChannel ? "API Key" : `${channel?.name ?? ""} API Key`}</span>
-			<input
+		<Form.Item
+			label={customChannel ? "API Key" : `${channel?.name ?? ""} API Key`}
+			extra={
+				<>
+					{draft?.id && editingEntry?.hasKey ? (
+						<Checkbox
+							checked={draft.clearKey}
+							onChange={(event) =>
+								setDraft((current) =>
+									current ? { ...current, clearKey: event.target.checked, apiKey: "" } : current,
+								)
+							}
+						>
+							{t("清除已保存的密钥（改成无鉴权端点）")}
+						</Checkbox>
+					) : null}
+					{keyHostChanged && !draft?.apiKey.trim() && !draft?.clearKey ? (
+						<div>{t("端点主机已变化；不填新 Key 时，保存会清除旧密钥。")}</div>
+					) : null}
+				</>
+			}
+		>
+			<Input.Password
 				value={draft?.apiKey ?? ""}
 				onChange={(event) =>
 					setDraft((current) =>
@@ -808,256 +772,320 @@ export function SettingsPanel({
 					)
 				}
 				placeholder={draft?.id ? t("已保存，留空表示不修改") : t("无鉴权端点留空")}
-				type="password"
 				spellCheck={false}
 			/>
-			{draft?.id && editingEntry?.hasKey ? (
-				<label className="cockpit-check">
-					<input
-						type="checkbox"
-						checked={draft.clearKey}
-						onChange={(event) =>
-							setDraft((current) =>
-								current ? { ...current, clearKey: event.target.checked, apiKey: "" } : current,
-							)
-						}
-					/>
-					<span>{t("清除已保存的密钥（改成无鉴权端点）")}</span>
-				</label>
-			) : null}
-			{keyHostChanged && !draft?.apiKey.trim() && !draft?.clearKey ? (
-				<small className="cockpit-hint">{t("端点主机已变化；不填新 Key 时，保存会清除旧密钥。")}</small>
-			) : null}
-		</div>
+		</Form.Item>
 	);
 
 	const lookupPanel = () => (
-		<div className="cockpit-lookup">
-			<div className="cockpit-lookup__head">
-				<span>{t("按模型 ID 查内置库")}</span>
-				<button
-					type="button"
-					className="cockpit-link"
+		<div className="modelhub-lookup">
+			<Space size={8} wrap>
+				<Text type="secondary">{t("按模型 ID 查内置库")}</Text>
+				<Button
+					size="small"
+					type="link"
 					disabled={defaultsLoading || !draft?.modelId.trim()}
+					loading={defaultsLoading}
 					onClick={() => void lookupDefaults(false)}
 				>
-					{defaultsLoading ? t("查询中…") : t("填充能力")}
-				</button>
-			</div>
-			<p className="cockpit-hint">{defaultsNote || t("ID 匹配时自动补上下文、价格等能力，不改端点。")}</p>
+					{t("填充能力")}
+				</Button>
+			</Space>
+			<Text type="secondary" className="modelhub-lookup__note">
+				{defaultsNote || t("ID 匹配时自动补上下文、价格等能力，不改端点。")}
+			</Text>
 			{defaultsMatches ? (
-				<div className="cockpit-lookup__matches">
+				<Space size={6} wrap>
 					{defaultsMatches.map((defaults) => (
-						<button
-							type="button"
-							key={defaults.provider}
-							onClick={() => applyDefaultsToDraft(defaults)}
-						>
+						<Button key={defaults.provider} size="small" onClick={() => applyDefaultsToDraft(defaults)}>
 							{defaults.providerName} · {defaults.modelId} · {defaults.api}
-						</button>
+						</Button>
 					))}
-				</div>
+				</Space>
 			) : null}
 		</div>
 	);
 
+	const numField = (value: string, onChange: (next: string) => void, placeholder: string, min = 1, step = 1) => (
+		<InputNumber
+			min={min}
+			step={step}
+			style={{ width: "100%" }}
+			value={value.trim() === "" ? null : Number(value)}
+			onChange={(next) => onChange(next === null || next === undefined ? "" : String(next))}
+			placeholder={placeholder}
+		/>
+	);
+
 	const capabilityCard = () => (
-		<div className="cockpit-caps-card">
-			<div className="cockpit-caps-card__head">
-				<span>{t("能力概览")}</span>
-				<span className="cockpit-caps-card__src">{capsSourceLabel}</span>
-			</div>
-			<div className="cockpit-caps-card__chips">
-				<span className="cockpit-cap">
-					<i>{t("上下文")}</i>
-					<b>{capContext}</b>
-				</span>
-				<span className="cockpit-cap">
-					<i>{t("输出")}</i>
-					<b>{capOutput}</b>
-				</span>
-				<span className="cockpit-cap">
-					<i>{t("思考")}</i>
-					<b>{draft?.reasoning ? "✓" : "—"}</b>
-				</span>
-				<span className="cockpit-cap">
-					<i>{t("图片")}</i>
-					<b>{draft?.imageInput ? "✓" : "—"}</b>
-				</span>
-				<span className="cockpit-cap">
-					<i>{t("价格")}</i>
-					<b>{capPrice}</b>
-				</span>
-			</div>
-			<p className="cockpit-hint">
+		<Card
+			size="small"
+			className="modelhub-caps"
+			title={
+				<Space size={8} wrap>
+					<Text strong>{t("能力概览")}</Text>
+					<Text type="secondary">{capsSourceLabel}</Text>
+				</Space>
+			}
+		>
+			<Space size={18} wrap>
+				<Text type="secondary">
+					{t("上下文")} <Text strong>{capContext}</Text>
+				</Text>
+				<Text type="secondary">
+					{t("输出")} <Text strong>{capOutput}</Text>
+				</Text>
+				<Text type="secondary">
+					{t("思考")} <Text strong>{draft?.reasoning ? "✓" : "—"}</Text>
+				</Text>
+				<Text type="secondary">
+					{t("图片")} <Text strong>{draft?.imageInput ? "✓" : "—"}</Text>
+				</Text>
+				<Text type="secondary">
+					{t("价格")} <Text strong>{capPrice}</Text>
+				</Text>
+			</Space>
+			<Text type="secondary" className="modelhub-lookup__note">
 				{customChannel
 					? t("自定义渠道的能力沿用当前填写，请自行核对。")
 					: t("端点与协议跟随渠道；能力可在「能力与价格」里改。")}
-			</p>
-		</div>
+			</Text>
+		</Card>
 	);
+
+	const columns: ProColumns<SentinelModelEntryView>[] = [
+		{
+			title: t("模型"),
+			key: "name",
+			render: (_, entry) => (
+				<div className="modelhub-name">
+					<Space size={6} wrap>
+						<Text strong>{entry.name}</Text>
+						<Text type="secondary">{entry.modelId}</Text>
+					</Space>
+					<Text type="secondary" title={entry.baseUrl}>
+						{hostOf(entry.baseUrl)}
+					</Text>
+				</div>
+			),
+		},
+		{
+			title: t("能力"),
+			key: "caps",
+			render: (_, entry) => (
+				<Space size={4} wrap>
+					{capabilityChips(entry).map((chip) => (
+						<Tag key={chip} variant="filled">
+							{chip}
+						</Tag>
+					))}
+				</Space>
+			),
+		},
+		{
+			title: t("角色"),
+			key: "roles",
+			width: 220,
+			render: (_, entry) => (
+				<Space size={4} wrap>
+					<UsageTags roles={entry.roles} />
+				</Space>
+			),
+		},
+		{
+			title: t("状态"),
+			key: "state",
+			width: 120,
+			render: (_, entry) => (
+				<ModelStatusTag
+					state={testState(testing === entry.id, results[entry.id])}
+					detail={testDetail(results[entry.id])}
+				/>
+			),
+		},
+		{
+			title: t("操作"),
+			key: "actions",
+			width: 150,
+			render: (_, entry) => (
+				<Space size={4}>
+					<Button
+						size="small"
+						type="link"
+						loading={testing === entry.id}
+						onClick={(event) => {
+							event.stopPropagation();
+							void runTest(entry.id);
+						}}
+					>
+						{t("测试")}
+					</Button>
+					<Button
+						size="small"
+						type="link"
+						onClick={(event) => {
+							event.stopPropagation();
+							openDraft(draftOf(entry));
+						}}
+					>
+						{t("编辑")}
+					</Button>
+				</Space>
+			),
+		},
+	];
 
 	return (
 		<div className="settings settings--wide cockpit">
-			<div className="cockpit-sec cockpit-sec--first">
-				<h3>{t("角色")}</h3>
-				<span className="cockpit-sec__meta">
-					{t("{assigned} / {total} 已分配 · 点击「更换」选择模型", { assigned, total: ROLE_ORDER.length })}
-				</span>
-				<span className="cockpit-sec__right">
-					<button
-						type="button"
-						className="cockpit-link"
-						disabled={testingAll || library.entries.length === 0}
-						onClick={() => void runAllTests()}
-					>
-						{testingAll ? t("测试中…") : t("全部测试")}
-					</button>
-				</span>
-			</div>
-			<div className="cockpit-roles">
-				{ROLE_ORDER.map((role) => {
-					const resolved = library.resolved[role];
-					const roleRef = role === "main" ? library.roles.main : library.roles[role];
-					const entry =
-						library.entries.find((candidate) => candidate.id === (resolved?.entryId ?? roleRef)) ?? null;
-					const state = testState(testing === entry?.id, entry ? results[entry.id] : undefined);
-					return (
-						<div className="cockpit-role" key={role}>
-							<div className="cockpit-role__top">
-								<span className={`cockpit-role__label is-${role}`}>{ROLE_LABELS[role]}</span>
-								{entry ? (
-									<ModelStatusTag state={state} detail={testDetail(results[entry.id])} />
-								) : (
-									<span className="cockpit-tag is-muted">{t("未绑定")}</span>
-								)}
-							</div>
-							<div className="cockpit-role__name" title={resolved?.modelId ?? ""}>
-								{entry?.name ?? t("未选择模型")}
-							</div>
-							<div className="cockpit-role__sub" title={entry?.baseUrl ?? ROLE_HINTS[role]}>
-								{entry ? `${entry.modelId} · ${hostOf(entry.baseUrl)}` : ROLE_HINTS[role]}
-							</div>
-							<div className="cockpit-chips">
-								{entry ? (
-									capabilityChips(entry).map((chip) => (
-										<span className="cockpit-chip" key={chip}>
-											{chip}
-										</span>
-									))
-								) : (
-									<span className="cockpit-chip">{t("尚未解析到可用端点")}</span>
-								)}
-							</div>
-							{role === "reviewer" ? (
-								<label className="cockpit-check">
-									<input
-										type="checkbox"
-										checked={library.reviewerAuto}
-										onChange={(event) => onSetReviewerAuto(event.target.checked)}
-									/>
-									<span>
-										{t("自动评审")}
-										<small>{t("关闭后新记录不再排队，已排队的也会停止")}</small>
-									</span>
-								</label>
-							) : null}
-							<div className="cockpit-role__foot">
-								<button type="button" className="cockpit-link" onClick={() => setPickerRole(role)}>
-									{t("更换")}
-								</button>
-								{entry ? (
-									<button
-										type="button"
-										className="cockpit-link"
-										disabled={testing === entry.id}
-										onClick={() => void runTest(entry.id)}
-									>
-										{t("测试")}
-									</button>
-								) : null}
-								<span className="cockpit-role__short">
-									{resolved?.followedMain ? t("跟随主模型") : ROLE_SHORT[role]}
-								</span>
-							</div>
-						</div>
-					);
-				})}
-			</div>
+			<Card
+				size="small"
+				title={t("角色")}
+				extra={
+					<Space size={8} wrap>
+						<Text type="secondary">
+							{t("{assigned} / {total} 已分配 · 点击「更换」选择模型", {
+								assigned,
+								total: ROLE_ORDER.length,
+							})}
+						</Text>
+						<Button
+							size="small"
+							icon={<ReloadOutlined />}
+							loading={testingAll}
+							disabled={testingAll || library.entries.length === 0}
+							onClick={() => void runAllTests()}
+						>
+							{t("全部测试")}
+						</Button>
+					</Space>
+				}
+			>
+				<Row gutter={[12, 12]}>
+					{ROLE_ORDER.map((role) => {
+						const resolved = library.resolved[role];
+						const roleRef = role === "main" ? library.roles.main : library.roles[role];
+						const entry =
+							library.entries.find((candidate) => candidate.id === (resolved?.entryId ?? roleRef)) ?? null;
+						const state = testState(testing === entry?.id, entry ? results[entry.id] : undefined);
+						return (
+							<Col xs={24} md={12} xl={8} key={role}>
+								<Card
+									size="small"
+									className="modelhub-role"
+									title={
+										<Space size={6} wrap>
+											<Tag color={role === "main" ? "blue" : undefined} variant="filled">
+												{ROLE_LABELS[role]}
+											</Tag>
+											{entry ? (
+												<ModelStatusTag state={state} detail={testDetail(results[entry.id])} />
+											) : (
+												<Tag variant="filled">{t("未绑定")}</Tag>
+											)}
+										</Space>
+									}
+								>
+									<Text strong ellipsis title={resolved?.modelId ?? ""}>
+										{entry?.name ?? t("未选择模型")}
+									</Text>
+									<Text type="secondary" className="modelhub-role__sub" title={entry?.baseUrl ?? ROLE_HINTS[role]}>
+										{entry ? `${entry.modelId} · ${hostOf(entry.baseUrl)}` : ROLE_HINTS[role]}
+									</Text>
+									<Space size={4} wrap className="modelhub-role__chips">
+										{entry ? (
+											capabilityChips(entry).map((chip) => (
+												<Tag key={chip} variant="filled">
+													{chip}
+												</Tag>
+											))
+										) : (
+											<Tag variant="filled">{t("尚未解析到可用端点")}</Tag>
+										)}
+									</Space>
+									{role === "reviewer" ? (
+										<Space size={6} className="modelhub-role__auto">
+											<Tag
+												color={library.reviewerAuto ? "green" : "default"}
+												variant="filled"
+												role="button"
+												onClick={() => onSetReviewerAuto(!library.reviewerAuto)}
+												title={t("关闭后新记录不再排队，已排队的也会停止")}
+											>
+												{t("自动评审")}
+											</Tag>
+										</Space>
+									) : null}
+									<Space size={10} className="modelhub-role__foot">
+										<Button size="small" type="link" onClick={() => setPickerRole(role)}>
+											{t("更换")}
+										</Button>
+										{entry ? (
+											<Button
+												size="small"
+												type="link"
+												loading={testing === entry.id}
+												onClick={() => void runTest(entry.id)}
+											>
+												{t("测试")}
+											</Button>
+										) : null}
+										<Text type="secondary">
+											{resolved?.followedMain ? t("跟随主模型") : ROLE_SHORT[role]}
+										</Text>
+									</Space>
+								</Card>
+							</Col>
+						);
+					})}
+				</Row>
+			</Card>
 
-			<div className="cockpit-sec">
-				<h3>{t("模型库")}</h3>
-				<span className="cockpit-sec__meta">
-					{t("{count} 个模型", { count: library.entries.length })} ·{" "}
-					{unused === 0 ? t("全部已使用") : t("{count} 个未使用", { count: unused })}
-					{keyword ? ` · ${t("匹配 {count} 个", { count: shown.length })}` : ""}
-				</span>
-				<span className="cockpit-sec__right">
-					<label className="cockpit-search">
-						<input
-							type="search"
+			<Card
+				size="small"
+				title={t("模型库")}
+				extra={
+					<Space size={8} wrap>
+						<Text type="secondary">
+							{t("{count} 个模型", { count: library.entries.length })} ·{" "}
+							{unused === 0 ? t("全部已使用") : t("{count} 个未使用", { count: unused })}
+							{keyword ? ` · ${t("匹配 {count} 个", { count: shown.length })}` : ""}
+						</Text>
+						<Input
+							allowClear
+							size="small"
+							style={{ width: 220 }}
 							value={search}
 							onChange={(event) => setSearch(event.target.value)}
 							placeholder={t("搜索名称、模型 ID、端点")}
 							spellCheck={false}
 						/>
-					</label>
-					<button type="button" className="primary" onClick={() => openDraft({ ...EMPTY_DRAFT })}>
-						{t("添加模型")}
-					</button>
-				</span>
-			</div>
-			{library.entries.length === 0 ? (
-				<div className="cockpit-empty">
-					{t("还没有模型。添加一条后，角色里就能分配它。")}
-					<button type="button" className="primary" onClick={() => openDraft({ ...EMPTY_DRAFT })}>
-						{t("添加模型")}
-					</button>
-				</div>
-			) : (
-				<div className="cockpit-list">
-					{shown.length === 0 ? (
-						<div className="cockpit-empty">{t("没有匹配的模型，换个关键词试试")}</div>
-					) : (
-						shown.map((entry) => (
-							<button
-								type="button"
-								className="cockpit-row"
-								key={entry.id}
-								onClick={() => openDraft(draftOf(entry))}
-							>
-								<span className="cockpit-row__name">
-									<i className={`cockpit-dot is-${testState(testing === entry.id, results[entry.id]).tone}`} />
-									<span className="cockpit-row__label">
-										<b>{entry.name}</b>
-										<small>{entry.modelId}</small>
-									</span>
-								</span>
-								<span className="cockpit-mono cockpit-row__endpoint" title={entry.baseUrl}>
-									{hostOf(entry.baseUrl)}
-								</span>
-								<span className="cockpit-chips cockpit-row__caps">
-									{capabilityChips(entry).map((chip) => (
-										<span className="cockpit-chip" key={chip}>
-											{chip}
-										</span>
-									))}
-								</span>
-								<span className="cockpit-row__uses">
-									<UsageTags roles={entry.roles} />
-								</span>
-								<span className="cockpit-row__state">
-									<ModelStatusTag
-										state={testState(testing === entry.id, results[entry.id])}
-										detail={testDetail(results[entry.id])}
-									/>
-								</span>
-								<span className="cockpit-chev">›</span>
-							</button>
-						))
-					)}
-				</div>
-			)}
+						<Button size="small" type="primary" icon={<PlusOutlined />} onClick={() => openDraft({ ...EMPTY_DRAFT })}>
+							{t("添加模型")}
+						</Button>
+					</Space>
+				}
+			>
+				<ProTable<SentinelModelEntryView>
+					rowKey="id"
+					size="middle"
+					columns={columns}
+					dataSource={shown}
+					search={false}
+					options={false}
+					pagination={false}
+					scroll={{ x: 900 }}
+					onRow={(entry) => ({
+						onClick: () => openDraft(draftOf(entry)),
+						style: { cursor: "pointer" },
+					})}
+					locale={{
+						emptyText:
+							library.entries.length === 0
+								? t("还没有模型。添加一条后，角色里就能分配它。")
+								: t("没有匹配的模型，换个关键词试试"),
+					}}
+				/>
+			</Card>
 
 			{pickerRole ? (
 				<ModelRolePicker
@@ -1073,678 +1101,400 @@ export function SettingsPanel({
 				/>
 			) : null}
 
-			{draft
-				? createPortal(
-						<>
-							<button
-								type="button"
-								className="cockpit-scrim cockpit-scrim--drawer"
-								aria-label={t("关闭编辑")}
-								onClick={closeDraft}
-							/>
-							<aside
-								className="cockpit-drawer"
-								role="dialog"
-								aria-modal="true"
-								aria-label={t("模型编辑")}
-								ref={drawerRef}
-								tabIndex={-1}
-							>
-								<div className="cockpit-drawer__head">
-									<div>
-										<h3 className="cockpit-drawer__title">
-											{draft.id ? draft.name || draft.modelId || t("编辑模型") : t("添加模型")}
-											{editingEntry ? (
-												<ModelStatusTag
-													state={testState(testing === editingEntry.id, results[editingEntry.id])}
-													detail={testDetail(results[editingEntry.id])}
-												/>
-											) : (
-												<span className="cockpit-tag">{t("未保存")}</span>
-											)}
-										</h3>
-										<p className="cockpit-drawer__sub">
-											{draft.id
-												? t("{model} · {endpoint}", {
-														model: draft.modelId || t("未填写模型 ID"),
-														endpoint: hostOf(draft.baseUrl) || t("未填写端点"),
-													})
-												: t("填写连接信息后保存")}
-										</p>
-									</div>
-									<button
-										type="button"
-										className="cockpit-iconbtn"
-										aria-label={t("关闭")}
-										onClick={closeDraft}
-									>
-										<CloseIcon />
-									</button>
-								</div>
-								<div className="cockpit-drawer__tabs" role="tablist">
-									<button
-										type="button"
-										role="tab"
-										aria-selected={drawerTab === "conn"}
-										className={drawerTab === "conn" ? "is-active" : ""}
-										onClick={() => setDrawerTab("conn")}
-									>
-										{t("连接")}
-									</button>
-									<button
-										type="button"
-										role="tab"
-										aria-selected={drawerTab === "cap"}
-										className={drawerTab === "cap" ? "is-active" : ""}
-										onClick={() => setDrawerTab("cap")}
-									>
-										{t("能力与价格")}
-									</button>
-								</div>
-								{drawerTest === null ? (
-									<div className="cockpit-testbar is-bad" role="status">
-										<b>{t("无响应")}</b>
-										<span>{t("没有收到测试结果，请重试。")}</span>
-									</div>
-								) : drawerTest ? (
-									<div
-										className={`cockpit-testbar ${drawerTest.ok ? "is-ok" : "is-bad"}`}
-										role="status"
-									>
-										<b>{drawerTest.ok ? t("连接可用") : t("连接失败")}</b>
-										<span>{drawerTest.message}</span>
-										{drawerTest.detail ? (
-											<small title={drawerTest.detail}>{drawerTest.detail}</small>
-										) : null}
-									</div>
-								) : null}
-								<div
-									className="cockpit-drawer__body"
-									role="tabpanel"
-									hidden={drawerTab !== "conn"}
+			{draft ? (
+				<Drawer
+					open
+					width={620}
+					onClose={closeDraft}
+					destroyOnHidden
+					className="modelhub-drawer"
+					title={
+						<Space size={8} wrap>
+							<Text strong>
+								{draft.id ? draft.name || draft.modelId || t("编辑模型") : t("添加模型")}
+							</Text>
+							{editingEntry ? (
+								<ModelStatusTag
+									state={testState(testing === editingEntry.id, results[editingEntry.id])}
+									detail={testDetail(results[editingEntry.id])}
+								/>
+							) : (
+								<Tag variant="filled">{t("未保存")}</Tag>
+							)}
+						</Space>
+					}
+					extra={
+						<Text type="secondary">
+							{draft.id
+								? t("{model} · {endpoint}", {
+										model: draft.modelId || t("未填写模型 ID"),
+										endpoint: hostOf(draft.baseUrl) || t("未填写端点"),
+									})
+								: t("填写连接信息后保存")}
+						</Text>
+					}
+					footer={
+						<Space size={8} className="modelhub-foot">
+							{editingEntry ? (
+								<Popconfirm
+									title={t("删除模型")}
+									description={
+										editingEntry.roles.length > 0
+											? t("被 {count} 个角色使用，先解除引用才能删除", { count: editingEntry.roles.length })
+											: t("删除这个模型？")
+									}
+									okText={t("删除")}
+									okButtonProps={{ danger: true }}
+									cancelText={t("取消")}
+									disabled={editingEntry.roles.length > 0}
+									onConfirm={() => removeDraftEntry(editingEntry)}
 								>
-									{capabilityError ? <p className="warn-text">{capabilityError}</p> : null}
-									<div className="cockpit-field" ref={channelBlockRef}>
-										<span>{t("渠道")}</span>
-										<button
-											type="button"
-											className={`cockpit-select${channelPickerOpen ? " is-open" : ""}`}
-											aria-expanded={channelPickerOpen}
-											onClick={() => {
-												setChannelPickerOpen((open) => !open);
-												setModelPickerOpen(false);
-											}}
-										>
-											<span className="cockpit-select__main">
-												<b>
-													{customChannel
-														? t("自定义渠道")
-														: channel
-															? channel.name
-															: channelsLoading
-																? t("读取渠道…")
-																: t("选择渠道")}
-												</b>
-												<em>
-													{customChannel
-														? t("自己填 Base URL 与协议")
-														: channel
-															? hostOf(channel.baseUrl) || t("{count} 个模型", { count: channel.modelCount })
-															: t("从内置目录选择，或自定义")}
-												</em>
-											</span>
-											<span className="cockpit-select__chev">▾</span>
-										</button>
-										<small className="cockpit-hint">
-											{customChannel
-												? t("Key 只作用于这个端点；模型能力在「能力与价格」里填写。")
-												: channel
-													? t("{api} · {endpoint}", { api: channel.api, endpoint: channel.baseUrl || t("端点由模型决定") })
-													: t("渠道决定端点、协议与 Key 的作用域。")}
-										</small>
-										{channelPickerOpen ? (
-											<div className="cockpit-picker">
-												<div className="cockpit-picker__search">
-													<input
-														type="search"
-														value={channelSearch}
-														onChange={(event) => setChannelSearch(event.target.value)}
-														placeholder={t("搜索渠道或模型，例如 deepseek / claude")}
-														spellCheck={false}
-														autoFocus
-													/>
-													{channelsLoading ? (
-														<span className="cockpit-picker__state">{t("读取中…")}</span>
-													) : null}
-												</div>
-												<div className="cockpit-picker__scroll">
-													{channelsError ? (
-														<div className="cockpit-picker__empty">
-															{channelsError}
-															<button
-																type="button"
-																className="cockpit-link"
-																onClick={() => void loadChannels(channelSearch)}
-															>
-																{t("重试")}
-															</button>
-														</div>
-													) : null}
-													{!channelsError &&
-													!channelsLoading &&
-													channelOptions !== null &&
-													channelItems.length === 0 ? (
-														<div className="cockpit-picker__empty">
-															{t("没有匹配的渠道，可以直接自定义。")}
-														</div>
-													) : null}
-													{featuredChannels.length > 0 ? (
-														<>
-															<div className="cockpit-picker__group">{t("常用渠道")}</div>
-															{featuredChannels.map((option) => {
-																const active =
-																	!customChannel &&
-																	channel?.provider === option.provider;
-																return (
-																	<button
-																		type="button"
-																		className={`cockpit-picker__row${active ? " is-active" : ""}`}
-																		key={option.provider}
-																		onClick={() => pickBuiltinChannel(option)}
-																	>
-																		<span className="cockpit-picker__main">
-																			<b>{option.name}</b>
-																			<em>
-																											{t("{endpoint} · {count} 个模型", {
-																												endpoint: hostOf(option.baseUrl) || t("端点由模型决定"),
-																												count: option.modelCount,
-																											})}
-																			</em>
-																		</span>
-																		{active ? (
-																			<span className="cockpit-picker__check">✓</span>
-																		) : null}
-																	</button>
-																);
-															})}
-														</>
-													) : null}
-													{moreChannels.length > 0 ? (
-														<>
-															<div className="cockpit-picker__group">{t("更多渠道")}</div>
-															{moreChannels.map((option) => {
-																const active =
-																	!customChannel &&
-																	channel?.provider === option.provider;
-																return (
-																	<button
-																		type="button"
-																		className={`cockpit-picker__row${active ? " is-active" : ""}`}
-																		key={option.provider}
-																		onClick={() => pickBuiltinChannel(option)}
-																	>
-																		<span className="cockpit-picker__main">
-																			<b>{option.name}</b>
-																			<em>
-																											{t("{endpoint} · {count} 个模型", {
-																												endpoint: hostOf(option.baseUrl) || t("端点由模型决定"),
-																												count: option.modelCount,
-																											})}
-																			</em>
-																		</span>
-																		{active ? (
-																			<span className="cockpit-picker__check">✓</span>
-																		) : null}
-																	</button>
-																);
-															})}
-														</>
-													) : null}
-												</div>
-												<div className="cockpit-picker__foot">
-													<button
-														type="button"
-														className={`cockpit-picker__row${customChannel ? " is-active" : ""}`}
-														onClick={pickCustomChannel}
-													>
-														<span className="cockpit-picker__main">
-															<b>{t("自定义渠道")}</b>
-															<em>{t("自己填 Base URL、协议与模型 ID")}</em>
-														</span>
-														{customChannel ? (
-															<span className="cockpit-picker__check">✓</span>
-														) : null}
-													</button>
-												</div>
-											</div>
-										) : null}
-									</div>
+									<Button danger icon={<DeleteOutlined />} disabled={editingEntry.roles.length > 0}>
+										{t("删除")}
+									</Button>
+								</Popconfirm>
+							) : null}
+							<Button
+								disabled={!editingEntry}
+								loading={testing === editingEntry?.id}
+								onClick={() => {
+									if (editingEntry) void runTest(editingEntry.id);
+								}}
+							>
+								{t("测试连接")}
+							</Button>
+							{editingEntry ? (
+								<Button onClick={() => onDuplicateEntry(editingEntry.id)}>{t("复制")}</Button>
+							) : null}
+							<Button type="primary" disabled={!valid} onClick={submit}>
+								{t("保存")}
+							</Button>
+						</Space>
+					}
+				>
+					{drawerTest === null ? (
+						<Alert
+							type="error"
+							showIcon
+							className="ui-page__alert"
+							title={t("无响应")}
+							description={t("没有收到测试结果，请重试。")}
+						/>
+					) : drawerTest ? (
+						<Alert
+							type={drawerTest.ok ? "success" : "error"}
+							showIcon
+							className="ui-page__alert"
+							title={drawerTest.ok ? t("连接可用") : t("连接失败")}
+							description={
+								<>
+									{drawerTest.message}
+									{drawerTest.detail ? <pre className="modelhub-pre">{drawerTest.detail}</pre> : null}
+								</>
+							}
+						/>
+					) : null}
+					{drawerWarn}
 
-									{customChannel ? (
-										<>
-											<label className="cockpit-field">
-												<span>Base URL</span>
-												<input
-													value={draft.baseUrl}
-													onChange={(event) =>
-														setDraft({ ...draft, baseUrl: event.target.value })
-													}
-													onBlur={autoFillNewEntry}
-													placeholder="https://relay.example.com/v1"
-													spellCheck={false}
-												/>
-											</label>
-											<label className="cockpit-field">
-												<span>{t("协议")}</span>
-												<select
-													value={draft.api}
-													onChange={(event) =>
-														setDraft({ ...draft, api: event.target.value })
-													}
-												>
-													{MODEL_API_OPTIONS.map((option) => (
-														<option value={option.id} key={option.id}>
-															{option.label}
-														</option>
-													))}
-													{MODEL_API_OPTIONS.some(
-														(option) => option.id === draft.api,
-													) ? null : (
-														<option value={draft.api}>{t("{api}（当前值）", { api: draft.api })}</option>
-													)}
-												</select>
-											</label>
-											<label className="cockpit-field">
-												<span>{t("模型 ID")}</span>
-												<input
-													value={draft.modelId}
-													onChange={(event) =>
-														setDraft({ ...draft, modelId: event.target.value })
-													}
-													onBlur={autoFillNewEntry}
-													placeholder="deepseek-chat / glm-4.7 / qwen3-coder…"
-													spellCheck={false}
-												/>
-											</label>
-											{lookupPanel()}
-											{keyField()}
-											<label className="cockpit-field">
-												<span>{t("显示名称")}</span>
-												<input
-													value={draft.name}
-													onChange={(event) =>
-														setDraft({ ...draft, name: event.target.value })
-													}
-													placeholder={t("默认使用模型 ID")}
-													spellCheck={false}
-												/>
-											</label>
-											{capabilityCard()}
-										</>
-									) : channel ? (
-										<>
-											{keyField()}
-											<div className="cockpit-field" ref={modelBlockRef}>
-												<span>{t("模型")}</span>
-												<button
-													type="button"
-													className={`cockpit-select${modelPickerOpen ? " is-open" : ""}`}
-													aria-expanded={modelPickerOpen}
-													disabled={modelsLoading}
-													onClick={() => {
-														setModelPickerOpen((open) => !open);
-														setChannelPickerOpen(false);
-													}}
-												>
-													<span className="cockpit-select__main">
-														<b>
-															{modelsLoading
-																? t("读取模型…")
-																: customModel
-																	? t("自定义模型 ID")
-																	: selectedModel
-																		? selectedModel.name
-																		: t("选择模型")}
-														</b>
-														<em>
-															{customModel
-																? draft.modelId.trim() ||
-																	t("目录里没有的模型")
-																: selectedModel
-																	? selectedModel.modelId
-																	: t("{count} 个模型", { count: modelOptions.length })}
-														</em>
-													</span>
-													{selectedModel ? (
-														<span className="cockpit-select__meta">
-															{contextText(selectedModel.contextWindow)}
-														</span>
-													) : null}
-													<span className="cockpit-select__chev">▾</span>
-												</button>
-												{modelsError ? (
-													<p className="warn-text">
-														{modelsError}{" "}
-														<button
-															type="button"
-															className="cockpit-link"
-															onClick={retryModels}
-														>
-															{t("重试")}
-														</button>
-													</p>
-												) : null}
-												{modelPickerOpen ? (
-													<div className="cockpit-picker">
-														<div className="cockpit-picker__search">
-															<input
-																type="search"
-																value={modelSearch}
-																onChange={(event) =>
-																	setModelSearch(event.target.value)
-																}
-																placeholder={t("搜索模型名称或 ID")}
-																spellCheck={false}
-																autoFocus
-															/>
-															<span className="cockpit-picker__state">
-																{modelTokens.length > 0
-																	? `${visibleModels.length} / ${modelOptions.length}`
-																	: t("{count} 个", { count: modelOptions.length })}
-															</span>
-														</div>
-														<div className="cockpit-picker__scroll cockpit-picker__scroll--tall">
-															{modelsLoading ? (
-																<div className="cockpit-picker__empty">{t("读取模型…")}</div>
-															) : null}
-															{!modelsError &&
-															!modelsLoading &&
-															modelOptions.length === 0 ? (
-																<div className="cockpit-picker__empty">
-																	{t("该渠道没有内置模型，请用自定义模型 ID。")}
-																</div>
-															) : null}
-															{!modelsError &&
-															modelOptions.length > 0 &&
-															visibleModels.length === 0 ? (
-																<div className="cockpit-picker__empty">
-																	{t("没有匹配的模型，可直接自定义模型 ID。")}
-																</div>
-															) : null}
-															{visibleModels.map((preset) => {
-																const active =
-																	!customModel &&
-																	draft.modelId.trim() === preset.modelId;
-																return (
-																	<button
-																		type="button"
-																		className={`cockpit-picker__row${active ? " is-active" : ""}`}
-																		key={`${preset.provider}:${preset.modelId}:${preset.baseUrl}`}
-																		onClick={() => pickModel(preset)}
-																	>
-																		<span className="cockpit-picker__main">
-																			<b>{preset.name}</b>
-																			<em>{preset.modelId}</em>
-																		</span>
-																		<span className="cockpit-picker__meta">
-																			{contextText(preset.contextWindow)}
-																		</span>
-																	</button>
-																);
-															})}
-														</div>
-														<div className="cockpit-picker__foot">
-															<button
-																type="button"
-																className={`cockpit-picker__row${customModel ? " is-active" : ""}`}
-																onClick={pickCustomModel}
-															>
-																<span className="cockpit-picker__main">
-																	<b>{t("自定义模型 ID")}</b>
-																	<em>{t("目录里没有的模型")}</em>
-																</span>
-																<span className="cockpit-picker__meta">＋</span>
-															</button>
-														</div>
-													</div>
-												) : null}
-											</div>
-											{customModel ? (
-												<>
-													<label className="cockpit-field">
-														<span>{t("模型 ID")}</span>
-														<input
-															ref={customModelInputRef}
-															value={draft.modelId}
-															onChange={(event) =>
-																setDraft({ ...draft, modelId: event.target.value })
-															}
-															onBlur={autoFillNewEntry}
-															placeholder={t("例如 my-finetune-001")}
-															spellCheck={false}
-														/>
-														<small className="cockpit-hint">
-															{t("内置目录没有这个模型，能力与价格需要手动填。")}
-														</small>
-													</label>
-													{lookupPanel()}
-												</>
-											) : null}
-											<label className="cockpit-field">
-												<span>{t("显示名称")}</span>
-												<input
-													value={draft.name}
-													onChange={(event) =>
-														setDraft({ ...draft, name: event.target.value })
-													}
-													placeholder={t("默认使用模型 ID")}
-													spellCheck={false}
-												/>
-											</label>
-											{capabilityCard()}
-										</>
-									) : (
-										<p className="cockpit-hint">
-											{channelsLoading
-												? t("正在读取内置渠道…")
-												: t("先在上方选择渠道；目录之外的中转用「自定义渠道」。")}
-										</p>
-									)}
-									<p className="cockpit-hint">
-										{t("保存后立即生效；正在运行的会话会在下一次请求时使用新配置。")}
-									</p>
-								</div>
-								<div className="cockpit-drawer__body" role="tabpanel" hidden={drawerTab !== "cap"}>
-									<div className="cockpit-grid2">
-										<label className="cockpit-field">
-											<span>{t("上下文窗口（tokens）")}</span>
-											<input
-												type="number"
-												min={1}
-												step={1}
-												value={draft.contextWindow}
-												onChange={(event) =>
-													setDraft({ ...draft, contextWindow: event.target.value })
-												}
-												placeholder={t("例如 128000")}
-											/>
-										</label>
-										<label className="cockpit-field">
-											<span>{t("最大输出（tokens）")}</span>
-											<input
-												type="number"
-												min={1}
-												step={1}
-												value={draft.maxTokens}
-												onChange={(event) => setDraft({ ...draft, maxTokens: event.target.value })}
-												placeholder={t("例如 16384")}
-											/>
-										</label>
-									</div>
-									<div className="cockpit-checks">
-										<label className="cockpit-check">
-											<input
-												type="checkbox"
-												checked={draft.reasoning}
-												onChange={(event) =>
-													setDraft({ ...draft, reasoning: event.target.checked })
-												}
-											/>
-											<span>
-												{t("支持思考 / 推理")}
-												<small>{t("开启后默认 medium 强度，会话里仍可调整")}</small>
-											</span>
-										</label>
-										<label className="cockpit-check">
-											<input
-												type="checkbox"
-												checked={draft.imageInput}
-												onChange={(event) =>
-													setDraft({ ...draft, imageInput: event.target.checked })
-												}
-											/>
-											<span>
-												{t("支持图片输入")}
-												<small>{t("关闭后截图不会发给该模型")}</small>
-											</span>
-										</label>
-									</div>
-									<div className="cockpit-divider">{t("价格（美元 / 百万 token）")}</div>
-									<div className="cockpit-grid2">
-										<label className="cockpit-field">
-											<span>{t("输入")}</span>
-											<input
-												type="number"
-												min={0}
-												step="0.01"
-												value={draft.costInput}
-												onChange={(event) =>
-													setDraft({ ...draft, costInput: event.target.value })
-												}
-												placeholder="0"
-											/>
-										</label>
-										<label className="cockpit-field">
-											<span>{t("输出")}</span>
-											<input
-												type="number"
-												min={0}
-												step="0.01"
-												value={draft.costOutput}
-												onChange={(event) =>
-													setDraft({ ...draft, costOutput: event.target.value })
-												}
-												placeholder="0"
-											/>
-										</label>
-										<label className="cockpit-field">
-											<span>{t("缓存读")}</span>
-											<input
-												type="number"
-												min={0}
-												step="0.01"
-												value={draft.costCacheRead}
-												onChange={(event) =>
-													setDraft({ ...draft, costCacheRead: event.target.value })
-												}
-												placeholder="0"
-											/>
-										</label>
-										<label className="cockpit-field">
-											<span>{t("缓存写")}</span>
-											<input
-												type="number"
-												min={0}
-												step="0.01"
-												value={draft.costCacheWrite}
-												onChange={(event) =>
-													setDraft({ ...draft, costCacheWrite: event.target.value })
-												}
-												placeholder="0"
-											/>
-										</label>
-									</div>
-									<div className="cockpit-divider">{t("提示缓存（秒）")}</div>
-									<div className="cockpit-grid2">
-										<label className="cockpit-field">
-											<span>{t("短期")}</span>
-											<input
-												type="number"
-												min={1}
-												step={1}
-												value={draft.cacheShort}
-												onChange={(event) =>
-													setDraft({ ...draft, cacheShort: event.target.value })
-												}
-												placeholder={t("例如 300")}
-											/>
-										</label>
-										<label className="cockpit-field">
-											<span>{t("长期")}</span>
-											<input
-												type="number"
-												min={1}
-												step={1}
-												value={draft.cacheLong}
-												onChange={(event) =>
-													setDraft({ ...draft, cacheLong: event.target.value })
-												}
-												placeholder={t("例如 3600")}
-											/>
-										</label>
-									</div>
-									<p className="cockpit-hint">
-										{t(
-											"价格决定成本统计与缓存预热收益；缓存时长只在该端点确实支持 prompt caching 时填写。四项价格任意一项填写即整组保存，空项按 0 计。",
-										)}
-									</p>
-									{capabilityError ? <p className="warn-text">{capabilityError}</p> : null}
-								</div>
-								{drawerWarn ? <div className="cockpit-drawer__warn">{drawerWarn}</div> : null}
-								<div className="cockpit-drawer__foot">
-									{editingEntry ? (
-										<button
-											type="button"
-											className="cockpit-link is-danger cockpit-foot-delete"
-											title={
-												editingEntry.roles.length > 0
-													? t("被 {count} 个角色使用，先解除引用才能删除", { count: editingEntry.roles.length })
-													: t("删除这个模型")
+					<Tabs
+						activeKey={drawerTab}
+						onChange={(key) => setDrawerTab(key as "conn" | "cap")}
+						items={[
+							{
+								key: "conn",
+								label: t("连接"),
+								children: (
+									<Form layout="vertical" requiredMark={false} className="modelhub-form">
+										{capabilityError ? <Alert type="warning" showIcon title={capabilityError} /> : null}
+										<Form.Item
+											label={t("渠道")}
+											extra={
+												customChannel
+													? t("Key 只作用于这个端点；模型能力在「能力与价格」里填写。")
+													: channel
+														? t("{api} · {endpoint}", {
+																api: channel.api,
+																endpoint: channel.baseUrl || t("端点由模型决定"),
+															})
+														: t("渠道决定端点、协议与 Key 的作用域。")
 											}
-											onClick={() => removeDraftEntry(editingEntry)}
 										>
-											<DeleteIcon />
-											{t("删除")}
-										</button>
-									) : null}
-									<button
-										type="button"
-										className="cockpit-mini-btn"
-										disabled={!editingEntry || testing === editingEntry?.id}
-										onClick={() => {
-											if (editingEntry) void runTest(editingEntry.id);
-										}}
-									>
-										{editingEntry && testing === editingEntry.id ? t("测试中…") : t("测试连接")}
-									</button>
-									{editingEntry ? (
-										<button
-											type="button"
-											className="cockpit-mini-btn"
-											onClick={() => onDuplicateEntry(editingEntry.id)}
-										>
-											{t("复制")}
-										</button>
-									) : null}
-									<button type="button" className="primary" disabled={!valid} onClick={submit}>
-										{t("保存")}
-									</button>
-								</div>
-							</aside>
-						</>,
-						document.body,
-					)
-				: null}
+											<Select
+												showSearch
+												loading={channelsLoading}
+												style={{ width: "100%" }}
+												value={customChannel ? "__custom__" : (channel?.provider ?? undefined)}
+												placeholder={
+													channelsLoading ? t("读取渠道…") : t("选择渠道")
+												}
+												onChange={(value) => {
+													if (value === "__custom__") {
+														pickCustomChannel();
+														return;
+													}
+													const option = channelItems.find((candidate) => candidate.provider === value);
+													if (option) pickBuiltinChannel(option);
+												}}
+												filterOption={(input, option) =>
+													String(option?.label ?? "")
+														.toLowerCase()
+														.includes(input.toLowerCase())
+												}
+												options={[
+													...featuredChannels.map((option) => ({
+														value: option.provider,
+														label: `${option.name} · ${
+															hostOf(option.baseUrl) || t("端点由模型决定")
+														} · ${t("{count} 个模型", { count: option.modelCount })}`,
+													})),
+													...moreChannels.map((option) => ({
+														value: option.provider,
+														label: `${option.name} · ${
+															hostOf(option.baseUrl) || t("端点由模型决定")
+														} · ${t("{count} 个模型", { count: option.modelCount })}`,
+													})),
+													{ value: "__custom__", label: t("自定义渠道（自己填 Base URL 与协议）") },
+												]}
+											/>
+										</Form.Item>
+										{channelsError ? (
+											<Alert
+												type="error"
+												showIcon
+												className="ui-page__alert"
+												title={channelsError}
+												action={
+													<Button size="small" onClick={() => void loadChannels("")}>
+														{t("重试")}
+													</Button>
+												}
+											/>
+										) : null}
+
+										{customChannel ? (
+											<>
+												<Form.Item label="Base URL">
+													<Input
+														value={draft.baseUrl}
+														onChange={(event) => setDraft({ ...draft, baseUrl: event.target.value })}
+														onBlur={autoFillNewEntry}
+														placeholder="https://relay.example.com/v1"
+														spellCheck={false}
+													/>
+												</Form.Item>
+												<Form.Item label={t("协议")}>
+													<Select
+														value={draft.api}
+														onChange={(value) => setDraft({ ...draft, api: value })}
+														options={[
+															...MODEL_API_OPTIONS.map((option) => ({
+																value: option.id,
+																label: option.label,
+															})),
+															...(MODEL_API_OPTIONS.some((option) => option.id === draft.api)
+																? []
+																: [{ value: draft.api, label: t("{api}（当前值）", { api: draft.api }) }]),
+														]}
+													/>
+												</Form.Item>
+												<Form.Item label={t("模型 ID")}>
+													<Input
+														value={draft.modelId}
+														onChange={(event) => setDraft({ ...draft, modelId: event.target.value })}
+														onBlur={autoFillNewEntry}
+														placeholder="deepseek-chat / glm-4.7 / qwen3-coder…"
+														spellCheck={false}
+													/>
+												</Form.Item>
+												{lookupPanel()}
+												{keyField()}
+												<Form.Item label={t("显示名称")}>
+													<Input
+														value={draft.name}
+														onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+														placeholder={t("默认使用模型 ID")}
+														spellCheck={false}
+													/>
+												</Form.Item>
+												{capabilityCard()}
+											</>
+										) : channel ? (
+											<>
+												{keyField()}
+												<Form.Item label={t("模型")}>
+													<Select
+														showSearch
+														loading={modelsLoading}
+														style={{ width: "100%" }}
+														value={customModel ? "__custom__" : (selectedModel?.modelId ?? undefined)}
+														placeholder={
+															modelsLoading ? t("读取模型…") : t("选择模型")
+														}
+														onChange={(value) => {
+															if (value === "__custom__") {
+																pickCustomModel();
+																return;
+															}
+															const preset = modelOptions.find(
+																(candidate) => candidate.modelId === value,
+															);
+															if (preset) pickModel(preset);
+														}}
+														filterOption={(input, option) =>
+															String(option?.label ?? "")
+																.toLowerCase()
+																.includes(input.toLowerCase())
+														}
+														options={[
+															...modelOptions.map((preset) => ({
+																value: preset.modelId,
+																label: `${preset.name} · ${preset.modelId} · ${contextText(preset.contextWindow)}`,
+															})),
+															{ value: "__custom__", label: t("自定义模型 ID") },
+														]}
+													/>
+												</Form.Item>
+												{modelsError ? (
+													<Alert
+														type="error"
+														showIcon
+														className="ui-page__alert"
+														title={modelsError}
+														action={
+															<Button size="small" onClick={retryModels}>
+																{t("重试")}
+															</Button>
+														}
+													/>
+												) : null}
+												{customModel ? (
+													<>
+														<Form.Item
+															label={t("模型 ID")}
+															extra={t("内置目录没有这个模型，能力与价格需要手动填。")}
+														>
+															<Input
+																value={draft.modelId}
+																onChange={(event) =>
+																	setDraft({ ...draft, modelId: event.target.value })
+																}
+																onBlur={autoFillNewEntry}
+																placeholder={t("例如 my-finetune-001")}
+																spellCheck={false}
+															/>
+														</Form.Item>
+														{lookupPanel()}
+													</>
+												) : null}
+												<Form.Item label={t("显示名称")}>
+													<Input
+														value={draft.name}
+														onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+														placeholder={t("默认使用模型 ID")}
+														spellCheck={false}
+													/>
+												</Form.Item>
+												{capabilityCard()}
+											</>
+										) : (
+											<Text type="secondary">
+												{channelsLoading
+													? t("正在读取内置渠道…")
+													: t("先在上方选择渠道；目录之外的中转用「自定义渠道」。")}
+											</Text>
+										)}
+										<Text type="secondary">
+											{t("保存后立即生效；正在运行的会话会在下一次请求时使用新配置。")}
+										</Text>
+									</Form>
+								),
+							},
+							{
+								key: "cap",
+								label: t("能力与价格"),
+								children: (
+									<Form layout="vertical" requiredMark={false} className="modelhub-form">
+										<Row gutter={12}>
+											<Col span={12}>
+												<Form.Item label={t("上下文窗口（tokens）")}>
+													{numField(draft.contextWindow, (next) => setDraft({ ...draft, contextWindow: next }), t("例如 128000"))}
+												</Form.Item>
+											</Col>
+											<Col span={12}>
+												<Form.Item label={t("最大输出（tokens）")}>
+													{numField(draft.maxTokens, (next) => setDraft({ ...draft, maxTokens: next }), t("例如 16384"))}
+												</Form.Item>
+											</Col>
+										</Row>
+										<Form.Item>
+											<Checkbox
+												checked={draft.reasoning}
+												onChange={(event) => setDraft({ ...draft, reasoning: event.target.checked })}
+											>
+												{t("支持思考 / 推理")}
+											</Checkbox>
+											<div>
+												<Text type="secondary">{t("开启后默认 medium 强度，会话里仍可调整")}</Text>
+											</div>
+											<Checkbox
+												checked={draft.imageInput}
+												onChange={(event) => setDraft({ ...draft, imageInput: event.target.checked })}
+											>
+												{t("支持图片输入")}
+											</Checkbox>
+											<div>
+												<Text type="secondary">{t("关闭后截图不会发给该模型")}</Text>
+											</div>
+										</Form.Item>
+										<Text strong>{t("价格（美元 / 百万 token）")}</Text>
+										<Row gutter={12}>
+											<Col span={12}>
+												<Form.Item label={t("输入")}>
+													{numField(draft.costInput, (next) => setDraft({ ...draft, costInput: next }), "0", 0, 0.01)}
+												</Form.Item>
+											</Col>
+											<Col span={12}>
+												<Form.Item label={t("输出")}>
+													{numField(draft.costOutput, (next) => setDraft({ ...draft, costOutput: next }), "0", 0, 0.01)}
+												</Form.Item>
+											</Col>
+											<Col span={12}>
+												<Form.Item label={t("缓存读")}>
+													{numField(draft.costCacheRead, (next) => setDraft({ ...draft, costCacheRead: next }), "0", 0, 0.01)}
+												</Form.Item>
+											</Col>
+											<Col span={12}>
+												<Form.Item label={t("缓存写")}>
+													{numField(draft.costCacheWrite, (next) => setDraft({ ...draft, costCacheWrite: next }), "0", 0, 0.01)}
+												</Form.Item>
+											</Col>
+										</Row>
+										<Text strong>{t("提示缓存（秒）")}</Text>
+										<Row gutter={12}>
+											<Col span={12}>
+												<Form.Item label={t("短期")}>
+													{numField(draft.cacheShort, (next) => setDraft({ ...draft, cacheShort: next }), t("例如 300"))}
+												</Form.Item>
+											</Col>
+											<Col span={12}>
+												<Form.Item label={t("长期")}>
+													{numField(draft.cacheLong, (next) => setDraft({ ...draft, cacheLong: next }), t("例如 3600"))}
+												</Form.Item>
+											</Col>
+										</Row>
+										<Text type="secondary">
+											{t(
+												"价格决定成本统计与缓存预热收益；缓存时长只在该端点确实支持 prompt caching 时填写。四项价格任意一项填写即整组保存，空项按 0 计。",
+											)}
+										</Text>
+										{capabilityError ? <Alert type="warning" showIcon title={capabilityError} /> : null}
+									</Form>
+								),
+							},
+						]}
+					/>
+				</Drawer>
+			) : null}
 		</div>
 	);
 }

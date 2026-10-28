@@ -13,8 +13,13 @@
  * offering them as fields.
  */
 
+import { PlusOutlined } from "@ant-design/icons";
+import { ProTable } from "@ant-design/pro-components";
+import type { ProColumns } from "@ant-design/pro-components";
+import { Alert, Button, Checkbox, Input, InputNumber, Modal, Select, Space, Tag, Typography } from "antd";
 import { useMemo, useState } from "react";
 import { t } from "../i18n.ts";
+import { Page } from "../ui/Page.tsx";
 import {
 	AUTO_NODE_TAG,
 	EMPTY_PROXY_INPUT,
@@ -23,7 +28,9 @@ import {
 	type SentinelProxyConfigView,
 	type SentinelProxyInput,
 } from "../types.ts";
-import { ConfirmDialog } from "./ConfirmDialog.tsx";
+
+const { Text } = Typography;
+
 
 /**
  * Whether a profile is a tunnel rather than a proxy.
@@ -161,7 +168,7 @@ const PROXY_MODE_CARDS: readonly ProxyModeCard[] = [
  * configuration compete for the same 500px, and the dialog grew taller than the
  * viewport before the operator had typed anything.
  */
-export function ProxyEditor({
+export function ProxyEditorBody({
 	initial,
 	busy,
 	error,
@@ -190,17 +197,7 @@ export function ProxyEditor({
 	if (!activeMode) return null;
 
 	return (
-		<ConfirmDialog
-			title={initial.id ? t("编辑代理") : t("新建代理")}
-			subtitle={draft.name.trim() || t("未命名")}
-			className="proxy-editor-dialog"
-			onCancel={onCancel}
-			footer={
-				<button type="button" className="primary" disabled={busy || !named} onClick={() => onSave(draft)}>
-					{busy ? t("保存中…") : t("保存")}
-				</button>
-			}
-		>
+		<div className="proxy-editor-body">
 			<div className="proxy-editor-split">
 				<aside className="proxy-editor-rail" role="radiogroup" aria-label={t("出口类型")}>
 					<div className="proxy-editor-rail__label">{t("出口类型")}</div>
@@ -232,11 +229,10 @@ export function ProxyEditor({
 					</div>
 					<label className="proxy-field">
 						<span>{t("名称")}</span>
-						<input
+						<Input
 							value={draft.name}
 							placeholder={t("如 香港节点 / 本机 Clash")}
 							spellCheck={false}
-							/* biome-ignore lint/a11y/noAutofocus: the dialog exists to name and fill this node */
 							autoFocus
 							onChange={(event) => patch({ name: event.target.value })}
 						/>
@@ -246,18 +242,18 @@ export function ProxyEditor({
 					<div className="env-proxy-fields">
 						<label>
 							<span>{t("类型")}</span>
-							<select
+							<Select
 								value={draft.simple.type}
-								onChange={(event) => patchSimple({ type: event.target.value === "http" ? "http" : "socks5" })}
-							>
-								<option value="socks5">SOCKS5</option>
-								<option value="http">HTTP</option>
-							</select>
+								onChange={(value) => patchSimple({ type: value === "http" ? "http" : "socks5" })}
+								options={[
+									{ value: "socks5", label: "SOCKS5" },
+									{ value: "http", label: "HTTP" },
+								]}
+							/>
 						</label>
 						<label>
 							<span>{t("地址")}</span>
-							<input
-								type="text"
+							<Input
 								value={draft.simple.server}
 								placeholder="127.0.0.1"
 								onChange={(event) => patchSimple({ server: event.target.value })}
@@ -265,45 +261,44 @@ export function ProxyEditor({
 						</label>
 						<label>
 							<span>{t("端口")}</span>
-							<input
-								type="number"
-								value={draft.simple.port || ""}
+							<InputNumber
+								style={{ width: "100%" }}
+								min={1}
+								max={65535}
+								value={draft.simple.port || null}
 								placeholder="7890"
-								onChange={(event) => patchSimple({ port: Number.parseInt(event.target.value, 10) || 0 })}
+								onChange={(value) => patchSimple({ port: value ?? 0 })}
 							/>
 						</label>
 						<label>
 							<span>{t("用户名")}</span>
-							<input
-								type="text"
+							<Input
 								value={draft.simple.username}
 								onChange={(event) => patchSimple({ username: event.target.value })}
 							/>
 						</label>
 						<label>
 							<span>{t("密码")}</span>
-							<input
-								type="password"
+							<Input.Password
 								value={draft.simple.password}
 								onChange={(event) => patchSimple({ password: event.target.value })}
 							/>
 						</label>
 						{draft.simple.type === "http" ? (
-							<label className="env-proxy-check">
-								<input
-									type="checkbox"
-									checked={draft.simple.tls}
-									onChange={(event) => patchSimple({ tls: event.target.checked })}
-								/>
-								<span>{t("HTTPS 上游（tls）")}</span>
-							</label>
+							<Checkbox
+								className="env-proxy-check"
+								checked={draft.simple.tls}
+								onChange={(event) => patchSimple({ tls: event.target.checked })}
+							>
+								{t("HTTPS 上游（tls）")}
+							</Checkbox>
 						) : null}
 					</div>
 				) : draft.mode === "wireguard" ? (
 					<div className="env-proxy-fields">
 						<label className="env-proxy-wide">
 							<span>{t("WireGuard 配置（直接粘贴 wg0.conf）")}</span>
-							<textarea
+							<Input.TextArea
 								className="env-proxy-json"
 								rows={10}
 								value={draft.wireguard.config}
@@ -314,27 +309,26 @@ export function ProxyEditor({
 						</label>
 						<label className="env-proxy-wide">
 							<span>{t("DNS（配置里没有 DNS = 时填这里）")}</span>
-							<input
+							<Input
 								value={draft.wireguard.dns}
 								placeholder="10.66.0.1"
 								spellCheck={false}
 								onChange={(event) => patchWireGuard({ dns: event.target.value })}
 							/>
 						</label>
-						<label className="env-proxy-check env-proxy-wide">
-							<input
-								type="checkbox"
-								checked={draft.wireguard.killSwitch}
-								onChange={(event) => patchWireGuard({ killSwitch: event.target.checked })}
-							/>
-							<span>{t("断线即断网（kill-switch）：隧道起来后删掉直连的默认路由，隧道掉了不会漏回宿主机网络")}</span>
-						</label>
+						<Checkbox
+							className="env-proxy-check env-proxy-wide"
+							checked={draft.wireguard.killSwitch}
+							onChange={(event) => patchWireGuard({ killSwitch: event.target.checked })}
+						>
+							{t("断线即断网（kill-switch）：隧道起来后删掉直连的默认路由，隧道掉了不会漏回宿主机网络")}
+						</Checkbox>
 					</div>
 				) : draft.mode === "openvpn" ? (
 					<div className="env-proxy-fields">
 						<label className="env-proxy-wide">
 							<span>{t("OpenVPN 配置（直接粘贴 .ovpn，证书要内联）")}</span>
-							<textarea
+							<Input.TextArea
 								className="env-proxy-json"
 								rows={10}
 								value={draft.openvpn.config}
@@ -345,7 +339,7 @@ export function ProxyEditor({
 						</label>
 						<label>
 							<span>{t("用户名")}</span>
-							<input
+							<Input
 								value={draft.openvpn.username}
 								placeholder={t("配置要求 auth-user-pass 时填")}
 								spellCheck={false}
@@ -354,38 +348,33 @@ export function ProxyEditor({
 						</label>
 						<label>
 							<span>{t("密码")}</span>
-							<input
-								type="password"
+							<Input.Password
 								value={draft.openvpn.password}
 								onChange={(event) => patchOpenVpn({ password: event.target.value })}
 							/>
 						</label>
 						<label className="env-proxy-wide">
 							<span>{t("DNS（留空则用配置里的，或服务器推送的）")}</span>
-							<input
+							<Input
 								value={draft.openvpn.dns}
 								placeholder="10.8.0.1"
 								spellCheck={false}
 								onChange={(event) => patchOpenVpn({ dns: event.target.value })}
 							/>
 						</label>
-						<label className="env-proxy-check env-proxy-wide">
-							<input
-								type="checkbox"
-								checked={draft.openvpn.killSwitch}
-								onChange={(event) => patchOpenVpn({ killSwitch: event.target.checked })}
-							/>
-							<span>
-								{t("断线即断网（kill-switch）：隧道起来后删掉直连的默认路由，隧道掉了不会漏回宿主机网络")}
-							</span>
-						</label>
+						<Checkbox
+							className="env-proxy-check env-proxy-wide"
+							checked={draft.openvpn.killSwitch}
+							onChange={(event) => patchOpenVpn({ killSwitch: event.target.checked })}
+						>
+							{t("断线即断网（kill-switch）：隧道起来后删掉直连的默认路由，隧道掉了不会漏回宿主机网络")}
+						</Checkbox>
 					</div>
 				) : (
 					<div className="env-proxy-fields">
 						<label className="env-proxy-wide">
 							<span>{t("订阅地址")}</span>
-							<input
-								type="text"
+							<Input
 								value={draft.subscriptionUrl}
 								placeholder="https://example.com/api/v1/client/subscribe?token=..."
 								spellCheck={false}
@@ -394,8 +383,7 @@ export function ProxyEditor({
 						</label>
 						<label className="env-proxy-wide">
 							<span>{t("User-Agent")}</span>
-							<input
-								type="text"
+							<Input
 								value={draft.subscriptionUserAgent}
 								placeholder="sing-box/1.13.15"
 								spellCheck={false}
@@ -404,29 +392,26 @@ export function ProxyEditor({
 						</label>
 						<label className="env-proxy-wide">
 							<span>{t("定时更新")}</span>
-							<select
+							<Select
 								value={String(draft.subscriptionIntervalHours)}
-								onChange={(event) => patch({ subscriptionIntervalHours: Number(event.target.value) })}
-							>
-								{INTERVAL_OPTIONS.map((option) => (
-									<option key={option.hours} value={String(option.hours)}>
-										{option.label}
-									</option>
-								))}
-							</select>
+								onChange={(value) => patch({ subscriptionIntervalHours: Number(value) })}
+								options={INTERVAL_OPTIONS.map((option) => ({
+									value: String(option.hours),
+									label: option.label,
+								}))}
+							/>
 						</label>
 					</div>
 				)}
 
 				{draft.mode === "wireguard" || draft.mode === "openvpn" ? null : (
-					<label className="env-proxy-check">
-						<input
-							type="checkbox"
-							checked={draft.routePrivateDirect}
-							onChange={(event) => patch({ routePrivateDirect: event.target.checked })}
-						/>
-						<span>{t("内网与回环地址直连，其余走代理")}</span>
-					</label>
+					<Checkbox
+						className="env-proxy-check"
+						checked={draft.routePrivateDirect}
+						onChange={(event) => patch({ routePrivateDirect: event.target.checked })}
+					>
+						{t("内网与回环地址直连，其余走代理")}
+					</Checkbox>
 				)}
 
 				<p className="settings-hint">
@@ -441,7 +426,53 @@ export function ProxyEditor({
 				{error ? <div className="page-error">{error}</div> : null}
 				</div>
 			</div>
-		</ConfirmDialog>
+			<div className="proxy-editor-actions">
+				<Button onClick={onCancel}>{t("取消")}</Button>
+				<Button type="primary" loading={busy} disabled={!named} onClick={() => onSave(draft)}>
+					{busy ? t("保存中…") : t("保存")}
+				</Button>
+			</div>
+		</div>
+	);
+}
+
+/** The dialog shell around the editor body. */
+export function ProxyEditor({
+	initial,
+	busy,
+	error,
+	onSave,
+	onCancel,
+}: {
+	initial: SentinelProxyInput;
+	busy: boolean;
+	error: string | null;
+	onSave: (input: SentinelProxyInput) => void;
+	onCancel: () => void;
+}) {
+	return (
+		<Modal
+			open
+			width={980}
+			onCancel={onCancel}
+			footer={null}
+			destroyOnHidden
+			className="proxy-editor-dialog"
+			title={
+				<Space size={8}>
+					<Text strong>{initial.id ? t("编辑代理") : t("新建代理")}</Text>
+					<Text type="secondary">{initial.name.trim() || t("未命名")}</Text>
+				</Space>
+			}
+		>
+			<ProxyEditorBody
+				initial={initial}
+				busy={busy}
+				error={error}
+				onSave={onSave}
+				onCancel={onCancel}
+			/>
+		</Modal>
 	);
 }
 
@@ -498,7 +529,7 @@ const INTERVAL_OPTIONS: ReadonlyArray<{ hours: number; label: string }> = [
  * parser could not use are listed underneath with the reason, because "why is my
  * node missing" is the question this dialog would otherwise leave unanswered.
  */
-export function ProxyNodeDialog({
+export function ProxyNodeDialogBody({
 	proxy,
 	busy,
 	refreshing,
@@ -535,29 +566,7 @@ export function ProxyNodeDialog({
 		: nodes;
 
 	return (
-		<ConfirmDialog
-			title={t("节点")}
-			subtitle={proxy.name}
-			onCancel={onClose}
-			footer={
-				<>
-					<button type="button" className="ghost" disabled={refreshing} onClick={onRefresh}>
-						{refreshing ? t("拉取中…") : t("刷新订阅")}
-					</button>
-					<button
-						type="button"
-						className="primary"
-						disabled={testing || nodes.length === 0}
-						onClick={() => {
-							setByLatency(true);
-							onTest(url.trim());
-						}}
-					>
-						{testing ? t("测速中…") : t("批量测速")}
-					</button>
-				</>
-			}
-		>
+		<div className="proxynode-body">
 			<p className="settings-hint">
 				{proxy.subscription?.updatedAt
 					? t("上次拉取：{when}", { when: when(proxy.subscription.updatedAt) })
@@ -569,7 +578,7 @@ export function ProxyNodeDialog({
 			</p>
 			<label className="proxy-test-url">
 				<span>{t("测速地址")}</span>
-				<input
+				<Input
 					value={url}
 					spellCheck={false}
 					placeholder="https://www.gstatic.com/generate_204"
@@ -625,9 +634,9 @@ export function ProxyNodeDialog({
 				</div>
 			)}
 			{tested && !byLatency ? (
-				<button type="button" className="ghost small" onClick={() => setByLatency(true)}>
+				<Button size="small" onClick={() => setByLatency(true)}>
 					{t("按延迟排序")}
-				</button>
+				</Button>
 			) : null}
 			{proxy.skipped.length > 0 ? (
 				<>
@@ -641,7 +650,55 @@ export function ProxyNodeDialog({
 					</ul>
 				</>
 			) : null}
-		</ConfirmDialog>
+			<Space size={8} className="proxynode-actions">
+				<Button onClick={onClose}>{t("关闭")}</Button>
+				<Button loading={refreshing} disabled={refreshing} onClick={onRefresh}>
+					{refreshing ? t("拉取中…") : t("刷新订阅")}
+				</Button>
+				<Button
+					type="primary"
+					loading={testing}
+					disabled={testing || nodes.length === 0}
+					onClick={() => {
+						setByLatency(true);
+						onTest(url.trim());
+					}}
+				>
+					{testing ? t("测速中…") : t("批量测速")}
+				</Button>
+			</Space>
+		</div>
+	);
+}
+
+/** The dialog shell around the node picker. */
+export function ProxyNodeDialog(props: {
+	proxy: SentinelProxy;
+	busy: boolean;
+	refreshing: boolean;
+	testing: boolean;
+	testUrl: string;
+	onPick: (nodeTag: string) => void;
+	onRefresh: () => void;
+	onTest: (url: string) => void;
+	onClose: () => void;
+}) {
+	return (
+		<Modal
+			open
+			width={720}
+			onCancel={props.onClose}
+			footer={null}
+			destroyOnHidden
+			title={
+				<Space size={8}>
+					<Text strong>{t("节点")}</Text>
+					<Text type="secondary">{props.proxy.name}</Text>
+				</Space>
+			}
+		>
+			<ProxyNodeDialogBody {...props} />
+		</Modal>
 	);
 }
 
@@ -653,7 +710,7 @@ export function ProxyNodeDialog({
  * because a split tunnel has no useful public target: what "works" means depends on
  * which destinations the configuration actually routes into the tunnel.
  */
-export function ProxyTestDialog({
+export function ProxyTestDialogBody({
 	proxy,
 	testUrl,
 	busy,
@@ -685,21 +742,7 @@ export function ProxyTestDialog({
 	};
 
 	return (
-		<ConfirmDialog
-			title={t("测试代理")}
-			subtitle={proxy.name}
-			onCancel={onClose}
-			footer={
-				<>
-					<button type="button" className="ghost" disabled={testing} onClick={onClose}>
-						{t("关闭")}
-					</button>
-					<button type="button" className="primary" disabled={busy || testing} onClick={() => void run()}>
-						{testing ? t("测试中…") : result ? t("重新测试") : t("开始测试")}
-					</button>
-				</>
-			}
-		>
+		<div className="proxytest-body">
 			<p className="settings-hint">
 				{tunnel
 					? t("测试会启动一个临时隧道容器，真的建起网卡后从隧道里访问测试地址，测完即删。分流的 AllowedIPs / 服务器路由不覆盖这个地址时，它本来就不走隧道，请换成隧道内可达的地址。")
@@ -714,7 +757,7 @@ export function ProxyTestDialog({
 			) : null}
 			<label className="proxy-test-url">
 				<span>{t("测试地址")}</span>
-				<input
+				<Input
 					value={url}
 					spellCheck={false}
 					placeholder="https://www.gstatic.com/generate_204"
@@ -735,8 +778,42 @@ export function ProxyTestDialog({
 			) : (
 				<p className="settings-hint">{t("还没有测试过")}</p>
 			)}
-			{error ? <div className="page-error">{error}</div> : null}
-		</ConfirmDialog>
+			{error ? <Alert type="error" showIcon title={error} className="ui-page__alert" /> : null}
+			<Space size={8} className="proxytest-actions">
+				<Button onClick={onClose}>{t("关闭")}</Button>
+				<Button type="primary" loading={testing} disabled={busy || testing} onClick={() => void run()}>
+					{testing ? t("测试中…") : result ? t("重新测试") : t("开始测试")}
+				</Button>
+			</Space>
+		</div>
+	);
+}
+
+/** The dialog shell around the connectivity test. */
+export function ProxyTestDialog(props: {
+	proxy: SentinelProxy;
+	testUrl: string;
+	busy: boolean;
+	runningUses: number;
+	onTest: (id: string, url: string) => Promise<string | null>;
+	onClose: () => void;
+}) {
+	return (
+		<Modal
+			open
+			width={640}
+			onCancel={props.onClose}
+			footer={null}
+			destroyOnHidden
+			title={
+				<Space size={8}>
+					<Text strong>{t("测试代理")}</Text>
+					<Text type="secondary">{props.proxy.name}</Text>
+				</Space>
+			}
+		>
+			<ProxyTestDialogBody {...props} />
+		</Modal>
 	);
 }
 
@@ -845,144 +922,186 @@ export function ProxyPage({
 		setDeleting(null);
 	};
 
-	return (
-		<div className="page-card proxy-page">
-			<div className="ws-panel__head">
-				<div className="ws-panel__title">
-					{t("代理")}
-					<span className="ws-panel__sub">{t("{count} 个", { count: list.length })}</span>
+	const columns: ProColumns<SentinelProxy>[] = [
+		{
+			title: t("名称"),
+			key: "name",
+			render: (_, proxy) => (
+				<div className="proxyhub-name">
+					<Space size={6} wrap>
+						<Text strong>{proxy.name}</Text>
+						{proxy.id === config?.defaultId ? (
+							<Tag color="blue" variant="filled">
+								{t("默认")}
+							</Tag>
+						) : null}
+					</Space>
+					<Text type="secondary">{describeProfile(proxy)}</Text>
+					{proxy.test ? (
+						<Tag
+							color={proxy.test.ok ? "green" : "red"}
+							variant="filled"
+							title={proxy.test.error ?? undefined}
+						>
+							{proxy.test.ok
+								? proxy.test.latencyMs === null
+									? t("连接正常")
+									: `${proxy.test.latencyMs} ms`
+								: t("测试失败")}
+						</Tag>
+					) : null}
 				</div>
-				<div className="ws-panel__actions">
-					<button
-						type="button"
-						className="primary"
-						disabled={busy}
+			),
+		},
+		{
+			title: t("出口"),
+			key: "kind",
+			width: 130,
+			render: (_, proxy) => (
+				<Tag variant="filled">
+					{proxy.mode === "subscription"
+						? t("订阅")
+						: proxy.mode === "wireguard"
+							? "WireGuard"
+							: proxy.mode === "openvpn"
+								? "OpenVPN"
+								: t("普通代理")}
+				</Tag>
+			),
+		},
+		{
+			title: t("项目"),
+			key: "uses",
+			width: 150,
+			render: (_, proxy) => {
+				const count = uses.get(proxy.id) ?? 0;
+				return (
+					<Space size={6}>
+						<Text className="proxyhub-num">{count}</Text>
+						{isTunnel(proxy.mode) && count > 1 ? (
+							<Tag
+								color="orange"
+								variant="filled"
+								title={t("同一份证书同时只能有一个连接：除非服务器开了 duplicate-cn，两个项目一起用会被互相踢下线。要给每个项目单独一份证书，请分别建档案。")}
+							>
+								{t("证书共用")}
+							</Tag>
+						) : null}
+					</Space>
+				);
+			},
+		},
+		{
+			title: t("内网直连"),
+			key: "direct",
+			width: 110,
+			render: (_, proxy) => (
+				<Text type="secondary">
+					{isTunnel(proxy.mode) ? "—" : proxy.routePrivateDirect ? t("是") : t("否")}
+				</Text>
+			),
+		},
+		{
+			title: t("操作"),
+			key: "actions",
+			width: 200,
+			render: (_, proxy) => (
+				<Space size={4}>
+					{proxy.mode === "subscription" ? (
+						<Button
+							size="small"
+							type="link"
+							disabled={busy}
+							title={t("选一个节点，或刷新订阅")}
+							onClick={() => {
+								setError(null);
+								setPicking(proxy.id);
+							}}
+						>
+							{t("节点")}
+						</Button>
+					) : (
+						<Button
+							size="small"
+							type="link"
+							disabled={busy}
+							title={t("从这个档案真实访问一个地址，确认它还能用")}
+							onClick={() => {
+								setError(null);
+								setChecking(proxy.id);
+							}}
+						>
+							{t("测试")}
+						</Button>
+					)}
+					<Button
+						size="small"
+						type="link"
 						onClick={() => {
 							setError(null);
-							setEditing({ ...EMPTY_PROXY_INPUT });
+							setEditing(profileOf(proxy));
 						}}
 					>
-						{t("新建代理")}
-					</button>
-				</div>
-			</div>
+						{t("编辑")}
+					</Button>
+					<Button
+						size="small"
+						type="link"
+						danger
+						onClick={() => {
+							setError(null);
+							setDeleting(proxy);
+						}}
+					>
+						{t("删除")}
+					</Button>
+				</Space>
+			),
+		},
+	];
 
-			<div className="ws-panel__body">
-				{error ? <div className="page-error">{error}</div> : null}
+	return (
+		<Page
+			title={t("代理")}
+			description={t("{count} 个", { count: list.length })}
+			extra={
+				<Button
+					type="primary"
+					icon={<PlusOutlined />}
+					disabled={busy}
+					onClick={() => {
+						setError(null);
+						setEditing({ ...EMPTY_PROXY_INPUT });
+					}}
+				>
+					{t("新建代理")}
+				</Button>
+			}
+		>
+			{error ? <Alert type="error" showIcon title={error} className="ui-page__alert" /> : null}
 
-				{list.length === 0 ? (
-					<div className="ws-empty">
-						<span>{t("还没有代理")}</span>
-						<span>{t("新建一个之后，项目才能把出网流量交给它")}</span>
-					</div>
-				) : (
-					<div className="data-table proxy-table">
-						<div className="data-row data-head">
-							<span>{t("名称")}</span>
-							<span>{t("出口")}</span>
-							<span className="proxy-num">{t("项目")}</span>
-							<span>{t("内网直连")}</span>
-							<span className="data-actions-col">{t("操作")}</span>
+			<ProTable<SentinelProxy>
+				rowKey="id"
+				size="middle"
+				columns={columns}
+				dataSource={list}
+				search={false}
+				options={false}
+				pagination={false}
+				scroll={{ x: 900 }}
+				locale={{
+					emptyText: (
+						<div className="proxyhub-empty">
+							<Text strong>{t("还没有代理")}</Text>
+							<Text type="secondary">{t("新建一个之后，项目才能把出网流量交给它")}</Text>
 						</div>
-						{list.map((proxy) => (
-							<div key={proxy.id} className="data-row">
-								<span className="proxy-cell">
-									<span className="proxy-cell__name">
-										{proxy.name}
-										{proxy.id === config?.defaultId ? <span className="tag tag-primary">{t("默认")}</span> : null}
-									</span>
-									<span className="proxy-cell__sub">{describeProfile(proxy)}</span>
-									{proxy.test ? (
-										<span
-											className={`proxy-cell__test ${proxy.test.ok ? "ok" : "bad"}`}
-											title={proxy.test.error ?? undefined}
-										>
-											{proxy.test.ok
-												? proxy.test.latencyMs === null
-													? `✓ ${t("连接正常")}`
-													: `✓ ${proxy.test.latencyMs} ms`
-												: `✗ ${t("测试失败")}`}
-										</span>
-									) : null}
-								</span>
-								<span className="proxy-kind">
-									{proxy.mode === "subscription"
-										? t("订阅")
-										: proxy.mode === "wireguard"
-											? "WireGuard"
-											: proxy.mode === "openvpn"
-												? "OpenVPN"
-												: t("普通代理")}
-								</span>
-								<span className="data-mono proxy-num">
-									{uses.get(proxy.id) ?? 0}
-									{isTunnel(proxy.mode) && (uses.get(proxy.id) ?? 0) > 1 ? (
-										<span
-											className="tag proxy-shared"
-											title={t("同一份证书同时只能有一个连接：除非服务器开了 duplicate-cn，两个项目一起用会被互相踢下线。要给每个项目单独一份证书，请分别建档案。")}
-										>
-											{t("证书共用")}
-										</span>
-									) : null}
-								</span>
-								<span className="proxy-flag">
-									{isTunnel(proxy.mode) ? "—" : proxy.routePrivateDirect ? t("是") : t("否")}
-								</span>
-								<span className="data-actions">
-									{proxy.mode === "subscription" ? (
-										<button
-											type="button"
-											disabled={busy}
-											title={t("选一个节点，或刷新订阅")}
-											onClick={() => {
-												setError(null);
-												setPicking(proxy.id);
-											}}
-										>
-											{t("节点")}
-										</button>
-									) : (
-										<button
-											type="button"
-											disabled={busy}
-											title={t("从这个档案真实访问一个地址，确认它还能用")}
-											onClick={() => {
-												setError(null);
-												setChecking(proxy.id);
-											}}
-										>
-											{t("测试")}
-										</button>
-									)}
-									<button
-										type="button"
-										onClick={() => {
-											setError(null);
-											setEditing(profileOf(proxy));
-										}}
-									>
-										{t("编辑")}
-									</button>
-									<button
-										type="button"
-										className="danger"
-										onClick={() => {
-											setError(null);
-											setDeleting(proxy);
-										}}
-									>
-										{t("删除")}
-									</button>
-								</span>
-							</div>
-						))}
-					</div>
-				)}
+					),
+				}}
+			/>
 
-				<p className="ws-panel__hint">
-					{t("项目只记住代理的名字；在这里改一次，用到它的项目下次重建容器就会生效。")}
-				</p>
-			</div>
+			<Text type="secondary" className="proxyhub-note">
+				{t("项目只记住代理的名字；在这里改一次，用到它的项目下次重建容器就会生效。")}
+			</Text>
 
 			{editing ? (
 				<ProxyEditor
@@ -1034,25 +1153,22 @@ export function ProxyPage({
 				})()
 			) : null}
 
-			{deleting ? (
-				<ConfirmDialog
-					title={t("删除代理")}
-					subtitle={deleting.name}
-					onCancel={() => setDeleting(null)}
-					footer={
-						<button type="button" className="danger" disabled={busy} onClick={() => void remove(deleting)}>
-							{t("确认删除")}
-						</button>
-					}
-				>
-					<p className="confirm-note">
-						{t("删除后，用到它的项目会回到「跟随默认」；已经在跑的容器不受影响，下次重建时才换网络。")}
-						{uses.get(deleting.id)
-							? ` ${t("当前有 {count} 个项目用它。", { count: uses.get(deleting.id) ?? 0 })}`
-							: ""}
-					</p>
-				</ConfirmDialog>
-			) : null}
-		</div>
+			<Modal
+				open={deleting !== null}
+				title={t("删除代理")}
+				okText={t("确认删除")}
+				okButtonProps={{ danger: true, disabled: busy }}
+				cancelText={t("取消")}
+				onOk={() => {
+					if (deleting) void remove(deleting);
+				}}
+				onCancel={() => setDeleting(null)}
+			>
+				<Text>
+					{t("删除后，用到它的项目会回到「跟随默认」；已经在跑的容器不受影响，下次重建时才换网络。")}
+					{uses.get(deleting?.id ?? "") ? ` ${t("当前有 {count} 个项目用它。", { count: uses.get(deleting?.id ?? "") ?? 0 })}` : ""}
+				</Text>
+			</Modal>
+		</Page>
 	);
 }

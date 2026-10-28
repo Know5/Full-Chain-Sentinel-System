@@ -21,7 +21,24 @@
  * an agent or it is not, and "not mounted" means the server never connects.
  */
 
-import { Fragment, useEffect, useState } from "react";
+import { ReloadOutlined, SaveOutlined } from "@ant-design/icons";
+import {
+	Alert,
+	Button,
+	Card,
+	Col,
+	InputNumber,
+	List,
+	Row,
+	Space,
+	Switch,
+	Table,
+	Tag,
+	Tooltip,
+	Typography,
+} from "antd";
+import { useEffect, useState } from "react";
+import { t } from "../i18n.ts";
 import type {
 	SentinelCommanderPermissionKey,
 	SentinelMcpServerView,
@@ -32,9 +49,9 @@ import type {
 	SentinelPluginsView,
 	SentinelToolInfo,
 } from "../types.ts";
-import { t } from "../i18n.ts";
 import { mcpServerState, mountReason, TRANSPORT_LABELS } from "./McpPanel.tsx";
-import { RefreshIcon } from "./icons.tsx";
+
+const { Text } = Typography;
 
 /** Order and wording of the switches; spawn_agent is main-agent only. */
 const SWITCHES: { key: SentinelPermissionKey; label: string; hint: string; subagent: boolean }[] = [
@@ -106,6 +123,38 @@ const COMMANDER_SWITCHES: { key: SentinelCommanderPermissionKey; label: string; 
 	},
 	{ key: "read", label: "read", hint: t("读取项目工作目录中的文件（只读，不能修改）") },
 ];
+
+function SwitchRow({
+	label,
+	hint,
+	checked,
+	disabled,
+	onChange,
+	tooltip,
+}: {
+	label: React.ReactNode;
+	hint: string;
+	checked: boolean;
+	disabled?: boolean;
+	onChange: () => void;
+	tooltip?: string;
+}) {
+	return (
+		<div className="permhub-row">
+			<div className="permhub-row__text">
+				<Text code className="permhub-row__name">
+					{label}
+				</Text>
+				<Text type="secondary" className="permhub-row__hint">
+					{hint}
+				</Text>
+			</div>
+			<Tooltip title={tooltip}>
+				<Switch size="small" checked={checked} disabled={disabled} onChange={onChange} />
+			</Tooltip>
+		</div>
+	);
+}
 
 export function PermissionsPanel({
 	config,
@@ -215,26 +264,21 @@ export function PermissionsPanel({
 		setDraft((prev) => ({ ...prev, subagentMaxTurns: value }));
 	};
 
-	const disabledCount = (set: SentinelPermissionSet) => SWITCHES.filter((item) => item.subagent && !set[item.key]).length;
+	const disabledCount = (set: SentinelPermissionSet) =>
+		SWITCHES.filter((item) => item.subagent && !set[item.key]).length;
 
 	const switchRow = (agent: "main" | "subagent", item: (typeof SWITCHES)[number]) => {
 		const on = draft[agent][item.key];
 		const blockedByParent = agent === "subagent" && !draft.main[item.key];
 		return (
-			<label key={item.key} className={`perm-switch ${on ? "on" : ""} ${blockedByParent ? "blocked" : ""}`}>
-				<input
-					type="checkbox"
-					checked={on}
-					disabled={busy || blockedByParent}
-					onChange={() => toggle(agent, item.key)}
-				/>
-				<span className="perm-switch-body">
-					<span className="perm-switch-name">{item.label}</span>
-					<span className="perm-switch-hint">
-						{blockedByParent ? t("主 Agent 已禁用，子 Agent 无法单独开启") : item.hint}
-					</span>
-				</span>
-			</label>
+			<SwitchRow
+				key={item.key}
+				label={item.label}
+				hint={blockedByParent ? t("主 Agent 已禁用，子 Agent 无法单独开启") : item.hint}
+				checked={on}
+				disabled={busy || blockedByParent}
+				onChange={() => toggle(agent, item.key)}
+			/>
 		);
 	};
 
@@ -246,40 +290,40 @@ export function PermissionsPanel({
 	 * the master switch off, which is how a server is staged before MCP is allowed at all.
 	 */
 	const mcpServerRows = (
-		<div className="perm-mcp">
+		<div className="permhub-mcp">
 			{mcpServers === null ? (
-				<p className="perm-mcp-note">{t("正在读取 MCP 配置…")}</p>
+				<Text type="secondary">{t("正在读取 MCP 配置…")}</Text>
 			) : mcpServers.length === 0 ? (
-				<p className="perm-mcp-note">{t("还没有配置服务器（设置 → MCP）。")}</p>
+				<Text type="secondary">{t("还没有配置服务器（设置 → MCP）。")}</Text>
 			) : (
 				<>
-					<p className="perm-mcp-note">
+					<Text type="secondary" className="permhub-mcp__note">
 						{t("逐个服务器控制。这里的开关就是「设置 → MCP」的启用，对所有 Agent 生效。")}
-					</p>
+					</Text>
 					{mcpServers.map((server) => {
 						const state = mcpServerState(server);
 						return (
-							<label key={server.name} className={`perm-mcp-row ${server.enabled ? "on" : ""}`}>
-								<input
-									type="checkbox"
-									checked={server.enabled}
-									disabled={busy || mcpBusy}
-									onChange={() => onToggleMcpServer(server.name, !server.enabled)}
-								/>
-								<span className="perm-mcp-body">
-									<span className="perm-mcp-name">
-										{server.name}
-										<span className="perm-mcp-transport">{TRANSPORT_LABELS[server.transport]}</span>
-									</span>
-									<span className="perm-mcp-hint" title={server.target}>
+							<div key={server.name} className="permhub-row permhub-row--nested">
+								<div className="permhub-row__text">
+									<Space size={6}>
+										<Text code>{server.name}</Text>
+										<Tag variant="filled">{TRANSPORT_LABELS[server.transport]}</Tag>
+									</Space>
+									<Text type="secondary" className="permhub-row__hint" title={server.target}>
 										{draft.main.mcp
 											? state === "mounted"
 												? server.target
 												: mountReason(server)
 											: t("主开关已关闭：全部不挂载")}
-									</span>
-								</span>
-							</label>
+									</Text>
+								</div>
+								<Switch
+									size="small"
+									checked={server.enabled}
+									disabled={busy || mcpBusy}
+									onChange={() => onToggleMcpServer(server.name, !server.enabled)}
+								/>
+							</div>
 						);
 					})}
 				</>
@@ -288,216 +332,255 @@ export function PermissionsPanel({
 	);
 
 	return (
-		<div className="perm">
-			<p className="settings-hint">
-				{t("工具在会话创建时挂载，被禁用的工具会从注册表里移除：模型看不到、tool_search 搜不到、codemode 也调不到。保存后会立即重建当前会话（历史保留）；有会话正在运行时会拒绝保存，请先中止。")}
-			</p>
+		<>
+			<Alert
+				type="info"
+				showIcon
+				className="ui-page__alert"
+				title={t(
+					"工具在会话创建时挂载，被禁用的工具会从注册表里移除：模型看不到、tool_search 搜不到、codemode 也调不到。保存后会立即重建当前会话（历史保留）；有会话正在运行时会拒绝保存，请先中止。",
+				)}
+			/>
 
-			<div className="perm-presets">
-				<span className="perm-presets-label">{t("预设")}</span>
-				{presets.map((preset) => (
-					<button
-						key={preset.id}
-						type="button"
-						className="ghost small"
-						title={preset.hint}
-						disabled={busy}
-						onClick={() => applyPreset(preset)}
-					>
-						{preset.label}
-					</button>
-				))}
-				<span className="perm-presets-hint">
+			<div className="permhub-toolbar">
+				<Text type="secondary">{t("预设")}</Text>
+				<Space size={6} wrap>
+					{presets.map((preset) => (
+						<Tooltip key={preset.id} title={preset.hint}>
+							<Button size="small" disabled={busy} onClick={() => applyPreset(preset)}>
+								{preset.label}
+							</Button>
+						</Tooltip>
+					))}
+				</Space>
+				<Text type={dirty ? "warning" : "secondary"} className="permhub-dirty">
 					{dirty ? t("有未保存的修改") : t("主 Agent 已禁用 {count} 项", { count: disabledCount(draft.main) })}
-				</span>
-				<span className="composer-spacer" />
-				<button
-					type="button"
-					className="ghost small"
-					onClick={onRefresh}
-					disabled={busy}
-					title={t("重新读取已挂载工具")}
-				>
-					<RefreshIcon />
-					{t("刷新清单")}
-				</button>
-				<button
-					type="button"
-					className="primary"
-					disabled={busy || !dirty}
-					onClick={() =>
-						onSave({
-							main: { ...draft.main },
-							subagent: { ...draft.subagent },
-							commander: { ...draft.commander },
-							subagentMaxTurns: draft.subagentMaxTurns,
-							plugins: {
-								main: { ...draft.plugins.main },
-								subagent: { ...draft.plugins.subagent },
-							},
-						})
-					}
-				>
-					{t("保存并重建会话")}
-				</button>
+				</Text>
+				<Space size={6} className="permhub-toolbar__right">
+					<Button
+						size="small"
+						icon={<ReloadOutlined />}
+						disabled={busy}
+						title={t("重新读取已挂载工具")}
+						onClick={onRefresh}
+					>
+						{t("刷新清单")}
+					</Button>
+					<Button
+						size="small"
+						type="primary"
+						icon={<SaveOutlined />}
+						disabled={busy || !dirty}
+						onClick={() =>
+							onSave({
+								main: { ...draft.main },
+								subagent: { ...draft.subagent },
+								commander: { ...draft.commander },
+								subagentMaxTurns: draft.subagentMaxTurns,
+								plugins: {
+									main: { ...draft.plugins.main },
+									subagent: { ...draft.plugins.subagent },
+								},
+							})
+						}
+					>
+						{t("保存并重建会话")}
+					</Button>
+				</Space>
 			</div>
 
-			<div className="perm-columns">
-				<section className="perm-column perm-agent">
-					<header className="perm-agent__header">
-						<h3>{t("主 Agent")}</h3>
-					</header>
-					<div className="perm-agent__body">
-						{SWITCHES.map((item) => (
-							<Fragment key={item.key}>
-								{switchRow("main", item)}
-								{item.key === "mcp" ? mcpServerRows : null}
-							</Fragment>
-						))}
-					</div>
-				</section>
-				<section className="perm-column perm-agent">
-					<header className="perm-agent__header">
-						<h3>{t("子 Agent")}</h3>
-						<p className="perm-column-note">{t("子代理的权限永远不超过主 Agent，且永远不能再派生子代理。")}</p>
-					</header>
-					<div className="perm-agent__body">
-						{SUBAGENT_SWITCHES.map((item) => switchRow("subagent", item))}
-						<label className="perm-switch">
-							<span className="perm-switch-body">
-								<span className="perm-switch-name">{t("轮次上限")}</span>
-								<span className="perm-switch-hint">{t("单个子代理最多执行的轮数，达到后中止并汇报已有结果")}</span>
-							</span>
-							<input
-								type="number"
-								className="perm-number"
-								min={1}
-								max={200}
-								value={draft.subagentMaxTurns}
-								disabled={busy}
-								onChange={(event) => {
-									const value = Math.round(Number(event.target.value));
-									if (Number.isFinite(value)) setMaxTurns(value);
-								}}
-							/>
-						</label>
-					</div>
-				</section>
-				<section className="perm-column perm-column--tools">
-					<h3>{t("当前已挂载工具 ({count})", { count: tools.length })}</h3>
-					{tools.length === 0 ? (
-						<p className="perm-column-note">{t("当前没有会话（先选择项目），或所有工具都被禁用。")}</p>
-					) : (
-						<ul className="perm-tools">
-							{tools.map((tool) => (
-								<li key={tool.name} className={tool.active ? "" : "dim"}>
-									<code>{tool.name}</code>
-									<span>{tool.source}</span>
-									{tool.active ? null : <span className="perm-tool-note">{t("按需加载")}</span>}
-								</li>
+			<Row gutter={[16, 16]}>
+				<Col xs={24} lg={8}>
+					<Card size="small" title={t("主 Agent")} className="permhub-card">
+						<div className="permhub-list">
+							{SWITCHES.map((item) => (
+								<div key={item.key}>
+									{switchRow("main", item)}
+									{item.key === "mcp" ? mcpServerRows : null}
+								</div>
 							))}
-						</ul>
-					)}
-				</section>
-			</div>
-
-			<section className="perm-plugins">
-				<h3>{t("插件")}</h3>
-				<p className="perm-column-note">
-					{t("插件在实现上是 MCP 服务器，因此先受上面的 MCP 总开关约束；这里决定每个插件挂载给哪一类 Agent。关掉后该 Agent 的会话不连接这个插件，它的工具不会注册，tool_search 也搜不到。插件页的启用开关仍然有效，两处都开才会挂载。")}
-				</p>
-				{plugins === null ? (
-					<p className="perm-mcp-note">{t("正在读取插件…")}</p>
-				) : plugins.plugins.length === 0 ? (
-					<p className="perm-mcp-note">{t("还没有安装插件（设置 → 插件）。")}</p>
-				) : (
-					<div className="perm-plugin-list">
-						<div className="perm-plugin-head">
-							<span>{t("插件")}</span>
-							<span>{t("主 Agent")}</span>
-							<span>{t("子 Agent")}</span>
 						</div>
-						{plugins.plugins.map((plugin) => {
-							const key = `${plugin.hostId}/${plugin.manifest.id}`;
-							const mainOn = pluginOn("main", key);
-							const subOn = pluginOn("subagent", key);
-							const note = !plugin.enabled
-								? t("插件页已停用：不挂载")
-								: !draft.main.mcp
-									? t("MCP 总开关已关闭：全部不挂载")
-									: plugin.state === "running"
-										? t("{host} · 运行中", { host: plugin.hostName })
-										: `${plugin.hostName} · ${plugin.state}`;
-							return (
-								<div key={key} className={`perm-plugin-row ${plugin.enabled && mainOn ? "on" : ""}`}>
-									<div className="perm-plugin-body">
-										<span className="perm-plugin-name">
-											{plugin.manifest.name}
-											<span className="perm-plugin-version">v{plugin.manifest.version}</span>
-										</span>
-										<span className="perm-plugin-hint">{note}</span>
+					</Card>
+				</Col>
+				<Col xs={24} lg={8}>
+					<Card
+						size="small"
+						title={t("子 Agent")}
+						extra={<Text type="secondary">{t("权限不超过主 Agent")}</Text>}
+						className="permhub-card"
+					>
+						<div className="permhub-list">
+							{SUBAGENT_SWITCHES.map((item) => switchRow("subagent", item))}
+							<div className="permhub-row">
+								<div className="permhub-row__text">
+									<Text strong>{t("轮次上限")}</Text>
+									<Text type="secondary" className="permhub-row__hint">
+										{t("单个子代理最多执行的轮数，达到后中止并汇报已有结果")}
+									</Text>
+								</div>
+								<InputNumber
+									size="small"
+									min={1}
+									max={200}
+									value={draft.subagentMaxTurns}
+									disabled={busy}
+									style={{ width: 72 }}
+									onChange={(value) => {
+										if (typeof value === "number" && Number.isFinite(value)) setMaxTurns(Math.round(value));
+									}}
+								/>
+							</div>
+						</div>
+					</Card>
+				</Col>
+				<Col xs={24} lg={8}>
+					<Card
+						size="small"
+						title={t("当前已挂载工具 ({count})", { count: tools.length })}
+						className="permhub-card"
+					>
+						{tools.length === 0 ? (
+							<Text type="secondary">{t("当前没有会话（先选择项目），或所有工具都被禁用。")}</Text>
+						) : (
+							<List
+								size="small"
+								dataSource={tools}
+								renderItem={(tool) => (
+									<List.Item className={tool.active ? "" : "permhub-tool is-dim"}>
+										<Space size={6} wrap>
+											<Text code>{tool.name}</Text>
+											<Text type="secondary">{tool.source}</Text>
+											{tool.active ? null : <Tag variant="filled">{t("按需加载")}</Tag>}
+										</Space>
+									</List.Item>
+								)}
+							/>
+						)}
+					</Card>
+				</Col>
+			</Row>
+
+			<Card size="small" title={t("插件")} className="permhub-card">
+				<Text type="secondary" className="permhub-section-note">
+					{t(
+						"插件在实现上是 MCP 服务器，因此先受上面的 MCP 总开关约束；这里决定每个插件挂载给哪一类 Agent。关掉后该 Agent 的会话不连接这个插件，它的工具不会注册，tool_search 也搜不到。插件页的启用开关仍然有效，两处都开才会挂载。",
+					)}
+				</Text>
+				{plugins === null ? (
+					<Text type="secondary">{t("正在读取插件…")}</Text>
+				) : plugins.plugins.length === 0 ? (
+					<Text type="secondary">{t("还没有安装插件（设置 → 插件）。")}</Text>
+				) : (
+					<Table
+						size="small"
+						rowKey={(plugin) => `${plugin.hostId}/${plugin.manifest.id}`}
+						pagination={false}
+						dataSource={plugins.plugins}
+						columns={[
+							{
+								title: t("插件"),
+								key: "name",
+								render: (_, plugin) => (
+									<div className="permhub-plugin">
+										<Space size={6}>
+											<Text strong>{plugin.manifest.name}</Text>
+											<Text type="secondary">v{plugin.manifest.version}</Text>
+										</Space>
+										<Text type="secondary" className="permhub-plugin__hint">
+											{!plugin.enabled
+												? t("插件页已停用：不挂载")
+												: !draft.main.mcp
+													? t("MCP 总开关已关闭：全部不挂载")
+													: plugin.state === "running"
+														? t("{host} · 运行中", { host: plugin.hostName })
+														: `${plugin.hostName} · ${plugin.state}`}
+										</Text>
 									</div>
-									<label className="perm-plugin-switch" title={t("主 Agent 是否挂载")}>
-										<input
-											type="checkbox"
-											checked={mainOn}
+								),
+							},
+							{
+								title: t("主 Agent"),
+								key: "main",
+								width: 110,
+								align: "center",
+								render: (_, plugin) => {
+									const key = `${plugin.hostId}/${plugin.manifest.id}`;
+									return (
+										<Switch
+											size="small"
+											checked={pluginOn("main", key)}
 											disabled={busy}
 											aria-label={t("{name} 挂载给主 Agent", { name: plugin.manifest.name })}
 											onChange={() => togglePlugin("main", key)}
 										/>
-									</label>
-									<label
-										className="perm-plugin-switch"
-										title={mainOn ? t("子 Agent 是否挂载") : t("主 Agent 已关闭，子 Agent 无法单独开启")}
-									>
-										<input
-											type="checkbox"
-											checked={mainOn && subOn}
-											disabled={busy || !mainOn}
-											aria-label={t("{name} 挂载给子 Agent", { name: plugin.manifest.name })}
-											onChange={() => togglePlugin("subagent", key)}
-										/>
-									</label>
-								</div>
-							);
-						})}
-					</div>
+									);
+								},
+							},
+							{
+								title: t("子 Agent"),
+								key: "subagent",
+								width: 110,
+								align: "center",
+								render: (_, plugin) => {
+									const key = `${plugin.hostId}/${plugin.manifest.id}`;
+									const mainOn = pluginOn("main", key);
+									return (
+										<div className="permhub-plugin-switch">
+											<Switch
+												size="small"
+												checked={mainOn && pluginOn("subagent", key)}
+												disabled={busy || !mainOn}
+												aria-label={t("{name} 挂载给子 Agent", { name: plugin.manifest.name })}
+												onChange={() => togglePlugin("subagent", key)}
+											/>
+											{!mainOn ? (
+												<Text type="secondary" className="permhub-plugin-switch__hint">
+													{t("主 Agent 已关闭，子 Agent 无法单独开启")}
+												</Text>
+											) : null}
+										</div>
+									);
+								},
+							},
+						]}
+					/>
 				)}
-			</section>
+			</Card>
 
-			<section className="perm-commander">
-				<h3>{t("指挥官（工程模式）")}</h3>
-				<p className="perm-column-note">
-					{t("指挥官的调度工具（dispatch_task 等）始终挂载；这里控制的是它拆解任务用的受限执行面。修改在指挥官会话下次创建时生效（新建或恢复工程），运行中的工程不受影响。")}
-				</p>
-				<div className="perm-commander-switches">
-					{COMMANDER_SWITCHES.map((item) => (
-						<label key={item.key} className={`perm-switch ${draft.commander[item.key] ? "on" : ""}`}>
-							<input
-								type="checkbox"
-								checked={draft.commander[item.key]}
-								disabled={busy}
-								onChange={() => toggleCommander(item.key)}
-							/>
-							<span className="perm-switch-body">
-								<span className="perm-switch-name">{item.label}</span>
-								<span className="perm-switch-hint">{item.hint}</span>
-							</span>
-						</label>
-					))}
-					{draft.commander.bash ? null : (
-						<p className="perm-column-note">
-							{t("bash 已关闭：指挥官将完全基于目标清单与任务结果摘要编排，不能再自行确认目标类型。")}
-						</p>
+			<Card size="small" title={t("指挥官（工程模式）")} className="permhub-card">
+				<Text type="secondary" className="permhub-section-note">
+					{t(
+						"指挥官的调度工具（dispatch_task 等）始终挂载；这里控制的是它拆解任务用的受限执行面。修改在指挥官会话下次创建时生效（新建或恢复工程），运行中的工程不受影响。",
 					)}
+				</Text>
+				<div className="permhub-list">
+					{COMMANDER_SWITCHES.map((item) => (
+						<SwitchRow
+							key={item.key}
+							label={item.label}
+							hint={item.hint}
+							checked={draft.commander[item.key]}
+							disabled={busy}
+							onChange={() => toggleCommander(item.key)}
+						/>
+					))}
 				</div>
-			</section>
+				{draft.commander.bash ? null : (
+					<Text type="secondary" className="permhub-section-note">
+						{t("bash 已关闭：指挥官将完全基于目标清单与任务结果摘要编排，不能再自行确认目标类型。")}
+					</Text>
+				)}
+			</Card>
 
 			{draft.main.bash || draft.main.edit || draft.main.write ? null : (
-				<p className="perm-warn">
-					{t("当前配置下 Agent 不能执行命令，也不能修改文件：适合只读侦察。如果它需要落地脚本或证据文件，请至少开启 write。")}
-				</p>
+				<Alert
+					type="warning"
+					showIcon
+					title={t(
+						"当前配置下 Agent 不能执行命令，也不能修改文件：适合只读侦察。如果它需要落地脚本或证据文件，请至少开启 write。",
+					)}
+				/>
 			)}
-		</div>
+		</>
 	);
 }

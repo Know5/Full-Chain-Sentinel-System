@@ -29,6 +29,9 @@
 		"yaml": "2.9.0"
 	},
 	"devDependencies": {
+		"@ant-design/cssinjs": "2.1.2",
+		"@ant-design/icons": "6.3.4",
+		"@ant-design/pro-components": "3.1.15-8",
 		"@types/qrcode": "1.5.6",
 		"@types/react": "19.3.0",
 		"@types/react-dom": "19.3.0",
@@ -36,6 +39,8 @@
 		"@vitejs/plugin-react": "6.1.2",
 		"@xterm/addon-fit": "0.11.0",
 		"@xterm/xterm": "6.0.0",
+		"antd": "6.6.8",
+		"dayjs": "1.11.23",
 		"lucide-react": "1.54.0",
 		"qrcode": "1.5.4",
 		"react": "19.3.0",

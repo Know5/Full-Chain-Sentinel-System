@@ -1,3 +1,5 @@
+import { CaretDownOutlined, CaretRightOutlined } from "@ant-design/icons";
+import { Button, Card, Checkbox, Col, Empty, Input, List, Row, Segmented, Space, Tag, Typography } from "antd";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getLanguage, t } from "../i18n.ts";
 import {
@@ -12,8 +14,9 @@ import {
 	toolStatus,
 } from "../subagent-process.ts";
 import type { SentinelSubagentEvent, SentinelSubagentRun } from "../types.ts";
-import { CaretDownIcon, CaretRightIcon } from "./icons.tsx";
 import { MarkdownText } from "./MessageView.tsx";
+
+const { Text } = Typography;
 
 function formatClock(iso: string): string {
 	const date = new Date(iso);
@@ -27,6 +30,13 @@ function scalar(value: unknown): string | undefined {
 	if (Array.isArray(value) && value.every((item) => typeof item === "string")) return value.join(" ");
 	return undefined;
 }
+
+const STATUS_COLORS: Record<SentinelSubagentRun["status"], string> = {
+	running: "processing",
+	done: "green",
+	error: "red",
+	aborted: "default",
+};
 
 /** Structured arguments: the command stands alone, the rest reads as key/value. */
 function ToolDetail({
@@ -53,47 +63,45 @@ function ToolDetail({
 	};
 
 	return (
-		<div className="sa-detail">
-			{command ? <pre className="sa-command">{command}</pre> : null}
+		<div className="sap-detail">
+			{command ? <pre className="sap-pre">{command}</pre> : null}
 			{entries.length > 0 ? (
-				<div className="sa-args">
+				<div className="sap-args">
 					{entries.map(([key, value]) => {
 						const text = scalar(value);
 						return (
-							<div key={key} className="sa-arg">
-								<span className="sa-arg-key">{key}</span>
-								<span className={`sa-arg-value ${text === undefined ? "code" : ""}`}>
+							<Space key={key} size={8} align="start" className="sap-arg">
+								<Text code>{key}</Text>
+								<Text type={text === undefined ? "secondary" : undefined}>
 									{text ?? JSON.stringify(value, null, 2)}
-								</span>
-							</div>
+								</Text>
+							</Space>
 						);
 					})}
 				</div>
 			) : null}
-			<div className="sa-output-head">
-				<span>{t("输出")}</span>
-				<span className="sa-output-actions">
-					{command ? (
-						<button type="button" className="ghost small" onClick={() => void copy("command", command)}>
-							{copied === "command" ? t("已复制") : t("复制命令")}
-						</button>
-					) : null}
-					{step.output ? (
-						<button type="button" className="ghost small" onClick={() => void copy("output", step.output)}>
-							{copied === "output" ? t("已复制") : t("复制输出")}
-						</button>
-					) : null}
-					{step.output && onFullscreen ? (
-						<button type="button" className="ghost small" onClick={() => onFullscreen(step.name, step.output)}>
-							{t("全屏")}
-						</button>
-					) : null}
-				</span>
-			</div>
-			<pre className={`sa-output ${step.output ? "" : "is-empty"}`}>
+			<Space size={8} wrap className="sap-outputhead">
+				<Text type="secondary">{t("输出")}</Text>
+				{command ? (
+					<Button size="small" type="link" onClick={() => void copy("command", command)}>
+						{copied === "command" ? t("已复制") : t("复制命令")}
+					</Button>
+				) : null}
+				{step.output ? (
+					<Button size="small" type="link" onClick={() => void copy("output", step.output)}>
+						{copied === "output" ? t("已复制") : t("复制输出")}
+					</Button>
+				) : null}
+				{step.output && onFullscreen ? (
+					<Button size="small" type="link" onClick={() => onFullscreen(step.name, step.output)}>
+						{t("全屏")}
+					</Button>
+				) : null}
+			</Space>
+			<pre className={step.output ? "sap-pre" : "sap-pre is-empty"}>
 				{step.output || (step.running ? t("等待输出…") : t("（无输出）"))}
 			</pre>
-			{step.truncated ? <div className="subagent-truncated">{t("（输出过长，已截断）")}</div> : null}
+			{step.truncated ? <Text type="secondary">{t("（输出过长，已截断）")}</Text> : null}
 		</div>
 	);
 }
@@ -112,26 +120,23 @@ function ToolRow({
 	const status = toolStatus(step);
 	const duration = step.durationMs === undefined ? "" : formatMs(step.durationMs);
 	return (
-		<div className={`sa-step sa-tool ${status} ${expanded ? "open" : ""}`} id={`sa-tool-${step.seq}`}>
-			<div
-				className="sa-tool-row"
-				role="button"
-				tabIndex={0}
-				onClick={onToggle}
-				onKeyDown={(event) => {
-					if (event.key === "Enter" || event.key === " ") onToggle();
-				}}
-			>
-				<span className="sa-caret">{expanded ? <CaretDownIcon size={10} /> : <CaretRightIcon size={10} />}</span>
-				<span className="sa-tool-name">{step.name}</span>
+		<div
+			className={`sap-step sap-tool${status === "error" ? " is-error" : ""}${expanded ? " is-open" : ""}`}
+			id={`sa-tool-${step.seq}`}
+		>
+			<Button type="text" block className="sap-toolrow" onClick={onToggle}>
+				{expanded ? <CaretDownOutlined /> : <CaretRightOutlined />}
+				<Tag variant="filled">{step.name}</Tag>
 				{step.summary ? (
-					<span className={`sa-tool-summary ${step.running ? "live" : ""}`}>{step.summary}</span>
+					<Text type="secondary" ellipsis className="sap-toolsummary">
+						{step.summary}
+					</Text>
 				) : null}
-				<span className={`sa-tool-meta ${status}`}>
-					{status === "running" ? t("运行中") : status === "error" ? t("失败") : "✓"}
-					{duration ? <span className="sa-tool-duration">{duration}</span> : null}
-				</span>
-			</div>
+				<Tag color={status === "running" ? "processing" : status === "error" ? "red" : "green"} variant="filled">
+					{status === "running" ? t("运行中") : status === "error" ? t("失败") : t("完成")}
+					{duration ? ` ${duration}` : ""}
+				</Tag>
+			</Button>
 			{expanded ? <ToolDetail step={step} onFullscreen={onFullscreen} /> : null}
 		</div>
 	);
@@ -139,19 +144,17 @@ function ToolRow({
 
 function TextRow({ step, expanded, onToggle }: { step: TextStep; expanded: boolean; onToggle: () => void }) {
 	return (
-		<div className={`sa-step sa-text ${expanded ? "open" : ""}`}>
-			<div
-				className="sa-text-body"
-				role="button"
-				tabIndex={0}
-				onClick={onToggle}
-				onKeyDown={(event) => {
-					if (event.key === "Enter" || event.key === " ") onToggle();
-				}}
-			>
-				{expanded ? <MarkdownText text={step.text} /> : <div className="sa-text-clamp">{plainText(step.text)}</div>}
-			</div>
-			{step.truncated ? <div className="subagent-truncated">{t("（内容过长，已截断）")}</div> : null}
+		<div className={expanded ? "sap-step sap-text is-open" : "sap-step sap-text is-clamped"}>
+			<Button type="text" block className="sap-textbody" onClick={onToggle}>
+				{expanded ? (
+					<MarkdownText text={step.text} />
+				) : (
+					<Text type="secondary" ellipsis>
+						{plainText(step.text)}
+					</Text>
+				)}
+			</Button>
+			{step.truncated ? <Text type="secondary">{t("（内容过长，已截断）")}</Text> : null}
 		</div>
 	);
 }
@@ -175,46 +178,61 @@ function RunList({
 	onPage: (page: number) => void;
 }) {
 	return (
-		<aside className="subagent-list">
-			{total > 10 ? (
-				<div className="subagent-list-pager">
-					<button type="button" disabled={page === 0} onClick={() => onPage(page - 1)}>
-						{t("上一页")}
-					</button>
-					<span>
-						{page + 1} / {pageCount}
-					</span>
-					<button type="button" disabled={page >= pageCount - 1} onClick={() => onPage(page + 1)}>
-						{t("下一页")}
-					</button>
-					<span className="muted">{t("共 {total}", { total })}</span>
-				</div>
-			) : null}
-			{runs.map((run) => {
-				const duration = durationOf(run);
-				return (
-					<button
-						key={run.id}
-						type="button"
-						className={`subagent-item ${run.status} ${run.id === selectedId ? "selected" : ""}`}
-						onClick={() => onSelect(run.id)}
-					>
-						<span className="subagent-item-top">
-							<span className={`subagent-badge ${run.status}`}>{STATUS_LABELS[run.status]}</span>
-							<span className="subagent-item-clock">{formatClock(run.startedAt)}</span>
-						</span>
-						<span className="subagent-item-task" title={run.task}>
-							{run.task}
-						</span>
-						<span className="subagent-item-meta">
-							{t("{turns} 轮", { turns: run.turns })}
-							{duration ? ` · ${duration}` : ""}
-						</span>
-					</button>
-				);
-			})}
-			{runs.length === 0 ? <div className="subagent-empty">{t("加载中…")}</div> : null}
-		</aside>
+		<Card
+			size="small"
+			className="sap-list"
+			title={t("子代理")}
+			extra={
+				total > 10 ? (
+					<Space size={6}>
+						<Button size="small" disabled={page === 0} onClick={() => onPage(page - 1)}>
+							{t("上一页")}
+						</Button>
+						<Text type="secondary">
+							{page + 1} / {pageCount}
+						</Text>
+						<Button size="small" disabled={page >= pageCount - 1} onClick={() => onPage(page + 1)}>
+							{t("下一页")}
+						</Button>
+						<Text type="secondary">{t("共 {total}", { total })}</Text>
+					</Space>
+				) : null
+			}
+		>
+			{runs.length === 0 ? (
+				<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t("加载中…")} />
+			) : (
+				<List
+					size="small"
+					dataSource={runs}
+					renderItem={(run) => {
+						const duration = durationOf(run);
+						return (
+							<List.Item
+								className={run.id === selectedId ? "sap-run is-selected" : "sap-run"}
+								onClick={() => onSelect(run.id)}
+							>
+								<div className="sap-run__text">
+									<Space size={6} wrap>
+										<Tag color={STATUS_COLORS[run.status]} variant="filled">
+											{STATUS_LABELS[run.status]}
+										</Tag>
+										<Text type="secondary">{formatClock(run.startedAt)}</Text>
+									</Space>
+									<Text ellipsis title={run.task}>
+										{run.task}
+									</Text>
+									<Text type="secondary">
+										{t("{turns} 轮", { turns: run.turns })}
+										{duration ? ` · ${duration}` : ""}
+									</Text>
+								</div>
+							</List.Item>
+						);
+					}}
+				/>
+			)}
+		</Card>
 	);
 }
 
@@ -285,51 +303,66 @@ function RunDetail({
 	const duration = durationOf(run);
 
 	return (
-		<div className="subagent-detail">
-			<div className="subagent-detail-head">
-				<div className="subagent-detail-title" title={run.task}>
-					{run.task}
+		<Card
+			size="small"
+			className="sap-detail"
+			title={
+				<div className="sap-title">
+					<Text strong ellipsis title={run.task}>
+						{run.task}
+					</Text>
+					<Space size={6} wrap>
+						<Tag color={STATUS_COLORS[run.status]} variant="filled">
+							{STATUS_LABELS[run.status]}
+						</Tag>
+						<Text type="secondary">
+							{t("{turns} 轮", { turns: run.turns })}
+							{duration ? ` · ${duration}` : ""} · {formatClock(run.startedAt)}
+						</Text>
+					</Space>
 				</div>
-				<div className="subagent-detail-meta">
-					<span className={`subagent-badge ${run.status}`}>{STATUS_LABELS[run.status]}</span>
-					<span>
-						{t("{turns} 轮", { turns: run.turns })}
-						{duration ? ` · ${duration}` : ""} · {formatClock(run.startedAt)}
-					</span>
-				</div>
-			</div>
-			<div className="subagent-tabs">
-				<button type="button" className={tab === "process" ? "on" : ""} onClick={() => setTab("process")}>
-					{t("过程")}
-					<span className="subagent-tab-count">{toolCount}</span>
-					{/* Visible from the result tab too: a failed step is why the operator
-					    opens the process in the first place. */}
-					{failureCount > 0 ? (
-						<span className="subagent-tab-fail">{t("{count} 个失败", { count: failureCount })}</span>
-					) : null}
-				</button>
-				<button type="button" className={tab === "result" ? "on" : ""} onClick={() => setTab("result")}>
-					{t("结果")}
-				</button>
+			}
+		>
+			<div className="sap-toolbar">
+				<Segmented
+					size="small"
+					value={tab}
+					onChange={(value) => setTab(value as "process" | "result")}
+					options={[
+						{
+							value: "process",
+							label: (
+								<Space size={4}>
+									{t("过程")}
+									<Tag variant="filled">{toolCount}</Tag>
+									{failureCount > 0 ? (
+										<Tag color="red" variant="filled">
+											{t("{count} 个失败", { count: failureCount })}
+										</Tag>
+									) : null}
+								</Space>
+							),
+						},
+						{ value: "result", label: t("结果") },
+					]}
+				/>
 				{tab === "process" ? (
-					<span className="subagent-tools">
-						<input
+					<Space size={6} wrap>
+						<Input
+							size="small"
+							allowClear
+							style={{ width: 180 }}
 							value={query}
 							onChange={(event) => setQuery(event.target.value)}
 							placeholder={t("搜索命令、输出…")}
 							spellCheck={false}
 						/>
-						<button
-							type="button"
-							className={`ghost small ${failuresOnly ? "on" : ""}`}
-							onClick={() => setFailuresOnly((prev) => !prev)}
-						>
+						<Checkbox checked={failuresOnly} onChange={(event) => setFailuresOnly(event.target.checked)}>
 							{t("只看失败")}
-						</button>
+						</Checkbox>
 						{firstFailure ? (
-							<button
-								type="button"
-								className="ghost small"
+							<Button
+								size="small"
 								onClick={() => {
 									// A filter could be hiding the row, so clear it first and
 									// scroll after the list has been re-rendered.
@@ -343,21 +376,22 @@ function RunDetail({
 								}}
 							>
 								{t("跳到第一个失败")}
-							</button>
+							</Button>
 						) : null}
-						<button
-							type="button"
-							className={`ghost small ${follow ? "on" : ""}`}
+						<Button
+							size="small"
+							type={follow ? "primary" : "default"}
 							title={t("跟随最新步骤")}
 							onClick={() => setFollow((prev) => !prev)}
 						>
 							{t("跟随")}
-						</button>
-					</span>
+						</Button>
+					</Space>
 				) : null}
 			</div>
+
 			<div
-				className="subagent-detail-body"
+				className="sap-body"
 				ref={bodyRef}
 				onScroll={(event) => {
 					const body = event.currentTarget;
@@ -365,36 +399,41 @@ function RunDetail({
 				}}
 			>
 				{tab === "result" ? (
-					<div className="subagent-result">
-						{run.error ? <div className="subagent-error">{run.error}</div> : null}
+					<div className="sap-result">
+						{run.error ? (
+							<Text type="danger" className="sap-error">
+								{run.error}
+							</Text>
+						) : null}
 						{run.result ? (
 							<MarkdownText text={run.result} />
 						) : (
-							<div className="subagent-empty">
-								{run.status === "running" ? t("运行中，还没有产出结果") : t("（没有结果）")}
-							</div>
+							<Empty
+								image={Empty.PRESENTED_IMAGE_SIMPLE}
+								description={run.status === "running" ? t("运行中，还没有产出结果") : t("（没有结果）")}
+							/>
 						)}
 					</div>
 				) : events.length === 0 ? (
-					<div className="subagent-empty">{t("暂无过程记录")}</div>
+					<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t("暂无过程记录")} />
 				) : shownTurns.length === 0 ? (
-					<div className="subagent-empty">{t("没有匹配的步骤")}</div>
+					<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t("没有匹配的步骤")} />
 				) : (
-					<div className="subagent-process">
+					<div className="sap-process">
 						{shownTurns.map((turn) => (
-							<div key={turn.index} className="sa-turn">
-								<div className="sa-turn-head">
-									<span className="sa-turn-label">
-										{t("第 {round} 轮", { round: turn.index })}
-									</span>
-									<span className="sa-turn-meta">
+							<div key={turn.index} className="sap-turn">
+								<Space size={8} wrap className="sap-turnhead">
+									<Text strong>{t("第 {round} 轮", { round: turn.index })}</Text>
+									<Text type="secondary">
 										{t("{count} 个工具", { count: turn.tools })}
 										{turn.durationMs > 0 ? ` · ${formatMs(turn.durationMs)}` : ""}
-									</span>
+									</Text>
 									{turn.failures > 0 ? (
-										<span className="sa-turn-fail">{t("{count} 个失败", { count: turn.failures })}</span>
+										<Tag color="red" variant="filled">
+											{t("{count} 个失败", { count: turn.failures })}
+										</Tag>
 									) : null}
-								</div>
+								</Space>
 								{turn.steps.map((step) => {
 									if (step.kind === "tool") {
 										return (
@@ -426,20 +465,20 @@ function RunDetail({
 									}
 									if (step.kind === "thinking") {
 										return (
-											<div key={step.seq} className="sa-step sa-block">
-												<details className="thinking">
-													<summary>
+											<details key={step.seq} className="sap-thinking">
+												<summary>
+													<Text type="secondary">
 														{t("思考 · {count} 字", { count: step.text.length })}
-													</summary>
-													<pre>{step.text}</pre>
-												</details>
-											</div>
+													</Text>
+												</summary>
+												<pre className="sap-pre">{step.text}</pre>
+											</details>
 										);
 									}
 									return (
-										<div key={step.seq} className={`sa-step sa-status ${step.status ?? ""}`}>
+										<Text key={step.seq} type="secondary" className="sap-status">
 											{step.note}
-										</div>
+										</Text>
 									);
 								})}
 							</div>
@@ -447,24 +486,26 @@ function RunDetail({
 					</div>
 				)}
 			</div>
+
 			{run.status === "running" ? (
-				<div className="subagent-controls">
-					<button type="button" className="danger" onClick={() => onAbort(run.id)}>
+				<Space size={8} wrap className="sap-controls">
+					<Button danger onClick={() => onAbort(run.id)}>
 						{t("中止该子代理")}
-					</button>
-					<input
+					</Button>
+					<Input
+						style={{ flex: 1, minWidth: 220 }}
 						value={steerText}
 						placeholder={t("给该子代理追加指令…")}
 						onChange={(event) => setSteerText(event.target.value)}
-						onKeyDown={(event) => {
-							if (event.key === "Enter" && steerText.trim()) {
+						onPressEnter={() => {
+							if (steerText.trim()) {
 								onSteer(run.id, steerText.trim());
 								setSteerText("");
 							}
 						}}
 					/>
-					<button
-						type="button"
+					<Button
+						type="primary"
 						disabled={!steerText.trim()}
 						onClick={() => {
 							onSteer(run.id, steerText.trim());
@@ -472,10 +513,10 @@ function RunDetail({
 						}}
 					>
 						{t("追加")}
-					</button>
-				</div>
+					</Button>
+				</Space>
 			) : null}
-		</div>
+		</Card>
 	);
 }
 
@@ -557,35 +598,40 @@ export function SubagentPanel({
 
 	if (runs.length === 0 && total === 0) {
 		return (
-			<div className="subagent-panel empty">
-				<div className="subagent-empty">
-					{t("当前会话还没有子代理。让主代理用 spawn_agent 派发独立任务后，这里会显示它的实时过程。")}
-				</div>
-			</div>
+			<Empty
+				image={Empty.PRESENTED_IMAGE_SIMPLE}
+				description={t("当前会话还没有子代理。让主代理用 spawn_agent 派发独立任务后，这里会显示它的实时过程。")}
+			/>
 		);
 	}
 
 	return (
-		<div className="subagent-panel">
-			<RunList
-				runs={visible}
-				selectedId={selectedId}
-				onSelect={setPickedId}
-				page={page}
-				pageCount={pageCount}
-				total={total}
-				onPage={setPage}
-			/>
-			{selected ? (
-				<RunDetail
-					key={selected.id}
-					run={selected}
-					events={transcripts[selected.id] ?? []}
-					onAbort={onAbort}
-					onSteer={onSteer}
-					onFullscreen={onFullscreen}
+		<Row gutter={[12, 12]} className="sap">
+			<Col xs={24} lg={8}>
+				<RunList
+					runs={visible}
+					selectedId={selectedId}
+					onSelect={setPickedId}
+					page={page}
+					pageCount={pageCount}
+					total={total}
+					onPage={setPage}
 				/>
-			) : null}
-		</div>
+			</Col>
+			<Col xs={24} lg={16}>
+				{selected ? (
+					<RunDetail
+						key={selected.id}
+						run={selected}
+						events={transcripts[selected.id] ?? []}
+						onAbort={onAbort}
+						onSteer={onSteer}
+						onFullscreen={onFullscreen}
+					/>
+				) : (
+					<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t("暂无子代理")} />
+				)}
+			</Col>
+		</Row>
 	);
 }

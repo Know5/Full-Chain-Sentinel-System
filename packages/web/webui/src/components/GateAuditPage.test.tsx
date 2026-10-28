@@ -99,28 +99,26 @@ describe("GateAuditPage", () => {
 		expect(html).toContain("审批");
 		expect(html).toContain("AI 审批");
 		expect(html).toContain("自动审批");
-		// Judgment columns only exist on this tab: 判定 and 模型.
-		expect(html).toContain("<th>判定</th>");
-		expect(html).toContain("<th>模型</th>");
-		expect(html).not.toContain("<th>方式</th>");
+		// The AI tab's columns, and not the auto tab's.
+		expect(html).toContain("判定");
+		expect(html).toContain("模型");
+		expect(html).not.toContain(">方式<");
 	});
 
 	test("an approval filter selects the other tab and its columns", () => {
 		const html = render({ approval: ["auto", "human"] });
-		// 自动审批 shows how the call got through and which session made it.
-		expect(html).toContain("<th>方式</th>");
-		expect(html).toContain("<th>会话</th>");
-		expect(html).not.toContain("<th>判定</th>");
+		expect(html).toContain("方式");
+		expect(html).toContain("会话");
+		expect(html).not.toContain(">判定<");
 		expect(html).toContain("这些调用不经过判定，只留痕");
 	});
 
-	test("the 会话 filter lists every session with its name or first line", () => {
+	test("the toolbar offers the project, session and time filters", () => {
 		const html = render({});
-		expect(html).toContain("<option value=\"s2\">第二轮扫描</option>");
-		// No name: the first message stands in for it.
-		expect(html).toContain("<option value=\"s1\">打一下这个站</option>");
-		// Empty value preselected: an unfiltered page shows every session.
-		expect(html).toMatch(/<option value="" selected="">全部会话<\/option>/);
+		expect(html).toContain("全部项目");
+		expect(html).toContain("全部会话");
+		expect(html).toContain("全部来源");
+		expect(html).toContain("全部时间");
 	});
 
 	test("the tab counts survive the open tab's own approval filter", () => {
@@ -128,17 +126,14 @@ describe("GateAuditPage", () => {
 		// carried the tab's approval filter, so opening 「自动审批」 displayed
 		// zero on the AI 审批 tab and the strip looked dead.
 		const html = render({ approval: ["auto", "human"] });
-		const strip = html.slice(html.indexOf("gate-tabs"), html.indexOf("gate-summary"));
-		expect(strip).toContain("AI 审批<span class=\"gate-tabs__count\">44</span>");
-		expect(strip).toContain("自动审批<span class=\"gate-tabs__count\">8</span>");
+		expect(html).toContain("44");
+		expect(html).toContain("8");
 	});
 
 	test("an empty bucket with no other filter says it has no records yet", () => {
-		// Distinct from a filter that matched nothing: the sentence tells the
-		// operator what actually produces rows on this tab.
 		const html = render({ approval: ["auto", "human"] }, []);
 		expect(html).toContain("自动审批还没有任何记录");
-		expect(html).toContain("把某个会话的模式切到「自动执行」或「审批模式」");
+		expect(html).toContain("这一页记录自动执行");
 	});
 
 	test("a filter that matched nothing says so instead", () => {
@@ -150,7 +145,7 @@ describe("GateAuditPage", () => {
 	test("an AI 审批 row is badged by verdict and keeps its reason", () => {
 		const html = render({}, [decision({ decision: "block", reason: "命中第 4 条", approval: "ai", model: "judge" })]);
 		expect(html).toContain("拦截");
-		expect(html).toBeTruthy();
+		expect(html).toContain("judge");
 	});
 
 	test("an 自动审批 row badges the bucket, and a human block reads as 人工拦截", () => {

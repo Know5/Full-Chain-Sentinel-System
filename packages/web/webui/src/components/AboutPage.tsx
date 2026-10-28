@@ -6,6 +6,8 @@
  * when something looks wrong.
  */
 
+import { GithubOutlined, LinkOutlined } from "@ant-design/icons";
+import { Alert, Button, Descriptions, Space, Statistic, Tag, Typography } from "antd";
 import {
 	CONSOLE_VERSION,
 	PROJECT_LICENSE,
@@ -16,7 +18,10 @@ import {
 import { t } from "../i18n.ts";
 import type { SentinelProjectInfo, SentinelResolvedModelView, SentinelStateSnapshot, SentinelStatsView } from "../types.ts";
 import { SENTINEL_MODE_LABELS } from "../types.ts";
-import { GitHubIcon, SentinelMark } from "./icons.tsx";
+import { Page } from "../ui/Page.tsx";
+import { SentinelMark } from "./icons.tsx";
+
+const { Text } = Typography;
 
 export function AboutPage({
 	snapshot,
@@ -32,73 +37,100 @@ export function AboutPage({
 	project: SentinelProjectInfo | null;
 	connected: boolean;
 }) {
-	const rows: { label: string; value: string }[] = [
-		{ label: t("控制台"), value: t("{name} Web 控制台", { name: PROJECT_NAME }) },
-		{ label: t("连接状态"), value: connected ? t("已连接") : t("已断开") },
+	const items = [
+		{ key: "console", label: t("控制台"), children: t("{name} Web 控制台", { name: PROJECT_NAME }) },
 		{
+			key: "connection",
+			label: t("连接状态"),
+			children: (
+				<Tag color={connected ? "green" : "red"} variant="filled">
+					{connected ? t("已连接") : t("已断开")}
+				</Tag>
+			),
+		},
+		{
+			key: "main",
 			label: t("主模型"),
-			value: main
+			children: main
 				? t("{entry}（{model}）", { entry: main.entryName, model: main.modelId })
-				: t("未配置"),
+				: <Text type="secondary">{t("未配置")}</Text>,
 		},
 		{
+			key: "model",
 			label: t("模型"),
-			value: snapshot?.model ? `${snapshot.model.provider} / ${snapshot.model.id}` : t("未配置"),
+			children: snapshot?.model ? `${snapshot.model.provider} / ${snapshot.model.id}` : <Text type="secondary">{t("未配置")}</Text>,
 		},
-		{ label: t("执行模式"), value: snapshot ? SENTINEL_MODE_LABELS[snapshot.mode] : "—" },
-		{ label: t("思考等级"), value: snapshot?.thinkingLevel ?? "—" },
+		{ key: "mode", label: t("执行模式"), children: snapshot ? SENTINEL_MODE_LABELS[snapshot.mode] : "—" },
+		{ key: "thinking", label: t("思考等级"), children: snapshot?.thinkingLevel ?? "—" },
 		{
+			key: "project",
 			label: t("当前项目"),
-			value: project
+			children: project
 				? t("{name}（{container}）", { name: project.name, container: project.container ?? t("无容器") })
-				: t("未选择"),
+				: <Text type="secondary">{t("未选择")}</Text>,
 		},
-		{ label: t("工作目录"), value: snapshot?.cwd ?? "—" },
-		{ label: t("当前会话"), value: snapshot?.activeSessionId ?? "—" },
-		{
-			label: t("累计 Token"),
-			value: stats
-				? t("输入 {input} / 输出 {output}", { input: stats.tokens.input, output: stats.tokens.output })
-				: "—",
-		},
-		{ label: t("Token 合计"), value: stats ? String(stats.tokens.total) : "—" },
-		{ label: t("累计花费"), value: stats ? `$${stats.cost.toFixed(4)}` : "—" },
+		{ key: "cwd", label: t("工作目录"), children: <Text code>{snapshot?.cwd ?? "—"}</Text> },
+		{ key: "session", label: t("当前会话"), children: snapshot?.activeSessionId ?? "—" },
 	];
 
 	return (
-		<div className="page-card about-page">
-			<div className="ws-panel__head">
-				<div className="ws-panel__title">
-					{t("关于")}
-					<span className="ws-panel__sub">{t("当前运行环境与端点")}</span>
+		<Page title={t("关于")} description={t("当前运行环境与端点")}>
+			<div className="about-summary">
+				<div className="about-hero">
+					<span className="about-hero__mark">
+						<SentinelMark size={22} />
+					</span>
+					<div className="about-hero__text">
+						<Text strong className="about-hero__name">
+							{PROJECT_NAME}
+						</Text>
+						<Text type="secondary" className="about-hero__version">
+							v{CONSOLE_VERSION} · {PROJECT_LICENSE}
+						</Text>
+					</div>
+					<Space size={4} className="about-hero__links">
+						<Button
+							type="link"
+							size="small"
+							icon={<GithubOutlined />}
+							href={PROJECT_REPOSITORY}
+							target="_blank"
+							rel="noreferrer"
+						>
+							GitHub
+						</Button>
+						<Button
+							type="link"
+							size="small"
+							icon={<LinkOutlined />}
+							href={PROJECT_LICENSE_URL}
+							target="_blank"
+							rel="noreferrer"
+						>
+							{PROJECT_LICENSE}
+						</Button>
+					</Space>
+				</div>
+
+				<div className="about-stats">
+					<Statistic title={t("Token 输入")} value={stats?.tokens.input ?? 0} groupSeparator="," />
+					<Statistic title={t("Token 输出")} value={stats?.tokens.output ?? 0} groupSeparator="," />
+					<Statistic title={t("Token 合计")} value={stats?.tokens.total ?? 0} groupSeparator="," />
+					<Statistic title={t("累计花费")} value={stats?.cost ?? 0} precision={4} prefix="$" />
 				</div>
 			</div>
-			<div className="ws-panel__body">
-				<div className="kv-table">
-					{rows.map((row) => (
-						<div key={row.label} className="kv-row">
-							<span className="kv-label">{row.label}</span>
-							<span className="kv-value">{row.value}</span>
-						</div>
-					))}
-				</div>
-				<p className="ws-panel__hint">
-					{t("所有命令都在项目容器内以 root 执行，bash 命令在审批模式下逐条确认。工具输出与文件面板内容来自容器，请仅在已授权的目标上使用。")}
-				</p>
-				<div className="about-brand">
-					<SentinelMark size={16} className="about-brand__mark" />
-					<span className="about-brand__name">{PROJECT_NAME}</span>
-					<span className="about-brand__version">v{CONSOLE_VERSION}</span>
-					<span className="about-brand__sep" />
-					<a href={PROJECT_REPOSITORY} target="_blank" rel="noreferrer">
-						<GitHubIcon size={12} />
-						GitHub
-					</a>
-					<a href={PROJECT_LICENSE_URL} target="_blank" rel="noreferrer">
-						{PROJECT_LICENSE}
-					</a>
-				</div>
-			</div>
-		</div>
+
+			<Descriptions bordered size="small" column={2} items={items} className="about-descriptions" />
+
+			<Alert
+				type="warning"
+				showIcon
+				className="ui-page__alert"
+				title={t("所有命令都在项目容器内以 root 执行")}
+				description={t(
+					"bash 命令在审批模式下逐条确认。工具输出与文件面板内容来自容器，请仅在已授权的目标上使用。",
+				)}
+			/>
+		</Page>
 	);
 }

@@ -8,9 +8,11 @@
  * preference: three automatic rounds, then stop and ask.
  */
 
+import { Alert, Form, Input, InputNumber, Modal, Typography } from "antd";
 import { useState } from "react";
 import { t } from "../i18n.ts";
-import { CloseIcon } from "./icons.tsx";
+
+const { Text } = Typography;
 
 export const DEFAULT_GOAL_ROUNDS = 3;
 const MAX_GOAL_ROUNDS = 99;
@@ -38,79 +40,67 @@ export function GoalStartDialog({
 }) {
 	const [objective, setObjective] = useState("");
 	const [criteria, setCriteria] = useState("");
-	const [rounds, setRounds] = useState(String(DEFAULT_GOAL_ROUNDS));
+	const [rounds, setRounds] = useState(DEFAULT_GOAL_ROUNDS);
 
-	const parsed = Number(rounds);
-	const limit = Number.isFinite(parsed)
-		? Math.min(MAX_GOAL_ROUNDS, Math.max(1, Math.round(parsed)))
+	const limit = Number.isFinite(rounds)
+		? Math.min(MAX_GOAL_ROUNDS, Math.max(1, Math.round(rounds)))
 		: DEFAULT_GOAL_ROUNDS;
 	const canSubmit = objective.trim().length > 0;
+	const submit = () => {
+		if (!canSubmit) return;
+		onStart(objective.trim(), parseCriteria(criteria), limit);
+		onClose();
+	};
 
 	return (
-		<div className="modal-backdrop" onClick={onClose}>
-			<div className="modal goal-dialog" onClick={(event) => event.stopPropagation()}>
-				<h2>
-					{t("持续目标")}
-					<button type="button" className="ghost small" style={{ float: "right" }} onClick={onClose}>
-						<CloseIcon />
-					</button>
-				</h2>
-				<p className="modal-hint">
-					{t("一轮结束后自动继续，直到模型调用 goal_complete 证明达成目标，或达到轮数上限。只在自动模式下可用：")}{" "}
-					{t("运行期间所有命令无人拦截直接执行。")}
-				</p>
-
-				<label className="goal-field">
-					<span>{t("目标（必填）")}</span>
-					<textarea
+		<Modal
+			open
+			width={640}
+			title={t("持续目标")}
+			okText={t("提交并启动")}
+			cancelText={t("取消")}
+			okButtonProps={{ disabled: !canSubmit }}
+			onOk={submit}
+			onCancel={onClose}
+			destroyOnHidden
+		>
+			<Alert
+				type="warning"
+				showIcon
+				className="ui-page__alert"
+				title={`${t("一轮结束后自动继续，直到模型调用 goal_complete 证明达成目标，或达到轮数上限。只在自动模式下可用：")} ${t("运行期间所有命令无人拦截直接执行。")}`}
+			/>
+			<Form layout="vertical" requiredMark={false}>
+				<Form.Item label={t("目标（必填）")} required>
+					<Input.TextArea
 						value={objective}
-						rows={4}
+						autoSize={{ minRows: 4, maxRows: 10 }}
 						placeholder={t("例如：对 10.10.10.5 完成全端口侦察，确认服务与版本，并把确认的问题提交到漏洞中枢")}
 						onChange={(event) => setObjective(event.target.value)}
 					/>
-				</label>
-
-				<label className="goal-field">
-					<span>{t("验收标准（选填，一行一条；填了就必须在完成时逐条给出证据）")}</span>
-					<textarea
+				</Form.Item>
+				<Form.Item label={t("验收标准（选填，一行一条；填了就必须在完成时逐条给出证据）")}>
+					<Input.TextArea
 						value={criteria}
-						rows={3}
+						autoSize={{ minRows: 3, maxRows: 8 }}
 						placeholder={t("例如：\n开放端口已全部确认服务与版本\n发现的问题已提交漏洞中枢")}
 						onChange={(event) => setCriteria(event.target.value)}
 					/>
-				</label>
-
-				<label className="goal-field goal-field--inline">
-					<span>{t("自动续跑轮数上限")}</span>
-					<input
-						type="number"
+				</Form.Item>
+				<Form.Item
+					label={t("自动续跑轮数上限")}
+					extra={t("初始运行不计入；到上限后暂停，可在目标条上点「继续 +3 轮」。")}
+				>
+					<InputNumber
 						min={1}
 						max={MAX_GOAL_ROUNDS}
 						value={rounds}
-						onChange={(event) => setRounds(event.target.value)}
+						style={{ width: 160 }}
+						onChange={(value) => setRounds(value ?? DEFAULT_GOAL_ROUNDS)}
 					/>
-					<span className="goal-field__hint">
-						{t("初始运行不计入；到上限后暂停，可在目标条上点「继续 +3 轮」。")}
-					</span>
-				</label>
-
-				<div className="modal-actions">
-					<button type="button" onClick={onClose}>
-						{t("取消")}
-					</button>
-					<button
-						type="button"
-						className="primary"
-						disabled={!canSubmit}
-						onClick={() => {
-							onStart(objective.trim(), parseCriteria(criteria), limit);
-							onClose();
-						}}
-					>
-						{t("提交并启动")}
-					</button>
-				</div>
-			</div>
-		</div>
+				</Form.Item>
+			</Form>
+			<Text type="secondary">{t("目标运行期间所有命令无人拦截直接执行，请确认目标与范围。")}</Text>
+		</Modal>
 	);
 }

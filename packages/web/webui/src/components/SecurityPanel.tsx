@@ -5,8 +5,11 @@
  * not about the agent conversation) and logs every other session out. Logout
  * lives in the sider footer; the server refuses tokens issued before it.
  */
-import { type FormEvent, useState } from "react";
+import { Alert, Button, Card, Col, Form, Input, Row, Typography } from "antd";
+import { useState } from "react";
 import { t } from "../i18n.ts";
+
+const { Text } = Typography;
 
 export function SecurityPanel({ username }: { username: string | null }) {
 	const [current, setCurrent] = useState("");
@@ -16,8 +19,7 @@ export function SecurityPanel({ username }: { username: string | null }) {
 	const [saved, setSaved] = useState(false);
 	const [busy, setBusy] = useState(false);
 
-	const submit = async (event: FormEvent) => {
-		event.preventDefault();
+	const submit = async () => {
 		if (busy) return;
 		setSaved(false);
 		if (next !== confirm) {
@@ -47,54 +49,64 @@ export function SecurityPanel({ username }: { username: string | null }) {
 	};
 
 	return (
-		<div className="security-layout">
-			<section className="settings settings-section-card">
-				<h3 className="settings-section">{t("修改密码")}</h3>
-				<p className="settings-hint">{t("至少 8 个字符。修改后其他已登录的会话（包括别的浏览器）会全部退出。")}</p>
-				<form className="security-form" onSubmit={submit}>
-					<label>
-						{t("当前密码")}
-						<input
-							type="password"
-							value={current}
-							autoComplete="current-password"
-							onChange={(event) => setCurrent(event.target.value)}
-						/>
-					</label>
-					<label>
-						{t("新密码")}
-						<input
-							type="password"
-							value={next}
-							autoComplete="new-password"
-							onChange={(event) => setNext(event.target.value)}
-						/>
-					</label>
-					<label>
-						{t("确认新密码")}
-						<input
-							type="password"
-							value={confirm}
-							autoComplete="new-password"
-							onChange={(event) => setConfirm(event.target.value)}
-						/>
-					</label>
-					{error ? <p className="page-error">{error}</p> : null}
-					{saved ? <p className="settings-hint ok-text">{t("密码已修改。")}</p> : null}
-					<div className="security-form__actions">
-						<button type="submit" className="primary" disabled={busy || !current || !next}>
+		<Row gutter={[16, 16]}>
+			<Col xs={24} lg={14}>
+				<Card size="small" title={t("修改密码")}>
+					<Text type="secondary" className="security-hint">
+						{t("至少 8 个字符。修改后其他已登录的会话（包括别的浏览器）会全部退出。")}
+					</Text>
+					<Form layout="vertical" className="security-form" onFinish={() => void submit()} requiredMark={false}>
+						<Form.Item label={t("当前密码")} required>
+							<Input.Password
+								value={current}
+								autoComplete="current-password"
+								onChange={(event) => setCurrent(event.target.value)}
+							/>
+						</Form.Item>
+						<Form.Item label={t("新密码")} required>
+							<Input.Password
+								value={next}
+								autoComplete="new-password"
+								onChange={(event) => setNext(event.target.value)}
+							/>
+						</Form.Item>
+						<Form.Item label={t("确认新密码")} required>
+							<Input.Password
+								value={confirm}
+								autoComplete="new-password"
+								onChange={(event) => setConfirm(event.target.value)}
+								onPressEnter={() => void submit()}
+							/>
+						</Form.Item>
+
+						{error ? <Alert type="error" showIcon title={error} className="ui-page__alert" /> : null}
+						{saved ? (
+							<Alert type="success" showIcon title={t("密码已修改。")} className="ui-page__alert" />
+						) : null}
+
+						<Button
+							type="primary"
+							htmlType="submit"
+							loading={busy}
+							disabled={!current || !next}
+						>
 							{busy ? t("保存中…") : t("修改密码")}
-						</button>
-					</div>
-				</form>
-			</section>
-			<aside className="security-account">
-				<span>{t("当前登录")}</span>
-				<strong>{username ?? t("未知")}</strong>
-				<p className="settings-hint">
-					{t("当前登录：{user}。退出登录在侧栏底部；修改后其他已登录的会话（包括别的浏览器）会全部退出。", { user: username ?? t("未知") })}
-				</p>
-			</aside>
-		</div>
+						</Button>
+					</Form>
+				</Card>
+			</Col>
+			<Col xs={24} lg={10}>
+				<Card size="small" title={t("当前登录")}>
+					<Text strong className="security-account__name">
+						{username ?? t("未知")}
+					</Text>
+					<Text type="secondary">
+						{t("当前登录：{user}。退出登录在侧栏底部；修改后其他已登录的会话（包括别的浏览器）会全部退出。", {
+							user: username ?? t("未知"),
+						})}
+					</Text>
+				</Card>
+			</Col>
+		</Row>
 	);
 }

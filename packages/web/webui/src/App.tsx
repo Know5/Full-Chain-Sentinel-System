@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Alert, Button, Empty } from "antd";
 import { AboutPage } from "./components/AboutPage.tsx";
 import { ApiModelPage } from "./components/ApiModelPage.tsx";
 import { ApprovalQueue } from "./components/ApprovalQueue.tsx";
-import { AppSider, type PluginNavEntry } from "./components/AppSider.tsx";
-import { MobileTopbar } from "./components/MobileTopbar.tsx";
 import { AuthGate } from "./components/AuthGate.tsx";
+import { SessionPanel } from "./chat/SessionPanel.tsx";
+import { ConsoleShell } from "./shell/ConsoleShell.tsx";
+import type { PluginNavEntry } from "./shell/navigation.tsx";
 import { ConsentGate } from "./components/ConsentGate.tsx";
 import { PageBoundary } from "./components/PageBoundary.tsx";
 import { BranchModal } from "./components/BranchModal.tsx";
@@ -34,7 +36,6 @@ import { PocPage } from "./components/PocPage.tsx";
 import { PocSourcesPanel } from "./components/PocSourcesPanel.tsx";
 import { type PresetImportNotice, PresetPanel } from "./components/PresetPanel.tsx";
 import { ProjectGate } from "./components/ProjectGate.tsx";
-import { ProjectPicker } from "./components/ProjectPicker.tsx";
 import { ProjectsPage } from "./components/ProjectsPage.tsx";
 import { ProxyPage } from "./components/ProxyPage.tsx";
 import { RunFold } from "./components/RunFold.tsx";
@@ -147,7 +148,6 @@ import {
 import { ProjectAction } from "./project-actions.ts";
 import { SentinelConnection } from "./ws.ts";
 import { getLanguage, storeLanguage, t } from "./i18n.ts";
-import { useNavigation } from "./useNavigation.ts";
 
 /**
  * Start a browser download from the authenticated archive route. The server
@@ -338,7 +338,6 @@ export function App() {
 	const [errors, setErrors] = useState<string[]>([]);
 	/** The one page the content area shows; navigation lives in the sider. */
 	const [page, setPage] = useState<SentinelPageId>("chat");
-	const navigation = useNavigation();
 	/**
 	 * Console authentication: the console renders only once the session is
 	 * confirmed; otherwise the login (or first-run setup) screen replaces it.
@@ -2421,6 +2420,11 @@ export function App() {
 	const mode: SentinelMode = snapshot?.mode ?? "review";
 	const gatekeeper = snapshot?.gatekeeper ?? null;
 	const streaming = runActive;
+	/** Active runs plus the sessions a background task is writing to. */
+	const runningSessionIds =
+		runActive && snapshot?.activeSessionId
+			? [...new Set([...(snapshot.runningSessions ?? []), snapshot.activeSessionId])]
+			: (snapshot?.runningSessions ?? []);
 	const pendingApprovals = snapshot?.pendingApprovals ?? [];
 	const needsConfig = snapshot !== null && !snapshot.modelConfigured;
 	/** No project means no container, so the console blocks the chat entirely. */
@@ -2548,22 +2552,11 @@ export function App() {
 	}
 
 	return (
-		<div className="app">
-			{navigation.mobileOpen ? (
-				<button
-					type="button"
-					className="mobile-nav-scrim"
-					aria-label={t("收起侧边栏")}
-					tabIndex={-1}
-					onClick={navigation.close}
-				/>
-			) : null}
-			<AppSider
-				collapsed={!navigation.compact && sidebarCollapsed}
-				mobileOpen={navigation.mobileOpen}
-				inert={navigation.compact && !navigation.mobileOpen}
-				panelRef={navigation.panelRef}
-				onCloseMobile={navigation.close}
+		<>
+			<ConsoleShell
+				page={page}
+				onNavigate={openPage}
+				collapsed={sidebarCollapsed}
 				onToggleCollapse={() => {
 					setSidebarCollapsed((prev) => {
 						const next = !prev;
@@ -2571,118 +2564,85 @@ export function App() {
 						return next;
 					});
 				}}
-				activePage={page}
-				pluginPages={pluginPages}
-				onNavigate={openPage}
 				connected={connected}
 				mode={mode}
+				authUser={authUser}
 				modelConfigured={snapshot?.modelConfigured ?? false}
-				sessions={sessions}
-				engines={engines}
-				activeSessionId={snapshot?.activeSessionId ?? null}
-				runningSessions={
-					runActive && snapshot?.activeSessionId
-						? [...new Set([...(snapshot.runningSessions ?? []), snapshot.activeSessionId])]
-						: (snapshot?.runningSessions ?? [])
-				}
 				pendingApprovals={pendingApprovals.length}
 				pendingVulns={vulnStats.byStatus.pending}
-				onNewSession={() => {
-					openPage("chat");
-					send({ type: "new_session" });
-				}}
-				onSwitchSession={(path) => {
-					openPage("chat");
-					send({ type: "switch_session", path });
-				}}
-				onRenameSession={(path, name) => send({ type: "rename_session", path, name })}
-				onDeleteSession={(path) => send({ type: "delete_session", path })}
-				onSetSessionStatus={(path, status) => send({ type: "set_session_status", path, status })}
+				pluginPages={pluginPages}
+				projects={projects}
+				activeProject={snapshot?.project ?? null}
+				busy={streaming}
+				onSwitchProject={(id) => send({ type: "switch_project", id })}
+				onCreateProject={addProject}
+				onManageProjects={() => openPage("projects")}
 				onRefresh={refreshPage}
-				authUser={authUser}
 				onLogout={() => {
 					void logout();
 				}}
 				onSwitchLanguage={switchLanguage}
-				projectSlot={
-					<ProjectPicker
-						projects={projects}
-						activeProject={snapshot?.project ?? null}
-						streaming={streaming}
-						proxyConfig={proxyView}
-						onSwitch={(id) => {
-							send({ type: "switch_project", id });
-							navigation.close();
-						}}
-						onAdd={addProject}
-						onRemove={removeProject}
-						onSetProxy={saveProjectProxy}
-					/>
-				}
-			/>
-			<div className="app-body">
-				<MobileTopbar
-					open={navigation.mobileOpen}
-					projectName={snapshot?.project?.name ?? null}
-					buttonRef={navigation.triggerRef}
-					onToggle={() => navigation.setOpen((open) => !open)}
-				/>
-				<main className="app-content" inert={navigation.mobileOpen}>
+			>
 					{/* A page that throws costs that page, not the console: the shell stays
 					    usable and the message says what broke. */}
 					<PageBoundary key={page} onHome={() => setPage("chat")}>
 					{connected ? null : (
-						<div className="conn-banner" role="status">
-							<span className="conn-banner-dot" />
-							<span>
-								{t("与后端连接已断开，正在自动重连… 若浏览器提示 ERR_ADDRESS_INVALID，请确认打开的是")}
-								<code> http://127.0.0.1:{t("端口")} </code>{t("（0.0.0.0 不是可访问地址）。")}
-							</span>
-						</div>
+						<Alert
+							type="warning"
+							showIcon
+							className="console-banner"
+							title={t("与后端连接已断开，正在自动重连")}
+							description={
+								<span>
+									{t("若浏览器提示 ERR_ADDRESS_INVALID，请确认打开的是")}
+									<code> http://127.0.0.1:{t("端口")} </code>
+									{t("（0.0.0.0 不是可访问地址）。")}
+								</span>
+							}
+						/>
 					)}
 					{envReport && !envReport.ok ? (
-						<div className="env-banner" role="status">
-							<span className="env-banner-dot" />
-							<span>
-								{t("Docker 环境不可用，对话已锁定：{reason}。", {
-									reason:
-										envReport.items.find((entry) => entry.blocking && entry.status !== "ok")?.label ??
-										t("环境检查未通过"),
-								})}
-								<button type="button" className="link" onClick={() => setPage("settings.environment")}>
+						<Alert
+							type="error"
+							showIcon
+							className="console-banner"
+							title={t("Docker 环境不可用，对话已锁定：{reason}。", {
+								reason:
+									envReport.items.find((entry) => entry.blocking && entry.status !== "ok")?.label ??
+									t("环境检查未通过"),
+							})}
+							description={t("构建镜像后才能开始对话。")}
+							action={
+								<Button size="small" type="link" onClick={() => setPage("settings.environment")}>
 									{t("设置 → 环境")}
-								</button>
-								{t("查看原因并构建镜像。")}
-							</span>
-						</div>
+								</Button>
+							}
+						/>
 					) : null}
 					{showGateBanner ? (
-						<div className="gate-banner" role="status">
-							<span className="gate-banner-dot" />
-							<span title={gatekeeper?.lastError ?? undefined}>
-								{t("守门模型不可用，已放行 {count} 次判定（AI 审批模式下命令未经过拦截直接执行）。", {
-									count: gatekeeper?.failures ?? 0,
-								})}
-								{gatekeeper?.lastError ? ` ${t("最近错误：{error}", { error: gatekeeper.lastError })}` : ""}
-								{t("请到")}
-								<button type="button" className="link" onClick={() => setPage("settings.model")}>
-									{t("设置 → 模型")}
-								</button>
-								{t("检查守门端点，或到")}
-							<button type="button" className="link" onClick={() => setPage("gates")}>
-								{t("审批")}
-							</button>
-								{t("查看失败记录。")}
-							</span>
-							<button
-								type="button"
-								className="gate-banner-close"
-								title={t("本次失败期间不再提示；下一次判定失败会重新出现")}
-								onClick={() => setDismissedGateFailure(gatekeeper?.lastFailureAt ?? null)}
-							>
-								×
-							</button>
-						</div>
+						<Alert
+							type="warning"
+							showIcon
+							closable
+							className="console-banner"
+							onClose={() => setDismissedGateFailure(gatekeeper?.lastFailureAt ?? null)}
+							title={t("守门模型不可用，已放行 {count} 次判定（AI 审批模式下命令未经过拦截直接执行）。", {
+								count: gatekeeper?.failures ?? 0,
+							})}
+							description={
+								<span>
+									{gatekeeper?.lastError ? `${t("最近错误：{error}", { error: gatekeeper.lastError })} ` : ""}
+									{t("请检查守门端点，或到")}
+									<Button size="small" type="link" onClick={() => setPage("settings.model")}>
+										{t("设置 → 模型")}
+									</Button>
+									<Button size="small" type="link" onClick={() => setPage("gates")}>
+										{t("审批")}
+									</Button>
+									{t("查看失败记录。")}
+								</span>
+							}
+						/>
 					) : null}
 					{/* The gate replaces the chat page only: settings and the project list
 					    must stay reachable, or a first run could never build the image. */}
@@ -2713,14 +2673,25 @@ export function App() {
 							onOpenSettings={() => openPage("settings.model")}
 						/>
 					) : page === "chat" ? (
-						<div className="page-card">
-							<div className="ws-panel__head">
-								<div className="ws-panel__title">
-									{t("对话")}
-									<span className="ws-panel__sub" title={activeSession?.firstMessage}>
-										{sessionLabel}
-									</span>
-								</div>
+						<div className="chat-workspace">
+							<SessionPanel
+								sessions={sessions}
+								activeSessionId={snapshot?.activeSessionId ?? null}
+								runningSessions={runningSessionIds}
+								engines={engines}
+								onNew={() => send({ type: "new_session" })}
+								onSwitch={(path) => send({ type: "switch_session", path })}
+								onRename={(path, name) => send({ type: "rename_session", path, name })}
+								onDelete={(path) => send({ type: "delete_session", path })}
+								onSetStatus={(path, status) => send({ type: "set_session_status", path, status })}
+							/>
+							<div className="chat-main">
+								<div className="page-card">
+							<div className="chat-head">
+								<span className="chat-head__name">{t("对话")}</span>
+								<span className="chat-head__sub" title={activeSession?.firstMessage}>
+									{sessionLabel}
+								</span>
 							</div>
 							<ChatToolbar
 								mode={mode}
@@ -2781,14 +2752,20 @@ export function App() {
 									}}
 								>
 									{visibleMessages.length === 0 && !liveText && !streaming ? (
-										<div className="ws-empty">
-											<span>{t("等待第一条指令")}</span>
-											<span>
-												{needsConfig
-													? t("请先在「设置 → 模型」中配置 OpenAI 兼容端点。")
-													: t("例如：对 10.10.10.5 进行全端口侦察，或派子代理并行侦察多个目标。")}
-											</span>
-										</div>
+										<Empty
+											className="chat-empty"
+											image={Empty.PRESENTED_IMAGE_SIMPLE}
+											description={
+												<>
+													<div>{t("等待第一条指令")}</div>
+													<div className="chat-empty__hint">
+														{needsConfig
+															? t("请先在「设置 → 模型」中配置 OpenAI 兼容端点。")
+															: t("例如：对 10.10.10.5 进行全端口侦察，或派子代理并行侦察多个目标。")}
+													</div>
+												</>
+											}
+										/>
 									) : null}
 									{runGroups.map((group, groupIndex) => {
 										// Compaction summaries live inside the run they happened
@@ -3019,6 +2996,8 @@ export function App() {
 									}}
 									onAbort={() => send({ type: "abort" })}
 								/>
+							</div>
+								</div>
 							</div>
 						</div>
 					) : page === "projects" ? (
@@ -3700,8 +3679,7 @@ export function App() {
 						/>
 					)}
 					</PageBoundary>
-				</main>
-			</div>
+			</ConsoleShell>
 			{filesOpen ? (
 				<Overlay
 					title={t("文件")}
@@ -3903,6 +3881,6 @@ export function App() {
 					</div>
 				))}
 			</div>
-		</div>
+		</>
 	);
 }

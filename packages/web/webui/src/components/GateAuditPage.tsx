@@ -11,8 +11,11 @@
  * honest — it re-queries with the same filter instead of losing the split.
  */
 
+import { ReloadOutlined, SearchOutlined } from "@ant-design/icons";
+import { ProTable } from "@ant-design/pro-components";
+import type { ProColumns } from "@ant-design/pro-components";
+import { Alert, Button, Empty, Input, Select, Space, Statistic, Tabs, Tag, Typography } from "antd";
 import { useMemo, useState } from "react";
-import "../styles/workspace-pages.css";
 import { getLanguage, t } from "../i18n.ts";
 import type {
 	SentinelGateApproval,
@@ -24,6 +27,9 @@ import type {
 	SessionInfoView,
 } from "../types.ts";
 import { SENTINEL_GATE_APPROVAL_LABELS, SENTINEL_GATE_DECISION_LABELS, SENTINEL_GATE_TAB_BUCKETS } from "../types.ts";
+import { Page } from "../ui/Page.tsx";
+
+const { Text } = Typography;
 
 const PAGE_SIZE = 50;
 
@@ -37,6 +43,12 @@ const WINDOWS: Array<{ label: string; ms: number }> = [
 	{ label: t("最近 24 小时"), ms: 24 * 60 * 60 * 1000 },
 	{ label: t("最近 7 天"), ms: 7 * 24 * 60 * 60 * 1000 },
 ];
+
+const DECISION_COLORS: Record<string, string> = {
+	allow: "green",
+	block: "red",
+	failed: "orange",
+};
 
 /** Row form: date plus clock, without the year. */
 function formatClock(at: number): string {
@@ -154,8 +166,6 @@ export function GateAuditPage({
 		[sessions],
 	);
 
-	const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-
 	/**
 	 * Whether anything other than the tab itself narrows the list. An empty page
 	 * with no other filter is a bucket that has never been written to, which is
@@ -165,314 +175,349 @@ export function GateAuditPage({
 		filter.projectId || filter.sessionId || filter.source || filter.search || filter.since || filter.decision,
 	);
 
-	return (
-		<div className="page-card gate-audit-page">
-			<div className="ws-panel__head">
-				<div className="ws-panel__title">
-					{t("审批")}
-					<span className="ws-panel__sub">
-						{tab === "ai" ? t("AI 审批判定流水") : t("自动审批工具调用流水")}
-						{t(" · 只读 · 永久保留")}
-						{stats ? t(" · 共 {count} 条", { count: stats.total }) : ""}
-					</span>
-				</div>
-				<button type="button" className="ghost" onClick={onRefresh}>
-					{t("刷新")}
-				</button>
-			</div>
-			<div className="ws-panel__body">
-				<div className="gate-tabs">
-					<button type="button" className={tab === "ai" ? "on" : ""} onClick={() => applyTab("ai")}>
-						{t("AI 审批")}
-						<span className="gate-tabs__count">{tabCounts?.ai ?? stats?.byApproval.ai ?? 0}</span>
-					</button>
-					<button type="button" className={tab === "auto" ? "on" : ""} onClick={() => applyTab("auto")}>
-						{t("自动审批")}
-						<span className="gate-tabs__count">
-							{(tabCounts?.auto ?? stats?.byApproval.auto ?? 0) + (tabCounts?.human ?? stats?.byApproval.human ?? 0)}
-						</span>
-					</button>
-				</div>
+	const aiCount = tabCounts?.ai ?? stats?.byApproval.ai ?? 0;
+	const autoCount =
+		(tabCounts?.auto ?? stats?.byApproval.auto ?? 0) + (tabCounts?.human ?? stats?.byApproval.human ?? 0);
 
-				{tab === "ai" ? (
-					<div className="gate-summary">
-						<span>
-							{t("拦截")} <b>{stats?.byDecision.block ?? 0}</b>
-						</span>
-						<span>
-							{t("放行")} <b>{stats?.byDecision.allow ?? 0}</b>
-						</span>
-						<span className={(stats?.byDecision.failed ?? 0) > 0 ? "bad" : ""}>
-							{t("失败")} <b>{stats?.byDecision.failed ?? 0}</b>
-						</span>
-						<span>
-							{t("拦截率")} <b>{stats ? percent(stats.blockRate) : "-"}</b>
-						</span>
-						<span>
-							{t("平均耗时")} <b>{stats ? formatLatency(stats.avgLatencyMs) : "-"}</b>
-						</span>
-						<span>
-							{t("24 小时")} <b>{stats?.last24h ?? 0}</b>
-						</span>
-						<span>
-							tokens <b>{stats ? stats.totalTokens.toLocaleString("en-US") : 0}</b>
-						</span>
-						<span>
-							{t("最近成功")} <b>{stats?.lastSuccessAt ? formatShort(stats.lastSuccessAt) : t("从未")}</b>
-						</span>
-					</div>
+	const columns: ProColumns<SentinelGateDecision>[] = [
+		{
+			title: t("时间"),
+			dataIndex: "at",
+			key: "at",
+			width: 150,
+			render: (_, item) => <Text type="secondary">{formatClock(item.at)}</Text>,
+		},
+		{
+			title: tab === "ai" ? t("判定") : t("方式"),
+			key: "decision",
+			width: 108,
+			render: (_, item) =>
+				tab === "ai" ? (
+					<Tag color={DECISION_COLORS[item.decision]} variant="filled">
+						{SENTINEL_GATE_DECISION_LABELS[item.decision]}
+					</Tag>
 				) : (
-					<div className="gate-summary">
-						<span>
-							{t("自动放行")} <b>{stats?.byApproval.auto ?? 0}</b>
-						</span>
-						<span>
-							{t("人工放行")} <b>{stats?.byApproval.human ?? 0}</b>
-						</span>
-						<span className={(stats?.byDecision.block ?? 0) > 0 ? "bad" : ""}>
-							{t("人工拦截")} <b>{stats?.byDecision.block ?? 0}</b>
-						</span>
-						<span>
-							{t("24 小时")} <b>{stats?.last24h ?? 0}</b>
-						</span>
-						<span className="gate-summary__note">{t("这些调用不经过判定，只留痕")}</span>
-					</div>
-				)}
-
-				{stats?.lastError ? (
-					<div className="test-result bad">
-						<div>{t("最近一次判定失败：{error}", { error: stats.lastError })}</div>
-					</div>
-				) : null}
-
-				<div className="gate-filters">
-					{tab === "ai" ? (
-						<label>
-							{t("判定")}
-							<select
-								value={filter.decision ?? ""}
-								onChange={(event) =>
-									apply({ decision: (event.target.value || undefined) as SentinelGateFilter["decision"] })
-								}
-							>
-								<option value="">{t("全部")}</option>
-								<option value="block">{t("拦截")}</option>
-								<option value="allow">{t("放行")}</option>
-								<option value="failed">{t("请求失败")}</option>
-							</select>
-						</label>
+					<Tag color={item.decision === "block" ? "red" : "green"} variant="filled">
+						{item.decision === "block" ? t("人工拦截") : SENTINEL_GATE_APPROVAL_LABELS[item.approval]}
+					</Tag>
+				),
+		},
+		{
+			title: t("调用"),
+			dataIndex: "command",
+			key: "command",
+			ellipsis: { showTitle: true },
+			render: (_, item) => (
+				<div className="gatehub-call">
+					{item.tool !== "bash" ? (
+						<Tag variant="filled" title={item.tool}>
+							{toolLabel(item.tool)}
+						</Tag>
 					) : null}
-					<label>
-						{t("来源")}
-						<select
-							value={filter.source ?? ""}
-							onChange={(event) => apply({ source: event.target.value || undefined })}
-						>
-							<option value="">{t("全部")}</option>
-							<option value="主代理">{t("主代理")}</option>
-							<option value="子代理">{t("子代理")}</option>
-						</select>
-					</label>
-					<label>
-						{t("时间")}
-						<select value={windowIndex} onChange={(event) => applyWindow(Number(event.target.value))}>
-							{WINDOWS.map((entry, index) => (
-								<option key={entry.label} value={index}>
-									{entry.label}
-								</option>
-							))}
-						</select>
-					</label>
-					<label>
-						{t("项目")}
-						<select
-							value={filter.projectId ?? ""}
-							onChange={(event) => apply({ projectId: event.target.value || undefined })}
-						>
-							<option value="">{t("全部项目")}</option>
-							{projects.map((project) => (
-								<option key={project.id} value={project.id}>
-									{project.name}
-								</option>
-							))}
-						</select>
-					</label>
-					<label>
-						{t("会话")}
-						<select
-							value={filter.sessionId ?? ""}
-							onChange={(event) => apply({ sessionId: event.target.value || undefined })}
-						>
-							<option value="">{t("全部会话")}</option>
-							{sessionOptions.map((session) => (
-								<option key={session.id} value={session.id}>
-									{sessionTitle(session)}
-								</option>
-							))}
-						</select>
-					</label>
-					<label className="gate-search">
-						{t("关键字")}
-						<input
-							value={search}
-							onChange={(event) => setSearch(event.target.value)}
-							onKeyDown={(event) => {
-								if (event.key === "Enter") apply({ search: search.trim() || undefined });
-							}}
-							placeholder={t("命令或理由中包含…")}
-							spellCheck={false}
-						/>
-					</label>
-					<button type="button" onClick={() => apply({ search: search.trim() || undefined })}>
-						{t("筛选")}
-					</button>
-					<button
-						type="button"
-						className="ghost"
-						onClick={() => {
-							setSearch("");
-							setWindowIndex(0);
-							onQuery(tab === "ai" ? { approval: SENTINEL_GATE_TAB_BUCKETS.ai } : {}, 1);
-						}}
-					>
-						{t("清空")}
-					</button>
+					<Text code className="gatehub-command">
+						{item.command.split("\n")[0]?.slice(0, 200)}
+					</Text>
 				</div>
+			),
+		},
+		{
+			title: t("来源"),
+			dataIndex: "source",
+			key: "source",
+			width: 156,
+			render: (_, item) => {
+				const sessionPath = item.sessionId ? sessionPathOf(item.sessionId) : null;
+				return (
+					<Space size={6}>
+						<Text type="secondary">{item.source}</Text>
+						{sessionPath ? (
+							<Button
+								type="link"
+								size="small"
+								title={t("打开这次调用所在的会话")}
+								onClick={(event) => {
+									event.stopPropagation();
+									onOpenSession(sessionPath);
+								}}
+							>
+								{t("会话")}
+							</Button>
+						) : null}
+					</Space>
+				);
+			},
+		},
+		...(tab === "ai"
+			? [
+					{
+						title: t("模型"),
+						key: "model",
+						width: 170,
+						ellipsis: { showTitle: true },
+						render: (_: unknown, item: SentinelGateDecision) => (
+							<div className="gatehub-model">
+								<Text type="secondary">{item.model ?? "-"}</Text>
+								{item.modelFrom ? <Text type="secondary">{item.modelFrom}</Text> : null}
+							</div>
+						),
+					},
+					{
+						title: t("耗时"),
+						key: "latency",
+						width: 96,
+						render: (_: unknown, item: SentinelGateDecision) => (
+							<Text type="secondary">{formatLatency(item.latencyMs)}</Text>
+						),
+					},
+				]
+			: [
+					{
+						title: t("会话"),
+						key: "session",
+						width: 220,
+						ellipsis: { showTitle: true },
+						render: (_: unknown, item: SentinelGateDecision) =>
+							item.sessionId ? (
+								<Text type="secondary">
+									{titles.get(item.sessionId) ?? item.sessionId.slice(0, 8)}
+								</Text>
+							) : (
+								<Text type="secondary">-</Text>
+							),
+					},
+				]),
+	];
 
-			{items.length === 0 ? (
-				<div className="ws-empty">
-					<span>
-						{filtersBeyondTab
-							? t("没有符合条件的{kind}", {
-									kind: tab === "ai" ? t("判定记录") : t("调用记录"),
-								})
-							: tab === "ai"
-								? t("AI 审批还没有任何记录")
-								: t("自动审批还没有任何记录")}
-					</span>
-					{tab === "ai" ? (
-						<span>
-							{t("AI 审批模式下每条命令、以及（开关打开时）每次 MCP / 插件工具调用都会在这里留下一条记录；审批模式与自动执行不产生判定记录，它们的调用在「自动审批」标签页。")}
-						</span>
-					) : (
-						<span>
-							{filtersBeyondTab
-								? t("这一页是所有「没有经过判定」的调用：自动执行模式、审批模式（含人工放行与人工拦截）、以及 AI 审批下守门没覆盖到的工具（read / edit / write、MCP 开关关闭时）。每次 bash、droid_shell、MCP 与插件、内置工具调用都会留一条。")
-								: t("这一页只记录本次更新之后发生的调用——自动执行模式、审批模式（含人工放行与人工拦截）、以及 AI 审批下守门没覆盖到的工具（read / edit / write、MCP 开关关闭时）。把某个会话的模式切到「自动执行」或「审批模式」再跑几条命令，这里就会出现记录。")}
-						</span>
-					)}
-				</div>
-			) : (
-					<table className="gate-table">
-						<thead>
-							<tr>
-								<th>{t("时间")}</th>
-								<th>{tab === "ai" ? t("判定") : t("方式")}</th>
-								<th>{t("调用")}</th>
-								<th>{t("来源")}</th>
-								{tab === "ai" ? <th>{t("模型")}</th> : <th>{t("会话")}</th>}
-								{tab === "ai" ? <th>{t("耗时")}</th> : null}
-							</tr>
-						</thead>
-						<tbody>
-							{items.map((item) => {
-								const sessionPath = item.sessionId ? sessionPathOf(item.sessionId) : null;
-								const open = expanded === item.id;
-								return (
-									<tr
-										key={item.id}
-										className={`gate-row ${item.decision}`}
-										onClick={() => setExpanded(open ? null : item.id)}
-									>
-										<td className="gate-time">{formatClock(item.at)}</td>
-										<td>
-											{tab === "ai" ? (
-												<span className={`gate-badge ${item.decision}`}>
-													{SENTINEL_GATE_DECISION_LABELS[item.decision]}
-												</span>
-											) : (
-												<span className={`gate-badge ${item.decision === "block" ? "block" : "allow"}`}>
-													{item.decision === "block" ? t("人工拦截") : SENTINEL_GATE_APPROVAL_LABELS[item.approval]}
-												</span>
-											)}
-										</td>
-										<td className="gate-command">
-											{item.tool !== "bash" ? (
-												<span className="gate-tool" title={item.tool}>
-													{toolLabel(item.tool)}
-												</span>
-											) : null}
-											<code className={open ? "open" : ""} title={item.command}>
-												{open ? item.command : item.command.split("\n")[0]?.slice(0, 200)}
-											</code>
-											{open ? (
-												<div className="gate-detail">
-													{item.tool !== "bash" ? <div>{t("工具：{tool}", { tool: item.tool })}</div> : null}
-													<div>{t("方式：{mode}", { mode: SENTINEL_GATE_APPROVAL_LABELS[item.approval] })}</div>
-													{item.reason ? <div>{t("理由：{reason}", { reason: item.reason })}</div> : null}
-													{item.error ? (
-														<div className="gate-detail-error">{t("失败：{error}", { error: item.error })}</div>
-													) : null}
-													<div>{t("工作目录：{cwd}", { cwd: item.cwd ?? "-" })}</div>
-													<div>
-														{t("tokens：{count}", { count: item.totalTokens ?? "-" })}
-														{item.modelFrom ? t(" · 来源 {from}", { from: item.modelFrom }) : ""}
-														{item.commandTruncated ? t(" · 命令已截断存储") : ""}
-													</div>
-													{item.commandTruncated ? <div>{t("（记录里的命令超过 8 KB，已截断）")}</div> : null}
-												</div>
-											) : null}
-										</td>
-										<td className="gate-source" title={item.source}>
-											{item.source}
-											{sessionPath ? (
-												<button
-													type="button"
-													className="link"
-													title={t("打开这次调用所在的会话")}
-													onClick={(event) => {
-														event.stopPropagation();
-														onOpenSession(sessionPath);
-													}}
-												>
-													{t("会话")}
-												</button>
-											) : null}
-										</td>
-										{tab === "ai" ? (
-											<>
-												<td className="gate-model">
-													<span className="gate-model-id" title={item.model ?? ""}>
-														{item.model ?? "-"}
-													</span>
-													{item.modelFrom ? <span className="gate-model-from">{item.modelFrom}</span> : null}
-												</td>
-												<td className="gate-latency">{formatLatency(item.latencyMs)}</td>
-											</>
-										) : (
-											<td className="gate-session" title={item.sessionId ? titles.get(item.sessionId) ?? "" : ""}>
-												{item.sessionId ? (titles.get(item.sessionId) ?? item.sessionId.slice(0, 8)) : "-"}
-											</td>
-										)}
-									</tr>
-								);
-							})}
-						</tbody>
-					</table>
-				)}
+	const statItems =
+		tab === "ai"
+			? [
+					{ label: t("拦截"), value: stats?.byDecision.block ?? 0 },
+					{ label: t("放行"), value: stats?.byDecision.allow ?? 0 },
+					{ label: t("失败"), value: stats?.byDecision.failed ?? 0, danger: (stats?.byDecision.failed ?? 0) > 0 },
+					{ label: t("拦截率"), value: stats ? percent(stats.blockRate) : "-" },
+					{ label: t("平均耗时"), value: stats ? formatLatency(stats.avgLatencyMs) : "-" },
+					{ label: t("24 小时"), value: stats?.last24h ?? 0 },
+					{ label: "tokens", value: stats ? stats.totalTokens.toLocaleString("en-US") : 0 },
+					{ label: t("最近成功"), value: stats?.lastSuccessAt ? formatShort(stats.lastSuccessAt) : t("从未") },
+				]
+			: [
+					{ label: t("自动放行"), value: stats?.byApproval.auto ?? 0 },
+					{ label: t("人工放行"), value: stats?.byApproval.human ?? 0 },
+					{ label: t("人工拦截"), value: stats?.byDecision.block ?? 0, danger: (stats?.byDecision.block ?? 0) > 0 },
+					{ label: t("24 小时"), value: stats?.last24h ?? 0 },
+				];
 
-				{pages > 1 ? (
-					<div className="gate-pager">
-						<button type="button" disabled={page <= 1} onClick={() => onQuery(filter, page - 1)}>
-							{t("上一页")}
-						</button>
-						<span>{t("第 {page} / {pages} 页 · 共 {total} 条", { page, pages, total })}</span>
-						<button type="button" disabled={page >= pages} onClick={() => onQuery(filter, page + 1)}>
-							{t("下一页")}
-						</button>
-					</div>
-				) : null}
+	return (
+		<Page
+			title={t("审批")}
+			description={
+				<>
+					{tab === "ai" ? t("AI 审批判定流水") : t("自动审批工具调用流水")}
+					{t(" · 只读 · 永久保留")}
+					{stats ? t(" · 共 {count} 条", { count: stats.total }) : ""}
+				</>
+			}
+			extra={
+				<Button icon={<ReloadOutlined />} onClick={onRefresh}>
+					{t("刷新")}
+				</Button>
+			}
+		>
+			<Tabs
+				activeKey={tab}
+				onChange={(key) => applyTab(key as SentinelGateTab)}
+				items={[
+					{
+						key: "ai",
+						label: (
+							<Space size={6}>
+								{t("AI 审批")}
+								<Tag variant="filled">{aiCount}</Tag>
+							</Space>
+						),
+					},
+					{
+						key: "auto",
+						label: (
+							<Space size={6}>
+								{t("自动审批")}
+								<Tag variant="filled">{autoCount}</Tag>
+							</Space>
+						),
+					},
+				]}
+			/>
+
+			<div className="gatehub-stats">
+				{statItems.map((item) => (
+					<Statistic
+						key={item.label}
+						title={item.label}
+						value={item.value}
+						styles={{ content: item.danger ? { color: "#dc2626" } : undefined }}
+					/>
+				))}
+				{tab === "auto" ? <Text type="secondary">{t("这些调用不经过判定，只留痕")}</Text> : null}
 			</div>
-		</div>
+
+			{stats?.lastError ? (
+				<Alert
+					type="error"
+					showIcon
+					className="ui-page__alert"
+					title={t("最近一次判定失败：{error}", { error: stats.lastError })}
+				/>
+			) : null}
+
+			<ProTable<SentinelGateDecision>
+				rowKey="id"
+				size="middle"
+				columns={columns}
+				dataSource={items}
+				search={false}
+				scroll={{ x: 900 }}
+				pagination={{
+					current: Math.max(1, page),
+					pageSize: PAGE_SIZE,
+					total,
+					showSizeChanger: false,
+					showTotal: (count) => t("共 {total} 条", { total: count }),
+					onChange: (next) => onQuery(filter, next),
+				}}
+				toolbar={{
+					title: (
+						<div className="gatehub-toolbar">
+							{tab === "ai" ? (
+								<Select
+									value={filter.decision ?? ""}
+									style={{ width: 120 }}
+									onChange={(value) =>
+										apply({ decision: (value || undefined) as SentinelGateFilter["decision"] })
+									}
+									options={[
+										{ value: "", label: t("全部判定") },
+										{ value: "block", label: t("拦截") },
+										{ value: "allow", label: t("放行") },
+										{ value: "failed", label: t("请求失败") },
+									]}
+								/>
+							) : null}
+							<Select
+								value={filter.source ?? ""}
+								style={{ width: 116 }}
+								onChange={(value) => apply({ source: value || undefined })}
+								options={[
+									{ value: "", label: t("全部来源") },
+									{ value: "主代理", label: t("主代理") },
+									{ value: "子代理", label: t("子代理") },
+								]}
+							/>
+							<Select
+								value={windowIndex}
+								style={{ width: 132 }}
+								onChange={(value) => applyWindow(Number(value))}
+								options={WINDOWS.map((entry, index) => ({ value: index, label: entry.label }))}
+							/>
+							<Select
+								value={filter.projectId ?? ""}
+								style={{ width: 150 }}
+								onChange={(value) => apply({ projectId: value || undefined })}
+								options={[
+									{ value: "", label: t("全部项目") },
+									...projects.map((project) => ({ value: project.id, label: project.name })),
+								]}
+							/>
+							<Select
+								value={filter.sessionId ?? ""}
+								style={{ width: 180 }}
+								showSearch
+								optionFilterProp="label"
+								onChange={(value) => apply({ sessionId: value || undefined })}
+								options={[
+									{ value: "", label: t("全部会话") },
+									...sessionOptions.map((session) => ({ value: session.id, label: sessionTitle(session) })),
+								]}
+							/>
+							<Input
+								allowClear
+								className="gatehub-search"
+								prefix={<SearchOutlined />}
+								value={search}
+								placeholder={t("命令或理由中包含…")}
+								onChange={(event) => setSearch(event.target.value)}
+								onPressEnter={() => apply({ search: search.trim() || undefined })}
+							/>
+							<Button onClick={() => apply({ search: search.trim() || undefined })}>{t("筛选")}</Button>
+							<Button
+								type="link"
+								onClick={() => {
+									setSearch("");
+									setWindowIndex(0);
+									onQuery(tab === "ai" ? { approval: SENTINEL_GATE_TAB_BUCKETS.ai } : {}, 1);
+								}}
+							>
+								{t("清空")}
+							</Button>
+						</div>
+					),
+				}}
+				expandable={{
+					expandedRowKeys: expanded ? [expanded] : [],
+					onExpandedRowsChange: (keys) => {
+						const key = keys[0];
+						if (key === undefined) setExpanded(null);
+					},
+					onExpand: (open, record) => {
+						if (open) setExpanded(record.id);
+					},
+					expandRowByClick: true,
+					expandedRowRender: (item) => (
+						<div className="gatehub-detail">
+							{item.tool !== "bash" ? <div>{t("工具：{tool}", { tool: item.tool })}</div> : null}
+							<div>{t("方式：{mode}", { mode: SENTINEL_GATE_APPROVAL_LABELS[item.approval] })}</div>
+							{item.reason ? <div>{t("理由：{reason}", { reason: item.reason })}</div> : null}
+							{item.error ? (
+								<div className="gatehub-detail__error">{t("失败：{error}", { error: item.error })}</div>
+							) : null}
+							<div>{t("工作目录：{cwd}", { cwd: item.cwd ?? "-" })}</div>
+							<div>
+								{t("tokens：{count}", { count: item.totalTokens ?? "-" })}
+								{item.modelFrom ? t(" · 来源 {from}", { from: item.modelFrom }) : ""}
+								{item.commandTruncated ? t(" · 命令已截断存储") : ""}
+							</div>
+							{item.commandTruncated ? <div>{t("（记录里的命令超过 8 KB，已截断）")}</div> : null}
+							<pre className="gatehub-command-full">{item.command}</pre>
+						</div>
+					),
+				}}
+				locale={{
+					emptyText: (
+						<Empty
+							image={Empty.PRESENTED_IMAGE_SIMPLE}
+							description={
+								<>
+									<div>
+										{filtersBeyondTab
+											? t("没有符合条件的{kind}", { kind: tab === "ai" ? t("判定记录") : t("调用记录") })
+											: tab === "ai"
+												? t("AI 审批还没有任何记录")
+												: t("自动审批还没有任何记录")}
+									</div>
+									<div className="gatehub-empty-hint">
+										{tab === "ai"
+											? t(
+													"AI 审批模式下每条命令、以及（开关打开时）每次 MCP / 插件工具调用都会在这里留下一条记录；审批模式与自动执行不产生判定记录，它们的调用在「自动审批」标签页。",
+												)
+											: t(
+													"这一页记录自动执行、人工审批（含人工放行与人工拦截）、以及 AI 审批下守门没覆盖到的工具调用。",
+												)}
+									</div>
+								</>
+							}
+						/>
+					),
+				}}
+			/>
+		</Page>
 	);
 }

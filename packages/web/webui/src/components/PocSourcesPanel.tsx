@@ -13,16 +13,18 @@
  * syncs it, so a first-time operator never has to know the URL. That source is
  * ordinary afterwards — this list edits, retargets, and deletes it like any
  * other, and pressing the button again recreates it.
- *
- * The page follows the console's settings idioms: labeled fields as a vertical
- * stack (`settings`), one block heading with its action on the right
- * (`settings-block__head`), and the source list as a `data-table`.
  */
 
+import { CloudDownloadOutlined, DeleteOutlined, EditOutlined, HistoryOutlined, ReloadOutlined, SyncOutlined } from "@ant-design/icons";
+import { ProTable } from "@ant-design/pro-components";
+import type { ProColumns } from "@ant-design/pro-components";
+import { Alert, Button, Card, Checkbox, Form, Input, Popconfirm, Select, Space, Tag, Typography } from "antd";
 import { useState } from "react";
 import { t } from "../i18n.ts";
 import type { SentinelPocSource, SentinelPocSourceSave } from "../types.ts";
 import { SENTINEL_OFFICIAL_POC_SOURCE_ID } from "../types.ts";
+
+const { Text } = Typography;
 
 /** Editing state of the form; a source being edited fills every field. */
 interface Draft {
@@ -75,11 +77,11 @@ function resultLine(source: SentinelPocSource): string {
 }
 
 /** Grey pill before the first sync, then green for ok and red for a failure. */
-function statusTag(source: SentinelPocSource): { className: string; label: string } {
-	if (!source.lastResult) return { className: "tag tag-aborted", label: t("未同步") };
+function statusOf(source: SentinelPocSource): { color: string; label: string } {
+	if (!source.lastResult) return { color: "default", label: t("未同步") };
 	return source.lastResult.ok
-		? { className: "tag tag-done", label: t("正常") }
-		: { className: "tag tag-failed", label: t("失败") };
+		? { color: "green", label: t("正常") }
+		: { color: "red", label: t("失败") };
 }
 
 export function PocSourcesPanel({
@@ -105,7 +107,6 @@ export function PocSourcesPanel({
 }) {
 	const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
 	const [error, setError] = useState<string | null>(null);
-	const [historyOf, setHistoryOf] = useState<string | null>(null);
 
 	const set = (patch: Partial<Draft>): void => setDraft((prev) => ({ ...prev, ...patch }));
 
@@ -146,212 +147,236 @@ export function PocSourcesPanel({
 		setDraft(EMPTY_DRAFT);
 	};
 
-	return (
-		<div className="settings settings--wide">
-			<p className="settings-hint">
-				{t("订阅远程 zip 模板包：手动「立即同步」，或按间隔自动拉取。同步只新增与覆盖（按模板 id 去重），从不删除本地模板；下载限 256MB、单次 60 秒超时、网络错误自动重试一次，每个源保留最近 5 次同步记录。")}
-			</p>
-
-			<section className="settings-section-card">
-				<h3 className="settings-section">{draft.id ? t("编辑订阅源") : t("添加订阅源")}</h3>
-				<div className="source-fields">
-					<label>
-						{t("名称")}
-						<input
-							value={draft.name}
-							placeholder={t("内网模板包")}
-							spellCheck={false}
-							onChange={(event) => set({ name: event.target.value })}
-						/>
-					</label>
-					<label>
-						{t("同步间隔")}
-						<select
-							value={draft.intervalHours}
-							onChange={(event) => set({ intervalHours: Number(event.target.value) })}
+	const columns: ProColumns<SentinelPocSource>[] = [
+		{
+			title: t("名称"),
+			key: "name",
+			width: 220,
+			render: (_, source) => {
+				const status = statusOf(source);
+				return (
+					<Space size={6} wrap>
+						<Text strong>{source.name}</Text>
+						<Tag
+							color={status.color}
+							variant="filled"
+							title={source.enabled ? t("已启用") : t("已停用，不会自动同步")}
 						>
-							{INTERVAL_CHOICES.map((hours) => (
-								<option key={hours} value={hours}>
-									{intervalLabel(hours)}
-								</option>
-							))}
-						</select>
-					</label>
-					<label className="source-fields__wide">
-						{t("zip 直链 URL")}
-						<input
-							value={draft.url}
-							placeholder="https://example.com/nuclei-templates.zip"
-							spellCheck={false}
-							onChange={(event) => set({ url: event.target.value })}
-						/>
-					</label>
-					<label>
-						{t("认证头名称（可选）")}
-						<input
-							value={draft.headerName}
-							placeholder="Authorization"
-							spellCheck={false}
-							onChange={(event) => set({ headerName: event.target.value })}
-						/>
-					</label>
-					<label>
-						{t("认证头的值（可选）")}
-						<input
-							type="password"
-							value={draft.headerValue}
-							placeholder={draft.headerSet ? t("留空保留原值") : "Bearer …"}
-							spellCheck={false}
-							onChange={(event) => set({ headerValue: event.target.value })}
-						/>
-					</label>
+							{source.enabled ? status.label : t("{label} · 已停用", { label: status.label })}
+						</Tag>
+					</Space>
+				);
+			},
+		},
+		{
+			title: t("zip 直链"),
+			dataIndex: "url",
+			key: "url",
+			ellipsis: { showTitle: true },
+			render: (_, source) => <Text code>{source.url}</Text>,
+		},
+		{
+			title: t("同步"),
+			key: "schedule",
+			width: 160,
+			render: (_, source) => (
+				<div className="pocsource-schedule">
+					<Text>{intervalLabel(source.intervalHours)}</Text>
+					<Text type="secondary">{formatWhen(source.lastSyncAt)}</Text>
 				</div>
-				<label className="check-row">
-					<input
-						type="checkbox"
-						checked={draft.enabled}
-						onChange={(event) => set({ enabled: event.target.checked })}
-					/>
-					{t("启用（停用后不再自动同步，仍可手动「立即同步」）")}
-				</label>
-				<div className="source-form-ops">
-					<button type="button" className="primary" onClick={submit}>
-						{draft.id ? t("保存修改") : t("添加订阅源")}
-					</button>
-					{draft.id ? (
-						<button type="button" onClick={() => setDraft(EMPTY_DRAFT)}>
-							{t("取消")}
-						</button>
-					) : null}
-				</div>
-				{error ? <span className="field-sub err-text">{error}</span> : null}
-			</section>
+			),
+		},
+		{
+			title: t("最近结果"),
+			key: "result",
+			width: 260,
+			ellipsis: { showTitle: true },
+			render: (_, source) => (
+				<Text
+					type={source.lastResult && !source.lastResult.ok ? "danger" : "secondary"}
+					title={resultLine(source)}
+					ellipsis
+				>
+					{resultLine(source)}
+				</Text>
+			),
+		},
+		{
+			title: t("操作"),
+			key: "actions",
+			width: 260,
+			render: (_, source) => {
+				// The official sync starts before its source exists in this list, so
+				// its busy state is not keyed on the id alone.
+				const busy =
+					syncing === source.id || (officialSyncing && source.id === SENTINEL_OFFICIAL_POC_SOURCE_ID);
+				return (
+					<Space size={4} wrap>
+						<Button
+							size="small"
+							type="link"
+							icon={<SyncOutlined spin={busy} />}
+							disabled={busy}
+							onClick={() => onSync(source.id)}
+						>
+							{busy ? t("同步中…") : t("立即同步")}
+						</Button>
+						<Button size="small" type="link" icon={<EditOutlined />} onClick={() => edit(source)}>
+							{t("编辑")}
+						</Button>
+						<Popconfirm
+							title={t("删除订阅源")}
+							description={t("删除订阅源「{name}」？已导入的模板不会被删除。", { name: source.name })}
+							okText={t("删除")}
+							okButtonProps={{ danger: true }}
+							cancelText={t("取消")}
+							onConfirm={() => onDelete(source.id)}
+						>
+							<Button size="small" type="link" danger icon={<DeleteOutlined />}>
+								{t("删除")}
+							</Button>
+						</Popconfirm>
+					</Space>
+				);
+			},
+		},
+	];
 
-			<div className="settings-block__head">
-				<h3 className="settings-section">
-					{t("订阅源")} <span className="hint">{t("（{count} 个）", { count: sources.length })}</span>
-				</h3>
-				<span className="settings-block__ops">
-					<button
-						type="button"
-						className="ghost small"
-						disabled={officialSyncing}
-						title={t("从官方仓库 projectdiscovery/nuclei-templates 下载最新模板包并导入；源不存在会自动创建，之后 URL 可以改成镜像")}
-						onClick={onSyncOfficial}
-					>
-						{officialSyncing ? t("同步中…") : t("一键同步官方 POC")}
-					</button>
-					<button type="button" onClick={onRefresh}>
-						{t("刷新")}
-					</button>
-				</span>
-			</div>
+	return (
+		<>
+			<Alert
+				type="info"
+				showIcon
+				className="ui-page__alert"
+				title={t(
+					"订阅远程 zip 模板包：手动「立即同步」，或按间隔自动拉取。同步只新增与覆盖（按模板 id 去重），从不删除本地模板；下载限 256MB、单次 60 秒超时、网络错误自动重试一次，每个源保留最近 5 次同步记录。",
+				)}
+			/>
 
-			{sources.length === 0 ? (
-				<p className="settings-hint">
-					{t("还没有订阅源。填一个 zip 直链后点「添加订阅源」；「立即同步」会把包内模板按 id 去重后并入 POC 库。")}
-				</p>
-			) : (
-				<div className="model-table-wrap">
-					<div className="data-table source-table">
-						<div className="data-row data-head">
-							<span>{t("名称")}</span>
-							<span>{t("zip 直链")}</span>
-							<span>{t("同步")}</span>
-							<span>{t("最近结果")}</span>
-							<span className="data-actions-col">{t("操作")}</span>
-						</div>
-						{sources.map((source) => {
-							const tag = statusTag(source);
-							// The official sync starts before its source exists in this
-							// list, so its busy state is not keyed on the id alone.
-							const busy = syncing === source.id || (officialSyncing && source.id === SENTINEL_OFFICIAL_POC_SOURCE_ID);
-							return (
-								<div className="data-row" key={source.id}>
-									<span className="data-name">
-										{source.name}
-										<span
-											className={tag.className}
-											title={source.enabled ? t("已启用") : t("已停用，不会自动同步")}
-										>
-											{source.enabled ? tag.label : t("{label} · 已停用", { label: tag.label })}
-										</span>
-									</span>
-									<span className="data-mono" title={source.url}>
-										{source.url}
-									</span>
-									<span className="source-schedule">
-										{intervalLabel(source.intervalHours)}
-										<span className="hint">{formatWhen(source.lastSyncAt)}</span>
-									</span>
-									<span
-										className={`source-result ${source.lastResult && !source.lastResult.ok ? "err-text" : ""}`}
-										title={resultLine(source)}
-									>
-										{resultLine(source)}
-									</span>
-									<span className="data-actions">
-										<button type="button" disabled={busy} onClick={() => onSync(source.id)}>
-											{busy ? t("同步中…") : t("立即同步")}
-										</button>
-										<button
-											type="button"
-											onClick={() => setHistoryOf(historyOf === source.id ? null : source.id)}
-										>
-											{historyOf === source.id ? t("收起") : t("历史")}
-										</button>
-										<button type="button" onClick={() => edit(source)}>
-											{t("编辑")}
-										</button>
-										<button
-											type="button"
-											onClick={() => {
-												if (
-													window.confirm(
-														t("删除订阅源「{name}」？\n已导入的模板不会被删除。", { name: source.name }),
-													)
-												) {
-													onDelete(source.id);
-												}
-											}}
-										>
-											{t("删除")}
-										</button>
-									</span>
-									{historyOf === source.id ? (
-										<div className="source-history">
-											<div className="source-history__title">
-												{t("最近 {count} 次同步", { count: source.history.length })}
-											</div>
-											{source.history.length === 0 ? (
-												<div className="hint">{t("还没有同步过。")}</div>
-											) : (
-												source.history.map((record) => (
-													<div key={record.at} className={record.ok ? "" : "err-text"}>
-														{t(
-															"{when} · {status} · 新增 {imported} · 覆盖 {replaced} · 跳过 {skipped} · {duration}s · {trigger}",
-															{
-																when: formatWhen(record.at),
-																status: record.ok ? t("成功") : t("失败"),
-																imported: record.imported,
-																replaced: record.replaced,
-																skipped: record.skipped,
-																duration: (record.durationMs / 1000).toFixed(1),
-																trigger: record.trigger === "auto" ? t("自动") : t("手动"),
-															},
-														)}
-														{record.error ? ` · ${record.error}` : ""}
-													</div>
-												))
-											)}
-										</div>
-									) : null}
-								</div>
-							);
-						})}
+			<Card
+				size="small"
+				title={draft.id ? t("编辑订阅源") : t("添加订阅源")}
+				className="pocsource-editor"
+			>
+				<Form layout="vertical" requiredMark={false} onFinish={submit}>
+					<div className="pocsource-grid">
+						<Form.Item label={t("名称")} required>
+							<Input
+								value={draft.name}
+								placeholder={t("内网模板包")}
+								spellCheck={false}
+								onChange={(event) => set({ name: event.target.value })}
+							/>
+						</Form.Item>
+						<Form.Item label={t("同步间隔")}>
+							<Select
+								value={draft.intervalHours}
+								onChange={(value) => set({ intervalHours: value })}
+								options={INTERVAL_CHOICES.map((hours) => ({ value: hours, label: intervalLabel(hours) }))}
+							/>
+						</Form.Item>
+						<Form.Item label={t("zip 直链 URL")} required className="pocsource-grid__wide">
+							<Input
+								value={draft.url}
+								placeholder="https://example.com/nuclei-templates.zip"
+								spellCheck={false}
+								onChange={(event) => set({ url: event.target.value })}
+							/>
+						</Form.Item>
+						<Form.Item label={t("认证头名称（可选）")}>
+							<Input
+								value={draft.headerName}
+								placeholder="Authorization"
+								spellCheck={false}
+								onChange={(event) => set({ headerName: event.target.value })}
+							/>
+						</Form.Item>
+						<Form.Item label={t("认证头的值（可选）")}>
+							<Input.Password
+								value={draft.headerValue}
+								placeholder={draft.headerSet ? t("留空保留原值") : "Bearer …"}
+								spellCheck={false}
+								onChange={(event) => set({ headerValue: event.target.value })}
+							/>
+						</Form.Item>
 					</div>
-				</div>
-			)}
-		</div>
+					<Checkbox checked={draft.enabled} onChange={(event) => set({ enabled: event.target.checked })}>
+						{t("启用（停用后不再自动同步，仍可手动「立即同步」）")}
+					</Checkbox>
+					{error ? <Alert type="error" showIcon title={error} className="ui-page__alert" /> : null}
+					<Space size={8} className="pocsource-actions">
+						<Button type="primary" htmlType="submit">
+							{draft.id ? t("保存修改") : t("添加订阅源")}
+						</Button>
+						{draft.id ? <Button onClick={() => setDraft(EMPTY_DRAFT)}>{t("取消")}</Button> : null}
+					</Space>
+				</Form>
+			</Card>
+
+			<ProTable<SentinelPocSource>
+				rowKey="id"
+				size="middle"
+				columns={columns}
+				dataSource={sources}
+				search={false}
+				pagination={false}
+				scroll={{ x: 1080 }}
+				toolbar={{
+					title: (
+						<Text strong>
+							{t("订阅源")} <Text type="secondary">{t("（{count} 个）", { count: sources.length })}</Text>
+						</Text>
+					),
+					actions: [
+						<Button
+							key="official"
+							icon={<CloudDownloadOutlined />}
+							loading={officialSyncing}
+							title={t("从官方仓库 projectdiscovery/nuclei-templates 下载最新模板包并导入；源不存在会自动创建，之后 URL 可以改成镜像")}
+							onClick={onSyncOfficial}
+						>
+							{officialSyncing ? t("同步中…") : t("一键同步官方 POC")}
+						</Button>,
+						<Button key="refresh" icon={<ReloadOutlined />} onClick={onRefresh}>
+							{t("刷新")}
+						</Button>,
+					],
+				}}
+				expandable={{
+					expandedRowRender: (source) => (
+						<div className="pocsource-history">
+							<Text strong>{t("最近 {count} 次同步", { count: source.history.length })}</Text>
+							{source.history.length === 0 ? (
+								<Text type="secondary">{t("还没有同步过。")}</Text>
+							) : (
+								source.history.map((record) => (
+									<Text key={record.at} type={record.ok ? undefined : "danger"} className="pocsource-history__line">
+										{t(
+											"{when} · {status} · 新增 {imported} · 覆盖 {replaced} · 跳过 {skipped} · {duration}s · {trigger}",
+											{
+												when: formatWhen(record.at),
+												status: record.ok ? t("成功") : t("失败"),
+												imported: record.imported,
+												replaced: record.replaced,
+												skipped: record.skipped,
+												duration: (record.durationMs / 1000).toFixed(1),
+												trigger: record.trigger === "auto" ? t("自动") : t("手动"),
+											},
+										)}
+										{record.error ? ` · ${record.error}` : ""}
+									</Text>
+								))
+							)}
+						</div>
+					),
+					expandRowByClick: false,
+				}}
+				locale={{
+					emptyText: t(
+						"还没有订阅源。填一个 zip 直链后点「添加订阅源」；「立即同步」会把包内模板按 id 去重后并入 POC 库。",
+					),
+				}}
+			/>
+		</>
 	);
 }

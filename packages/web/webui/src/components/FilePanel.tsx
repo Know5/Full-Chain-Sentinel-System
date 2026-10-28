@@ -1,8 +1,24 @@
+import {
+	Alert,
+	Breadcrumb,
+	Button,
+	ConfigProvider,
+	Empty,
+	Input,
+	List,
+	Popconfirm,
+	Progress,
+	Space,
+	Tag,
+	Typography,
+} from "antd";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getLanguage, t } from "../i18n.ts";
 import { formatSize } from "../transcript.ts";
 import type { SentinelFileEntry, SentinelFilePreview } from "../types.ts";
 import { DirIcon, DownloadIcon, FileIcon, ParentDirIcon } from "./icons.tsx";
+
+const { Text } = Typography;
 
 /** The asynchronous folder archive shown in the file panel. */
 export type FolderArchivePhase = "starting" | "running" | "cancelling" | "ready" | "failed" | "cancelled";
@@ -150,283 +166,301 @@ export function FilePanel({
 	};
 
 	return (
-		<div className="file-panel">
-			<div className="panel-toolbar">
-				<button type="button" onClick={() => onOpen(parentOf(state.path))} disabled={state.path === "/work"}>
-					<ParentDirIcon />
-					{t("上级")}
-				</button>
-				<button type="button" onClick={() => onOpen(state.path)} disabled={state.busy}>
-					{t("刷新")}
-				</button>
-				<button type="button" onClick={() => uploadRef.current?.click()}>
-					{t("上传")}
-				</button>
-				<button type="button" onClick={() => setNewDir("")}>
-					{t("新建目录")}
-				</button>
-				<button
-					type="button"
-					title={t("后台打包，完成后自动下载")}
-					disabled={archiveBusy}
-					onClick={() => onDownloadFolder(state.path)}
-				>
-					<DownloadIcon />
-					{t("下载当前文件夹")}
-				</button>
-				<input
-					ref={uploadRef}
-					type="file"
-					multiple
-					hidden
-					onChange={(event) => void startUpload(event.target.files)}
-				/>
-			</div>
-
-			<div className="file-crumbs">
-				{crumbs.map((crumb, index) => (
-					<span key={crumb.path}>
-						{index > 0 ? <span className="crumb-sep">/</span> : null}
-						<button type="button" className="crumb" onClick={() => onOpen(crumb.path)}>
-							{crumb.label}
-						</button>
-					</span>
-				))}
-			</div>
-
-			{archive ? (
-				<div className={`file-archive is-${archive.status}`}>
-					{archive.status === "starting" || archive.status === "running" ? (
-						<>
-							<span>
-								{archive.filename
-									? t("正在打包 {name}…", { name: archive.filename })
-									: t("正在准备打包…")}
-							</span>
-							<span className="file-archive__size">{formatSize(archive.bytes)}</span>
-							<span className="file-archive__bar">
-								<span />
-							</span>
-							{archive.status === "running" ? (
-								<button type="button" onClick={onCancelArchive}>
-									{t("取消打包")}
-								</button>
-							) : null}
-						</>
-					) : archive.status === "cancelling" ? (
-						<span>{t("正在取消打包…")}</span>
-					) : archive.status === "ready" ? (
-						<>
-							<span>{t("打包完成，已开始下载")}</span>
-							<span className="file-archive__size">{formatSize(archive.size ?? archive.bytes)}</span>
-							{archive.warning ? <span className="file-archive__warning">{archive.warning}</span> : null}
-						</>
-					) : archive.status === "failed" ? (
-						<span>{t("打包失败：{error}", { error: archive.error ?? t("未知错误") })}</span>
-					) : (
-						<span>{t("已取消打包")}</span>
-					)}
-				</div>
-			) : null}
-
-			{uploadError ? <div className="file-error">{uploadError}</div> : null}
-
-			{newDir !== null ? (
-				<div className="file-inline-form">
+		<ConfigProvider button={{ autoInsertSpace: false }}>
+			<div className="filepanel">
+				<Space size={6} wrap className="filepanel__toolbar">
+					<Button
+						size="small"
+						icon={<ParentDirIcon />}
+						disabled={state.path === "/work"}
+						onClick={() => onOpen(parentOf(state.path))}
+					>
+						{t("上级")}
+					</Button>
+					<Button size="small" disabled={state.busy} onClick={() => onOpen(state.path)}>
+						{t("刷新")}
+					</Button>
+					<Button size="small" onClick={() => uploadRef.current?.click()}>
+						{t("上传")}
+					</Button>
+					<Button size="small" onClick={() => setNewDir("")}>
+						{t("新建目录")}
+					</Button>
+					<Button
+						size="small"
+						icon={<DownloadIcon />}
+						title={t("后台打包，完成后自动下载")}
+						disabled={archiveBusy}
+						onClick={() => onDownloadFolder(state.path)}
+					>
+						{t("下载当前文件夹")}
+					</Button>
 					<input
-						autoFocus
-						value={newDir}
-						placeholder={t("目录名")}
-						onChange={(event) => setNewDir(event.target.value)}
-						onKeyDown={(event) => {
-							if (event.key === "Escape") setNewDir(null);
-							if (event.key === "Enter" && newDir.trim()) {
+						ref={uploadRef}
+						type="file"
+						multiple
+						hidden
+						onChange={(event) => void startUpload(event.target.files)}
+					/>
+				</Space>
+
+				<Breadcrumb
+					className="filepanel__crumbs"
+					items={crumbs.map((crumb) => ({
+						title: (
+							<Button type="link" size="small" onClick={() => onOpen(crumb.path)}>
+								{crumb.label}
+							</Button>
+						),
+					}))}
+				/>
+
+				{archive ? (
+					archive.status === "starting" || archive.status === "running" ? (
+						<Alert
+							type="info"
+							showIcon
+							className="filepanel__archive"
+							title={
+								archive.filename
+									? t("正在打包 {name}…", { name: archive.filename })
+									: t("正在准备打包…")
+							}
+							description={<Progress percent={100} status="active" showInfo={false} />}
+							action={
+								<Space size={8}>
+									<Text type="secondary">{formatSize(archive.bytes)}</Text>
+									{archive.status === "running" ? (
+										<Button size="small" onClick={onCancelArchive}>
+											{t("取消打包")}
+										</Button>
+									) : null}
+								</Space>
+							}
+						/>
+					) : archive.status === "cancelling" ? (
+						<Alert type="info" showIcon className="filepanel__archive" title={t("正在取消打包…")} />
+					) : archive.status === "ready" ? (
+						<Alert
+							type="success"
+							showIcon
+							className="filepanel__archive"
+							title={t("打包完成，已开始下载")}
+							description={archive.warning}
+							action={<Text type="secondary">{formatSize(archive.size ?? archive.bytes)}</Text>}
+						/>
+					) : archive.status === "failed" ? (
+						<Alert
+							type="error"
+							showIcon
+							className="filepanel__archive"
+							title={t("打包失败：{error}", { error: archive.error ?? t("未知错误") })}
+						/>
+					) : (
+						<Alert type="info" showIcon className="filepanel__archive" title={t("已取消打包")} />
+					)
+				) : null}
+
+				{uploadError ? <Alert type="error" showIcon title={uploadError} /> : null}
+
+				{newDir !== null ? (
+					<Space.Compact className="filepanel__inline">
+						<Input
+							autoFocus
+							value={newDir}
+							placeholder={t("目录名")}
+							onChange={(event) => setNewDir(event.target.value)}
+							onKeyDown={(event) => {
+								if (event.key === "Escape") setNewDir(null);
+								if (event.key === "Enter" && newDir.trim()) {
+									onMkdir(`${state.path}/${newDir.trim()}`);
+									setNewDir(null);
+								}
+							}}
+						/>
+						<Button
+							type="primary"
+							disabled={!newDir.trim()}
+							onClick={() => {
 								onMkdir(`${state.path}/${newDir.trim()}`);
 								setNewDir(null);
-							}
-						}}
-					/>
-					<button
-						type="button"
-						className="primary"
-						disabled={!newDir.trim()}
-						onClick={() => {
-							onMkdir(`${state.path}/${newDir.trim()}`);
-							setNewDir(null);
-						}}
-					>
-						{t("创建")}
-					</button>
-					<button type="button" onClick={() => setNewDir(null)}>
-						{t("取消")}
-					</button>
-				</div>
-			) : null}
+							}}
+						>
+							{t("创建")}
+						</Button>
+						<Button onClick={() => setNewDir(null)}>{t("取消")}</Button>
+					</Space.Compact>
+				) : null}
 
-			<div className="file-list">
-				{state.entries.length === 0 ? <div className="file-empty">{t("空目录")}</div> : null}
-				{state.entries.map((entry) => (
-					<div key={entry.path} className={`file-row ${preview?.path === entry.path ? "active" : ""}`}>
-						{renaming === entry.path ? (
-							<>
-								<input
-									autoFocus
-									className="file-rename"
-									value={renameValue}
-									onChange={(event) => setRenameValue(event.target.value)}
-									onKeyDown={(event) => {
-										if (event.key === "Escape") setRenaming(null);
-										if (event.key === "Enter" && renameValue.trim()) {
+				<div className="filepanel__list">
+					{state.entries.length === 0 ? (
+						<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t("空目录")} />
+					) : null}
+					{state.entries.map((entry) => (
+						<div
+							key={entry.path}
+							className={preview?.path === entry.path ? "filepanel__row is-active" : "filepanel__row"}
+						>
+							{renaming === entry.path ? (
+								<Space.Compact className="filepanel__rename">
+									<Input
+										autoFocus
+										value={renameValue}
+										onChange={(event) => setRenameValue(event.target.value)}
+										onKeyDown={(event) => {
+											if (event.key === "Escape") setRenaming(null);
+											if (event.key === "Enter" && renameValue.trim()) {
+												onRename(entry.path, `${state.path}/${renameValue.trim()}`);
+												setRenaming(null);
+											}
+										}}
+									/>
+									<Button
+										type="primary"
+										disabled={!renameValue.trim()}
+										onClick={() => {
 											onRename(entry.path, `${state.path}/${renameValue.trim()}`);
 											setRenaming(null);
-										}
-									}}
-								/>
-								<button
-									type="button"
-									className="primary"
-									disabled={!renameValue.trim()}
-									onClick={() => {
-										onRename(entry.path, `${state.path}/${renameValue.trim()}`);
-										setRenaming(null);
-									}}
-								>
-									{t("确定")}
-								</button>
-								<button type="button" onClick={() => setRenaming(null)}>
-									{t("取消")}
-								</button>
-							</>
-						) : (
-							<>
-								<button
-									type="button"
-									className="file-open"
-									title={entry.path}
-									onClick={() => (entry.type === "dir" ? onOpen(entry.path) : onPreview(entry.path))}
-								>
-									<span className="file-icon">{entry.type === "dir" ? <DirIcon /> : <FileIcon />}</span>
-									<span className="file-name">{entry.name}</span>
-									<span className="file-meta">
-										{entry.type === "dir" ? t("目录") : formatSize(entry.size)} · {formatTime(entry.mtime)}
-									</span>
-								</button>
-								{entry.type === "dir" ? (
-									<button
-										type="button"
-										className="file-action"
-										title={t("后台打包整个目录，完成后自动下载")}
-										disabled={archiveBusy}
-										onClick={() => onDownloadFolder(entry.path)}
+										}}
 									>
-										{t("下载")}
-									</button>
-								) : null}
-								<button
-									type="button"
-									className="file-action"
-									title={t("重命名")}
+										{t("确定")}
+									</Button>
+									<Button onClick={() => setRenaming(null)}>{t("取消")}</Button>
+								</Space.Compact>
+							) : (
+								<>
+									<Button
+										type="text"
+										className="filepanel__open"
+										title={entry.path}
+										onClick={() => (entry.type === "dir" ? onOpen(entry.path) : onPreview(entry.path))}
+									>
+										<span className="filepanel__icon">
+											{entry.type === "dir" ? <DirIcon /> : <FileIcon />}
+										</span>
+										<Text className="filepanel__name">{entry.name}</Text>
+										<Text type="secondary" className="filepanel__meta">
+											{entry.type === "dir" ? t("目录") : formatSize(entry.size)} · {formatTime(entry.mtime)}
+										</Text>
+									</Button>
+									<Space size={2} className="filepanel__ops">
+										{entry.type === "dir" ? (
+											<Button
+												size="small"
+												type="link"
+												title={t("后台打包整个目录，完成后自动下载")}
+												disabled={archiveBusy}
+												onClick={() => onDownloadFolder(entry.path)}
+											>
+												{t("下载")}
+											</Button>
+										) : null}
+										<Button
+											size="small"
+											type="link"
+											title={t("重命名")}
+											onClick={() => {
+												setRenaming(entry.path);
+												setRenameValue(entry.name);
+											}}
+										>
+											{t("改名")}
+										</Button>
+										<Popconfirm
+											title={t("确定删除 {name}？{suffix}", {
+												name: entry.name,
+												suffix: entry.type === "dir" ? t("目录内的文件会一并删除。") : "",
+											})}
+											okText={t("删除")}
+											okButtonProps={{ danger: true }}
+											cancelText={t("取消")}
+											onConfirm={() => onDelete(entry.path)}
+										>
+											<Button size="small" type="link" danger title={t("删除（目录会连同内容一起删除）")}>
+												{t("删除")}
+											</Button>
+										</Popconfirm>
+									</Space>
+								</>
+							)}
+						</div>
+					))}
+				</div>
+
+				{preview ? (
+					<div className="filepanel__preview">
+						<Space size={8} wrap className="filepanel__previewhead">
+							<Text strong className="filepanel__previewname" title={preview.path}>
+								{baseName(preview.path)}
+							</Text>
+							<Text type="secondary">
+								{preview.kind === "binary" ? t("二进制") : preview.kind === "image" ? t("图片") : t("文本")} ·{" "}
+								{formatSize(preview.size)}
+								{preview.truncated ? t(" · 已截断") : ""}
+							</Text>
+							<Button size="small" onClick={() => onDownload(preview.path)}>
+								{t("下载")}
+							</Button>
+							{previewIsText && !isEditing ? (
+								<Button
+									size="small"
 									onClick={() => {
-										setRenaming(entry.path);
-										setRenameValue(entry.name);
+										setEditing(preview.path);
+										setDraft(preview.text ?? "");
 									}}
 								>
-									{t("改名")}
-								</button>
-								<button
-									type="button"
-									className="file-action danger"
-									title={t("删除（目录会连同内容一起删除）")}
-									onClick={() => {
-										if (
-											window.confirm(
-												t("确定删除 {name}？{suffix}", { name: entry.name, suffix: entry.type === "dir" ? t("目录内的文件会一并删除。") : "" }),
-											)
-										) {
-											onDelete(entry.path);
-										}
-									}}
-								>
-									{t("删除")}
-								</button>
-							</>
+									{t("编辑")}
+								</Button>
+							) : null}
+							{isEditing ? (
+								<>
+									<Button
+										size="small"
+										type="primary"
+										disabled={!dirty}
+										onClick={() => {
+											onSave(preview.path, draft);
+											setEditing(null);
+										}}
+									>
+										{t("保存")}
+									</Button>
+									<Button
+										size="small"
+										onClick={() => {
+											setEditing(null);
+											setDraft("");
+										}}
+									>
+										{t("取消")}
+									</Button>
+								</>
+							) : null}
+						</Space>
+						{isEditing ? (
+							<Input.TextArea
+								className="filepanel__editor"
+								value={draft}
+								spellCheck={false}
+								autoSize={{ minRows: 8, maxRows: 20 }}
+								onChange={(event) => setDraft(event.target.value)}
+							/>
+						) : preview.kind === "image" && preview.data ? (
+							<img
+								className="filepanel__image"
+								src={`data:${preview.mimeType};base64,${preview.data}`}
+								alt={preview.path}
+							/>
+						) : preview.kind === "text" ? (
+							<pre className="filepanel__text">{preview.text}</pre>
+						) : (
+							<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t("二进制文件不提供预览，可下载后查看。")} />
 						)}
 					</div>
-				))}
+				) : (
+					<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t("选择一个文件查看内容")} />
+				)}
 			</div>
-
-			{preview ? (
-				<div className="file-preview">
-					<div className="file-preview-head">
-						<span className="file-preview-name" title={preview.path}>
-							{baseName(preview.path)}
-						</span>
-						<span className="file-meta">
-							{preview.kind === "binary" ? t("二进制") : preview.kind === "image" ? t("图片") : t("文本")} ·{" "}
-							{formatSize(preview.size)}
-							{preview.truncated ? t(" · 已截断") : ""}
-						</span>
-						<button type="button" onClick={() => onDownload(preview.path)}>
-							{t("下载")}
-						</button>
-						{previewIsText && !isEditing ? (
-							<button
-								type="button"
-								onClick={() => {
-									setEditing(preview.path);
-									setDraft(preview.text ?? "");
-								}}
-							>
-								{t("编辑")}
-							</button>
-						) : null}
-						{isEditing ? (
-							<>
-								<button
-									type="button"
-									className="primary"
-									disabled={!dirty}
-									onClick={() => {
-										onSave(preview.path, draft);
-										setEditing(null);
-									}}
-								>
-									{t("保存")}
-								</button>
-								<button
-									type="button"
-									onClick={() => {
-										setEditing(null);
-										setDraft("");
-									}}
-								>
-									{t("取消")}
-								</button>
-							</>
-						) : null}
-					</div>
-					{isEditing ? (
-						<textarea
-							className="file-editor"
-							value={draft}
-							spellCheck={false}
-							onChange={(event) => setDraft(event.target.value)}
-						/>
-					) : preview.kind === "image" && preview.data ? (
-						<img
-							className="file-image"
-							src={`data:${preview.mimeType};base64,${preview.data}`}
-							alt={preview.path}
-						/>
-					) : preview.kind === "text" ? (
-						<pre className="file-text">{preview.text}</pre>
-					) : (
-						<div className="file-empty">{t("二进制文件不提供预览，可下载后查看。")}</div>
-					)}
-				</div>
-			) : (
-				<div className="file-empty">{t("选择一个文件查看内容")}</div>
-			)}
-		</div>
+		</ConfigProvider>
 	);
 }

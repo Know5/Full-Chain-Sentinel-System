@@ -95,7 +95,7 @@ test("a live run renders its turns, tool rows and the step being executed", () =
 	expect(html).toContain("recon the second target");
 	expect(html).toContain("运行中");
 	// One rail, one turn header with its own statistics.
-	expect(html).toContain("subagent-process");
+	expect(html).toContain("sap-process");
 	expect(html).toContain("第 1 轮");
 	expect(html).toContain("3 个工具");
 	// A row reads as the tool and the argument that carries its point.
@@ -107,11 +107,11 @@ test("a live run renders its turns, tool rows and the step being executed", () =
 	// Thinking folds to its size, and prose folds to a clamped summary.
 	expect(html).toContain("思考 · 4 字");
 	// Earlier prose folds to a clamped summary; the latest one stays open.
-	expect(html).toContain("sa-text-clamp");
-	expect(html).toContain("sa-text open");
+	expect(html).toContain("sap-text is-clamped");
+	expect(html).toContain("sap-text is-open");
 	// A failed step is marked on its row, counted on the tab and reachable from
 	// the process toolbar.
-	expect(html).toContain("sa-tool error");
+	expect(html).toContain("sap-tool is-error");
 	expect(html).toContain("1 个失败");
 	expect(html).toContain("跳到第一个失败");
 	expect(html).toContain("只看失败");
@@ -161,5 +161,5 @@ test("paginates runs beyond the first page", () => {
 	const html = render(runs, {});
 	expect(html).toContain("1 / 4");
 	expect(html).toContain("共 25");
-	expect(html.match(/subagent-item /g)?.length).toBe(8);
+	expect(html.match(/sap-run\b/g)?.length).toBe(8);
 });

@@ -1,14 +1,15 @@
 /**
  * The live supervision window, opened from the composer's 监督 button.
  *
- * Option B (Inspector Card): a light card with a phase header, per-conversation
- * mode controls, and 状态 / 过程 / 日志 tabs. The global audit list lives in
- * 工作台 → 监督. Closing this window only hides it; supervision continues until
- * 停止监督.
+ * A light floating card with a phase header, per-conversation mode controls,
+ * and 状态 / 过程 / 日志 tabs. The global audit list lives in 工作台 → 监督.
+ * Closing this window only hides it; supervision continues until 停止监督.
  */
 
+import { Alert, Button, Card, ConfigProvider, Popconfirm, Segmented, Space, Table, Tabs, Tag, Typography } from "antd";
 import { useState } from "react";
 import { getLanguage, t } from "../i18n.ts";
+import { SUPERVISOR_STRATEGY_OPTIONS, supervisorStrategyKey, supervisorStrategyLabel } from "../supervisor-strategy.ts";
 import type {
 	SentinelSupervisorAdvice,
 	SentinelSupervisorCall,
@@ -19,7 +20,8 @@ import type {
 	SentinelSupervisorStrategyRef,
 	SentinelSupervisorView,
 } from "../types.ts";
-import { SUPERVISOR_STRATEGY_OPTIONS, supervisorStrategyKey, supervisorStrategyLabel } from "../supervisor-strategy.ts";
+
+const { Text } = Typography;
 
 const PHASE_LABELS: Record<string, string> = {
 	recon: t("侦察"),
@@ -67,11 +69,11 @@ function progressLabel(value: string): string {
 	return PROGRESS_LABELS[value] ?? value;
 }
 
-function progressClass(value: string): string {
-	if (value === "looping") return "bad";
-	if (value === "stalled") return "warn";
-	if (value === "advancing") return "ok";
-	return "";
+function progressColor(value: string): string {
+	if (value === "looping") return "red";
+	if (value === "stalled") return "orange";
+	if (value === "advancing") return "green";
+	return "default";
 }
 
 function timeLabel(at: number): string {
@@ -98,15 +100,24 @@ function modeLabel(mode: SentinelSupervisorMode, delivery: "auto" | "confirm"): 
 
 function CallRow({ call, onOpen }: { call: SentinelSupervisorCall; onOpen: (callId: string) => void }) {
 	return (
-		<button type="button" className="sv-call" onClick={() => onOpen(call.callId)} title={t("查看完整输出")}>
-			<span className={`sv-call__status ${call.status === "error" ? "bad" : "ok"}`} />
-			<span className="sv-call__tool">{call.tool}</span>
-			<span className="sv-call__args">{call.args}</span>
-			<span className="sv-call__meta">
+		<Button
+			type="text"
+			size="small"
+			className="svfw-call"
+			onClick={() => onOpen(call.callId)}
+			title={t("查看完整输出")}
+		>
+			<Tag color={call.status === "error" ? "red" : "green"} variant="filled">
+				{call.tool}
+			</Tag>
+			<Text type="secondary" ellipsis className="svfw-call__args">
+				{call.args}
+			</Text>
+			<Text type="secondary" className="svfw-call__meta">
 				{call.durationMs === null ? "" : `${Math.round(call.durationMs)}ms`}
 				{call.httpStatus === null ? "" : ` · HTTP ${call.httpStatus}`}
-			</span>
-		</button>
+			</Text>
+		</Button>
 	);
 }
 
@@ -121,52 +132,60 @@ function AdviceCard({
 }) {
 	if (advice.status !== "pending") {
 		return (
-			<div className={`sv-advice ${advice.status}`}>
-				<div className="sv-advice__head">
-					{advice.status === "sent" ? t("建议已发送") : t("建议已忽略")}
-					<span>{timeLabel(advice.sentAt ?? advice.at)}</span>
-				</div>
-				<pre>{advice.text}</pre>
-			</div>
+			<Alert
+				type={advice.status === "sent" ? "success" : "info"}
+				showIcon
+				className="svfw-alert"
+				title={`${advice.status === "sent" ? t("建议已发送") : t("建议已忽略")} · ${timeLabel(advice.sentAt ?? advice.at)}`}
+				description={<pre className="svfw-pre">{advice.text}</pre>}
+			/>
 		);
 	}
 	return (
-		<div className="sv-advice pending">
-			<div className="sv-advice__head">
-				{t("待确认的监督建议")}
-				<span>{timeLabel(advice.at)}</span>
-			</div>
-			<pre>{advice.text}</pre>
-			<div className="sv-advice__actions">
-				<button type="button" className="primary" onClick={() => onSend(advice.id)}>
-					{t("发送给 Agent")}
-				</button>
-				<button type="button" onClick={() => onIgnore(advice.id)}>
-					{t("忽略")}
-				</button>
-			</div>
-		</div>
+		<Alert
+			type="warning"
+			showIcon
+			className="svfw-alert"
+			title={`${t("待确认的监督建议")} · ${timeLabel(advice.at)}`}
+			description={<pre className="svfw-pre">{advice.text}</pre>}
+			action={
+				<Space size={6} orientation="vertical">
+					<Button size="small" type="primary" onClick={() => onSend(advice.id)}>
+						{t("发送给 Agent")}
+					</Button>
+					<Button size="small" onClick={() => onIgnore(advice.id)}>
+						{t("忽略")}
+					</Button>
+				</Space>
+			}
+		/>
 	);
 }
 
 function EpisodeItem({ episode }: { episode: SentinelSupervisorEpisode }) {
 	return (
-		<div className="sv-episode">
-			<div className="sv-episode__head">
-				<span>{timeLabel(episode.at)}</span>
-				<span>{phaseLabel(episode.phase)}</span>
-				<span className={progressClass(episode.progress)}>{progressLabel(episode.progress)}</span>
-				{episode.error ? <span className="bad">{t("失败")}</span> : null}
-			</div>
-			<div className="sv-episode__intent">{episode.intent || episode.error || t("（无摘要）")}</div>
+		<Card size="small" className="svfw-episode">
+			<Space size={8} wrap>
+				<Text type="secondary">{timeLabel(episode.at)}</Text>
+				<Text type="secondary">{phaseLabel(episode.phase)}</Text>
+				<Tag color={progressColor(episode.progress)} variant="filled">
+					{progressLabel(episode.progress)}
+				</Tag>
+				{episode.error ? (
+					<Tag color="red" variant="filled">
+						{t("失败")}
+					</Tag>
+				) : null}
+			</Space>
+			<Text className="svfw-episode__intent">{episode.intent || episode.error || t("（无摘要）")}</Text>
 			{episode.outcomes.length > 0 ? (
-				<ul className="sv-episode__list">
+				<ul className="svfw-list">
 					{episode.outcomes.slice(0, 4).map((item, index) => (
 						<li key={index}>{item}</li>
 					))}
 				</ul>
 			) : null}
-		</div>
+		</Card>
 	);
 }
 
@@ -230,345 +249,318 @@ export function SupervisorFloatingWindow({
 	};
 	const mergedLogs = mergeLogs(view.logs, logs);
 	const adviceLogs = mergedLogs.filter((log) => log.kind.startsWith("advice-")).slice(-4);
-	const tabButton = (value: Tab, label: string, count?: number) => (
-		<button
-			type="button"
-			role="tab"
-			aria-selected={tab === value}
-			className={`svb-tab ${tab === value ? "on" : ""}`}
-			onClick={() => setTab(value)}
-		>
-			{label}
-			{count === undefined ? null : <span>{count}</span>}
-		</button>
+
+	const statePanel = (
+		<div className="svfw-panel">
+			{view.pendingAdvice ? (
+				<AdviceCard advice={view.pendingAdvice} onSend={onSendAdvice} onIgnore={onIgnoreAdvice} />
+			) : null}
+			{view.lastError ? (
+				<Alert
+					type="error"
+					showIcon
+					className="svfw-alert"
+					title={t("最近错误：{error}", { error: view.lastError })}
+				/>
+			) : null}
+
+			<Text strong className="svfw-section">
+				{t("已排除 / 新证据")}
+			</Text>
+			<Space size={6} wrap>
+				{state.deadEnds.slice(-4).map((item) => (
+					<Tag key={`dead-${item}`} color="red" variant="filled" title={item}>
+						{item}
+					</Tag>
+				))}
+				{state.newEvidence.slice(-4).map((item) => (
+					<Tag key={`evidence-${item}`} color="green" variant="filled" title={item}>
+						{item}
+					</Tag>
+				))}
+				{state.deadEnds.length === 0 && state.newEvidence.length === 0 ? (
+					<Text type="secondary">{t("还没有排除项或新证据。")}</Text>
+				) : null}
+			</Space>
+
+			{state.tested.length > 0 ? (
+				<>
+					<Text strong className="svfw-section">
+						{t("已测试")}
+					</Text>
+					<Table
+						size="small"
+						rowKey={(entry) => `${entry.target}-${entry.test}`}
+						pagination={false}
+						dataSource={state.tested.slice(-5).reverse()}
+						columns={[
+							{ title: t("目标"), dataIndex: "target", key: "target", ellipsis: true },
+							{ title: t("测试"), dataIndex: "test", key: "test", ellipsis: true },
+							{ title: t("结果"), dataIndex: "result", key: "result", ellipsis: true },
+						]}
+					/>
+				</>
+			) : null}
+
+			{state.nextCandidates.length > 0 ? (
+				<>
+					<Text strong className="svfw-section">
+						{t("下一步候选")}
+					</Text>
+					<ul className="svfw-list">
+						{state.nextCandidates.slice(0, 4).map((item, index) => (
+							<li key={index}>{item}</li>
+						))}
+					</ul>
+				</>
+			) : null}
+
+			{adviceLogs.length > 0 ? (
+				<>
+					<Text strong className="svfw-section">
+						{t("最近介入")}
+					</Text>
+					<div className="svfw-advicelog">
+						{adviceLogs.map((log, index) => (
+							<Space key={`${log.at}-${index}`} size={8} wrap>
+								<Text type="secondary">{timeLabel(log.at)}</Text>
+								<Tag color={log.kind === "advice-skip" ? "orange" : undefined} variant="filled">
+									{ADVICE_LOG_LABELS[log.kind] ?? log.kind}
+								</Tag>
+								<Text type="secondary">{log.text}</Text>
+							</Space>
+						))}
+					</div>
+				</>
+			) : null}
+
+			<Text type="secondary" className="svfw-meta">
+				{t("监督模型 tokens {tokens}", { tokens: formatTokens(view.usage.total) })} · {view.usage.input} in /{" "}
+				{view.usage.output} out
+			</Text>
+		</div>
+	);
+
+	const processPanel = (
+		<div className="svfw-panel">
+			<Text strong className="svfw-section">
+				{t("最近 episode")}
+			</Text>
+			{episodes.length === 0 ? (
+				<Text type="secondary">{t("还没有 episode。每 20 次调用或发现重复/空转后会生成一条。")}</Text>
+			) : (
+				<div className="svfw-episodes">
+					{[...episodes].slice(-5).reverse().map((episode) => (
+						<EpisodeItem key={episode.id} episode={episode} />
+					))}
+				</div>
+			)}
+
+			<Text strong className="svfw-section">
+				{t("最近调用")}
+			</Text>
+			{view.recentCalls.length === 0 ? (
+				<Text type="secondary">{t("还没有工具调用。")}</Text>
+			) : (
+				<div className="svfw-calls">
+					{[...view.recentCalls].slice(-10).reverse().map((call) => (
+						<CallRow key={call.callId} call={call} onOpen={onOpenCall} />
+					))}
+				</div>
+			)}
+		</div>
+	);
+
+	const logsPanel = (
+		<div className="svfw-panel">
+			{mergedLogs.length === 0 ? (
+				<Text type="secondary">{t("暂无日志。")}</Text>
+			) : (
+				<div className="svfw-logs">
+					{mergedLogs.slice(-60).map((log, index) => (
+						<Space key={`${log.at}-${index}`} size={8} className={log.kind === "error" ? "svfw-log is-bad" : "svfw-log"}>
+							<Text type="secondary">{timeLabel(log.at)}</Text>
+							<Text>{log.text}</Text>
+						</Space>
+					))}
+				</div>
+			)}
+		</div>
 	);
 
 	return (
-		<aside className="svb" aria-label={t("监督")}>
-			<header className="svb-head">
-				<div className="svb-heading">
-					<div className="svb-eyebrow">
+		<ConfigProvider button={{ autoInsertSpace: false }}>
+			<Card
+				size="small"
+				className="svfw"
+			title={
+				<div className="svfw-title">
+					<Text type="secondary">
 						{t("监督")} · {view.sessionName}
-					</div>
-					<div className="svb-sub">
+					</Text>
+					<Text type="secondary" className="svfw-title__sub">
 						{modeLabel(mode, delivery)} ·{" "}
 						{activeStrategies.map((entry) => entry.name || supervisorStrategyLabel(entry.strategy)).join(" + ")} ·{" "}
 						{t("已分析 {count} 个 episode", { count: view.episodeCount })}
-					</div>
+					</Text>
 				</div>
-				<span className={`svb-status ${view.status}`}>{statusLabel(view)}</span>
-				<button type="button" className="svb-collapse" onClick={onHide} title={t("隐藏窗口，监督继续")}>
-					{t("收起")}
-				</button>
-			</header>
+			}
+			extra={
+				<Space size={8}>
+					<Tag color={view.status === "running" ? "processing" : "default"} variant="filled">
+						{statusLabel(view)}
+					</Tag>
+					<Button size="small" onClick={onHide} title={t("隐藏窗口，监督继续")}>
+						{t("收起")}
+					</Button>
+				</Space>
+			}
+		>
+			<Space size={8} wrap className="svfw-phaserow">
+				<Tag variant="filled">{phaseLabel(state.phase)}</Tag>
+				<Tag color={progressColor(state.progress)} variant="filled">
+					{progressLabel(state.progress)}
+				</Tag>
+				{view.pendingAdvice ? (
+					<Tag color="orange" variant="filled">
+						{t("待确认建议")}
+					</Tag>
+				) : null}
+				<Text type="secondary" title={view.model ? view.model.modelId : t("未配置模型")}>
+					{view.model?.modelId ?? t("未配置模型")}
+				</Text>
+			</Space>
+			<Text type="secondary" className="svfw-intent">
+				{state.intent || t("等待第一批调用…")}
+			</Text>
+			<Text type="secondary" className="svfw-metameta">
+				{t("监督判断：{progress}", { progress: progressLabel(state.progress) })} ·{" "}
+				{t("{calls} 次调用 · {episodes} 个 episode", { calls: view.callCount, episodes: view.episodeCount })}
+			</Text>
 
-			<div className="svb-body">
-				<div className="svb-phase-row">
-					<span className="svb-phase">{phaseLabel(state.phase)}</span>
-					<span className={`svb-progress ${progressClass(state.progress)}`}>
-						{progressLabel(state.progress)}
-					</span>
-					{view.pendingAdvice ? <span className="svb-advice-flag">{t("待确认建议")}</span> : null}
-					<span className={`svb-model ${view.model ? "" : "bad"}`}>
-						{view.model?.modelId ?? t("未配置模型")}
-					</span>
-				</div>
-				<div className="svb-intent">{state.intent || t("等待第一批调用…")}</div>
+			<Space size={8} className="svfw-section">
+				<Text strong>{t("监督策略")}</Text>
+				<Text type="secondary">{t("{count} 个", { count: activeStrategies.length })}</Text>
+			</Space>
+			<Space size={6} wrap>
+				{SUPERVISOR_STRATEGY_OPTIONS.map((option) => {
+					const ref: SentinelSupervisorStrategyRef = { strategy: option.id, customStrategyId: null };
+					const selected = activeStrategies.some(
+						(entry) => supervisorStrategyKey(entry) === supervisorStrategyKey(ref),
+					);
+					return (
+						<Button
+							key={option.id}
+							size="small"
+							type={selected ? "primary" : "default"}
+							disabled={stopped}
+							onClick={() => toggleStrategy(ref)}
+						>
+							{option.label}
+						</Button>
+					);
+				})}
+				{customStrategies.map((custom) => {
+					const ref: SentinelSupervisorStrategyRef = { strategy: custom.base, customStrategyId: custom.id };
+					const selected = activeStrategies.some(
+						(entry) => supervisorStrategyKey(entry) === supervisorStrategyKey(ref),
+					);
+					return (
+						<Button
+							key={custom.id}
+							size="small"
+							type={selected ? "primary" : "default"}
+							disabled={stopped}
+							onClick={() => toggleStrategy(ref)}
+						>
+							{custom.name}
+						</Button>
+					);
+				})}
+				{activeStrategies
+					.filter(
+						(entry) =>
+							entry.customStrategyId && !customStrategies.some((custom) => custom.id === entry.customStrategyId),
+					)
+					.map((entry) => (
+						<Button
+							key={`deleted:${entry.customStrategyId}`}
+							size="small"
+							type="primary"
+							danger
+							disabled={stopped}
+							title={t("该自定义策略已删除；点击可移除")}
+							onClick={() => toggleStrategy(entry)}
+						>
+							{t("{name}（已删除）", { name: entry.name })}
+						</Button>
+					))}
+			</Space>
+			{view.strategyNote ? (
+				<Text type="secondary" title={view.strategyNote} className="svfw-note">
+					{view.strategyNote}
+				</Text>
+			) : null}
 
-				<div
-					className="svb-meter"
-					aria-label={t("监督判断：{progress}", { progress: progressLabel(state.progress) })}
+			<Space size={8} wrap className="svfw-mode">
+				<Segmented
+					size="small"
+					value={mode === "observe" ? "observe" : delivery === "auto" ? "auto" : "confirm"}
+					disabled={stopped}
+					onChange={(value) => {
+						if (value === "observe") onSetMode("observe", delivery);
+						else if (value === "auto") onSetMode("intervene", "auto");
+						else onSetMode("intervene", "confirm");
+					}}
+					options={[
+						{ value: "observe", label: t("观察") },
+						{ value: "auto", label: t("介入 · 自动") },
+						{ value: "confirm", label: t("介入 · 确认") },
+					]}
+				/>
+				<Button
+					size="small"
+					onClick={onRunNow}
+					loading={view.running}
+					disabled={view.status !== "running" || view.running}
 				>
-					<span className={state.progress === "advancing" ? "on ok" : ""} />
-					<span className={state.progress === "stalled" ? "on warn" : ""} />
-					<span className={state.progress === "looping" ? "on bad" : ""} />
-				</div>
-				<div className="svb-meter-meta">
-					<span>{t("监督判断：{progress}", { progress: progressLabel(state.progress) })}</span>
-					<span>
-						{t("{calls} 次调用 · {episodes} 个 episode", {
-							calls: view.callCount,
-							episodes: view.episodeCount,
-						})}
-					</span>
-				</div>
+					{view.running ? t("分析中…") : t("立即分析")}
+				</Button>
+			</Space>
 
-				<div className="svb-strategy">
-					<div className="svb-strategy__head">
-						<span>{t("监督策略")}</span>
-						<span>{t("{count} 个", { count: activeStrategies.length })}</span>
-					</div>
-					<div className="svb-strategy__list">
-						{SUPERVISOR_STRATEGY_OPTIONS.map((option) => {
-							const ref: SentinelSupervisorStrategyRef = {
-								strategy: option.id,
-								customStrategyId: null,
-							};
-							const selected = activeStrategies.some(
-								(entry) => supervisorStrategyKey(entry) === supervisorStrategyKey(ref),
-							);
-							return (
-								<button
-									type="button"
-									key={option.id}
-									className={selected ? "on" : ""}
-									aria-pressed={selected}
-									disabled={stopped}
-									onClick={() => toggleStrategy(ref)}
-								>
-									{option.label}
-								</button>
-							);
-						})}
-						{customStrategies.map((custom) => {
-							const ref: SentinelSupervisorStrategyRef = {
-								strategy: custom.base,
-								customStrategyId: custom.id,
-							};
-							const selected = activeStrategies.some(
-								(entry) => supervisorStrategyKey(entry) === supervisorStrategyKey(ref),
-							);
-							return (
-								<button
-									type="button"
-									key={custom.id}
-									className={selected ? "on" : ""}
-									aria-pressed={selected}
-									disabled={stopped}
-									onClick={() => toggleStrategy(ref)}
-								>
-									{custom.name}
-								</button>
-							);
-						})}
-						{activeStrategies
-							.filter(
-								(entry) =>
-									entry.customStrategyId &&
-									!customStrategies.some((custom) => custom.id === entry.customStrategyId),
-							)
-							.map((entry) => (
-								<button
-									type="button"
-									key={`deleted:${entry.customStrategyId}`}
-									className="on"
-									aria-pressed
-									disabled={stopped}
-									title={t("该自定义策略已删除；点击可移除")}
-									onClick={() => toggleStrategy(entry)}
-								>
-									{t("{name}（已删除）", { name: entry.name })}
-								</button>
-							))}
-					</div>
-					{view.strategyNote ? (
-						<span className="svb-strategy-note" title={view.strategyNote}>
-							{view.strategyNote}
-						</span>
-					) : null}
-				</div>
+			<Tabs
+				className="svfw-tabs"
+				activeKey={tab}
+				onChange={(key) => setTab(key as Tab)}
+				items={[
+					{ key: "state", label: t("状态"), children: statePanel, forceRender: true },
+					{
+						key: "process",
+						label: `${t("过程")} ${episodes.length + view.recentCalls.length}`,
+						children: processPanel,
+						forceRender: true,
+					},
+					{ key: "logs", label: `${t("日志")} ${mergedLogs.length}`, children: logsPanel, forceRender: true },
+				]}
+			/>
 
-				<div className="svb-mode">
-					<button
-						type="button"
-						className={mode === "observe" ? "on" : ""}
-						disabled={stopped}
-						onClick={() => onSetMode("observe", delivery)}
-					>
-						{t("观察")}
-					</button>
-					<button
-						type="button"
-						className={mode === "intervene" && delivery === "auto" ? "on" : ""}
-						disabled={stopped}
-						onClick={() => onSetMode("intervene", "auto")}
-					>
-						{t("介入 · 自动")}
-					</button>
-					<button
-						type="button"
-						className={mode === "intervene" && delivery === "confirm" ? "on" : ""}
-						disabled={stopped}
-						onClick={() => onSetMode("intervene", "confirm")}
-					>
-						{t("介入 · 确认")}
-					</button>
-					<button
-						type="button"
-						className="svb-run-now"
-						onClick={onRunNow}
-						disabled={view.status !== "running" || view.running}
-					>
-						{view.running ? t("分析中…") : t("立即分析")}
-					</button>
-				</div>
-
-				<div className="svb-tabs" role="tablist" aria-label={t("监督视图")}>
-					{tabButton("state", t("状态"))}
-					{tabButton("process", t("过程"), episodes.length + view.recentCalls.length)}
-					{tabButton("logs", t("日志"), mergedLogs.length)}
-				</div>
-
-				<div className="svb-tabpanel" hidden={tab !== "state"}>
-					{view.pendingAdvice ? (
-						<AdviceCard advice={view.pendingAdvice} onSend={onSendAdvice} onIgnore={onIgnoreAdvice} />
-					) : null}
-					{view.lastError ? (
-						<p className="svb-error">{t("最近错误：{error}", { error: view.lastError })}</p>
-					) : null}
-
-					<div className="svb-section">
-						<div className="svb-section-head">
-							<h4>{t("已排除 / 新证据")}</h4>
-							<span>{state.deadEnds.length + state.newEvidence.length}</span>
-						</div>
-						<div className="svb-chips">
-							{state.deadEnds.slice(-4).map((item) => (
-								<span className="svb-chip bad" key={`dead-${item}`} title={item}>
-									{item}
-								</span>
-							))}
-							{state.newEvidence.slice(-4).map((item) => (
-								<span className="svb-chip ok" key={`evidence-${item}`} title={item}>
-									{item}
-								</span>
-							))}
-							{state.deadEnds.length === 0 && state.newEvidence.length === 0 ? (
-								<span className="svb-empty">{t("还没有排除项或新证据。")}</span>
-							) : null}
-						</div>
-					</div>
-
-					{state.tested.length > 0 ? (
-						<div className="svb-section">
-							<div className="svb-section-head">
-								<h4>{t("已测试")}</h4>
-								<span>{state.tested.length}</span>
-							</div>
-							<table className="svb-table">
-								<thead>
-									<tr>
-										<th>{t("目标")}</th>
-										<th>{t("测试")}</th>
-										<th>{t("结果")}</th>
-									</tr>
-								</thead>
-								<tbody>
-									{state.tested.slice(-5).reverse().map((entry, index) => (
-										<tr key={`${entry.target}-${entry.test}-${index}`}>
-											<td title={entry.target}>{entry.target}</td>
-											<td>{entry.test}</td>
-											<td title={entry.result}>{entry.result}</td>
-										</tr>
-									))}
-								</tbody>
-							</table>
-						</div>
-					) : null}
-
-					{state.nextCandidates.length > 0 ? (
-						<div className="svb-next">
-							<h4>{t("下一步候选")}</h4>
-							<ul>
-								{state.nextCandidates.slice(0, 4).map((item, index) => (
-									<li key={index}>{item}</li>
-								))}
-							</ul>
-						</div>
-					) : null}
-
-					{adviceLogs.length > 0 ? (
-						<div className="svb-section">
-							<div className="svb-section-head">
-								<h4>{t("最近介入")}</h4>
-								<span>{adviceLogs.length}</span>
-							</div>
-							<div className="svb-advice-log">
-								{adviceLogs.map((log, index) => (
-									<div key={`${log.at}-${index}`}>
-										<span>{timeLabel(log.at)}</span>
-										<b className={log.kind === "advice-skip" ? "warn" : ""}>
-											{ADVICE_LOG_LABELS[log.kind] ?? log.kind}
-										</b>
-										<span>{log.text}</span>
-									</div>
-								))}
-							</div>
-						</div>
-					) : null}
-
-					<div className="svb-meta">
-						<span>{t("监督模型 tokens {tokens}", { tokens: formatTokens(view.usage.total) })}</span>
-						<span>
-							{view.usage.input} in / {view.usage.output} out
-						</span>
-					</div>
-				</div>
-
-				<div className="svb-tabpanel" hidden={tab !== "process"}>
-					<div className="svb-section">
-						<div className="svb-section-head">
-							<h4>{t("最近 episode")}</h4>
-							<span>{episodes.length}</span>
-						</div>
-						{episodes.length === 0 ? (
-							<p className="svb-empty">
-								{t("还没有 episode。每 20 次调用或发现重复/空转后会生成一条。")}
-							</p>
-						) : (
-							<div className="sv-episode-list">
-								{[...episodes].slice(-5).reverse().map((episode) => (
-									<EpisodeItem key={episode.id} episode={episode} />
-								))}
-							</div>
-						)}
-					</div>
-
-					<div className="svb-section">
-						<div className="svb-section-head">
-							<h4>{t("最近调用")}</h4>
-							<span>{view.recentCalls.length}</span>
-						</div>
-						{view.recentCalls.length === 0 ? (
-							<p className="svb-empty">{t("还没有工具调用。")}</p>
-						) : (
-							<div className="sv-call-list">
-								{[...view.recentCalls].slice(-10).reverse().map((call) => (
-									<CallRow key={call.callId} call={call} onOpen={onOpenCall} />
-								))}
-							</div>
-						)}
-					</div>
-				</div>
-
-				<div className="svb-tabpanel" hidden={tab !== "logs"}>
-					<div className="sv-log">
-						{mergedLogs.slice(-60).map((log, index) => (
-							<div key={`${log.at}-${index}`} className={`sv-log__line ${log.kind === "error" ? "bad" : ""}`}>
-								<span>{timeLabel(log.at)}</span>
-								<span>{log.text}</span>
-							</div>
-						))}
-						{mergedLogs.length === 0 ? <p className="svb-empty">{t("暂无日志。")}</p> : null}
-					</div>
-				</div>
-			</div>
-
-			<footer className="svb-foot">
-				<span>{t("收起窗口不会停止监督")}</span>
-				<div>
-					<button
-						type="button"
-						className="danger"
-						disabled={stopped}
-						onClick={() => {
-							if (window.confirm(t("停止监督后，本次会话不再采集；要重新监督只能新开对话。确定停止？"))) onStop();
-						}}
-					>
+			<div className="svfw-foot">
+				<Text type="secondary">{t("收起窗口不会停止监督")}</Text>
+				<Popconfirm
+					title={t("停止监督")}
+					description={t("停止监督后，本次会话不再采集；要重新监督只能新开对话。确定停止？")}
+					okText={t("停止监督")}
+					okButtonProps={{ danger: true }}
+					cancelText={t("取消")}
+					disabled={stopped}
+					onConfirm={onStop}
+				>
+					<Button size="small" danger disabled={stopped}>
 						{t("停止监督")}
-					</button>
-				</div>
-			</footer>
-		</aside>
+					</Button>
+				</Popconfirm>
+			</div>
+			</Card>
+		</ConfigProvider>
 	);
 }

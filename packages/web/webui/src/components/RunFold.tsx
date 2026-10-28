@@ -1,5 +1,6 @@
+import { DownOutlined, RightOutlined } from "@ant-design/icons";
+import { Button, Typography } from "antd";
 import { t } from "../i18n.ts";
-import { CaretDownIcon, CaretRightIcon } from "./icons.tsx";
 
 /**
  * The single row that stands for one finished run's process. A recon run is
@@ -9,18 +10,19 @@ import { CaretDownIcon, CaretRightIcon } from "./icons.tsx";
  */
 export function RunFold({ digest, open, onToggle }: { digest: string; open: boolean; onToggle: () => void }) {
 	return (
-		<div
-			className={`run-fold ${open ? "open" : ""}`}
-			role="button"
-			tabIndex={0}
+		<Button
+			type="text"
+			size="small"
+			className="runfold"
 			onClick={onToggle}
-			onKeyDown={(event) => {
-				if (event.key === "Enter" || event.key === " ") onToggle();
-			}}
+			icon={open ? <DownOutlined /> : <RightOutlined />}
 		>
-			<span className="run-fold-caret">{open ? <CaretDownIcon size={11} /> : <CaretRightIcon size={11} />}</span>
-			<span className="run-fold-label">{open ? t("收起过程") : t("过程")}</span>
-			{digest ? <span className="run-fold-digest">{digest}</span> : null}
-		</div>
+			{open ? t("收起过程") : t("过程")}
+			{digest ? (
+				<Typography.Text type="secondary" ellipsis className="runfold__digest">
+					{digest}
+				</Typography.Text>
+			) : null}
+		</Button>
 	);
 }

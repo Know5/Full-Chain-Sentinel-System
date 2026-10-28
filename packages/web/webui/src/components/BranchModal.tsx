@@ -1,7 +1,9 @@
+import { Breadcrumb, Button, Collapse, Input, List, Modal, Space, Tag, Typography } from "antd";
 import { useMemo, useState } from "react";
 import { t } from "../i18n.ts";
 import type { SessionTreeNodeView, SentinelForkPoint } from "../types.ts";
-import { BranchIcon, CaretDownIcon, CaretRightIcon, CloseIcon } from "./icons.tsx";
+
+const { Text } = Typography;
 
 interface PathEntry {
 	id: string;
@@ -121,139 +123,130 @@ export function BranchModal({
 	};
 
 	return (
-		<div className="modal-backdrop" onClick={onClose}>
-			<div className="modal branch-modal" onClick={(event) => event.stopPropagation()}>
-				<h2>
-					{t("会话分支")}
-					<button type="button" className="ghost small" style={{ float: "right" }} onClick={onClose}>
-						<CloseIcon />
-					</button>
-				</h2>
-				<p className="modal-hint">{t("点击分支立即跳转，原分支完整保留，可随时切回。")}</p>
+		<Modal
+			open
+			width={780}
+			title={t("会话分支")}
+			footer={null}
+			onCancel={onClose}
+			destroyOnHidden
+			className="branchhub"
+		>
+			<Text type="secondary">{t("点击分支立即跳转，原分支完整保留，可随时切回。")}</Text>
 
-				<div className="breadcrumb">
-					{path.length === 0 ? (
-						<span className="breadcrumb-empty">{t("暂无消息")}</span>
-					) : (
-						path.map((item, index) => (
-							<span key={item.id} className="breadcrumb-crumb-wrap">
-								{index > 0 ? <span className="breadcrumb-sep">›</span> : null}
-								<button
-									type="button"
-									className={`breadcrumb-crumb ${index === path.length - 1 ? "now" : ""}`}
-									onClick={() => jump(item.id)}
-									disabled={index === path.length - 1}
-									title={item.label}
-								>
-									{item.label.slice(0, 14) || "…"}
-								</button>
-							</span>
-						))
-					)}
-				</div>
+			<Breadcrumb
+				className="branchhub__crumbs"
+				items={
+					path.length === 0
+						? [{ title: <Text type="secondary">{t("暂无消息")}</Text> }]
+						: path.map((item, index) => ({
+								title:
+									index === path.length - 1 ? (
+										<Text strong>{item.label.slice(0, 14) || "…"}</Text>
+									) : (
+										<Button
+											type="link"
+											size="small"
+											title={item.label}
+											onClick={() => jump(item.id)}
+										>
+											{item.label.slice(0, 14) || "…"}
+										</Button>
+									),
+							}))
+				}
+			/>
 
-				<div className="branch-scroll">
-					<div className="branch-section-title">{t("分叉点 · {count}", { count: forks.length })}</div>
-					{forks.length === 0 ? (
-						<div className="branch-empty">{t("还没有分叉。在历史消息上点「↩ 从此分叉」即可开新分支。")}</div>
-					) : null}
-					{forks.map((fork) => {
-						const open = expandedFork === fork.id;
-						return (
-							<div key={fork.id} className="fork-block">
-								<button
-									type="button"
-									className="fork-head"
-									onClick={() => setExpandedFork(open ? null : fork.id)}
-									title={fork.summary}
-								>
-									<span className={`caret ${open ? "open" : ""}`}>
-										{open ? <CaretDownIcon /> : <CaretRightIcon />}
-									</span>
-									<span className="fork-summary">
-										<BranchIcon size={12} /> {fork.summary.slice(0, 30)}
-									</span>
-									<span className="fork-count">{t("{count} 条分支", { count: fork.branches.length })}</span>
-								</button>
-								{open ? (
-									<div className="fork-branches">
-										{fork.branches.map((branch) => (
-											<div key={branch.entryId} className={`branch-row ${branch.active ? "active" : ""}`}>
-												<button
-													type="button"
-													className="branch-option"
-													onClick={() => jump(branch.entryId)}
-													disabled={branch.active}
-													title={branch.summary}
-												>
-													<span className="branch-dot" />
-													<span className="branch-name">
-														{branch.label || branch.summary.slice(0, 26)}
-													</span>
-													<span className="branch-meta">{t("{count} 条", { count: branch.messageCount })}</span>
-													{branch.active ? <span className="branch-now">{t("当前")}</span> : null}
-												</button>
-												{editingBranch === branch.entryId ? (
-													<input
-														className="branch-rename"
-														value={editValue}
-														onChange={(event) => setEditValue(event.target.value)}
-														onKeyDown={(event) => {
-															if (event.key === "Enter") {
-																if (editValue.trim()) onRenameBranch(branch.entryId, editValue.trim());
-																setEditingBranch(null);
-															}
-															if (event.key === "Escape") setEditingBranch(null);
-														}}
-														onBlur={() => setEditingBranch(null)}
-														placeholder={t("分支名称")}
-														spellCheck={false}
-													/>
-												) : (
-													<button
-														type="button"
-														className="ghost small"
-														title={t("命名分支")}
-														onClick={() => {
-															setEditingBranch(branch.entryId);
-															setEditValue(branch.label);
-														}}
-													>
-														✎
-													</button>
-												)}
-											</div>
-										))}
+			<Text strong>{t("分叉点 · {count}", { count: forks.length })}</Text>
+			{forks.length === 0 ? (
+				<Text type="secondary">{t("还没有分叉。在历史消息上点「↩ 从此分叉」即可开新分支。")}</Text>
+			) : (
+				<Collapse
+					className="branchhub__forks"
+					items={forks.map((fork) => ({
+						key: fork.id,
+						label: (
+							<Space size={8} wrap>
+								<Text>{fork.summary.slice(0, 30)}</Text>
+								<Text type="secondary">{t("{count} 条分支", { count: fork.branches.length })}</Text>
+							</Space>
+						),
+						children: (
+							<div className="branchhub__branches">
+								{fork.branches.map((branch) => (
+									<div key={branch.entryId} className="branchhub__branch">
+										<Button
+											type="link"
+											size="small"
+											disabled={branch.active}
+											title={branch.summary}
+											onClick={() => jump(branch.entryId)}
+										>
+											<Space size={6} wrap>
+												<Text>{branch.label || branch.summary.slice(0, 26)}</Text>
+												<Text type="secondary">{t("{count} 条", { count: branch.messageCount })}</Text>
+												{branch.active ? (
+													<Tag color="blue" variant="filled">
+														{t("当前")}
+													</Tag>
+												) : null}
+											</Space>
+										</Button>
+										{editingBranch === branch.entryId ? (
+											<Input
+												size="small"
+												autoFocus
+												style={{ width: 160 }}
+												value={editValue}
+												onChange={(event) => setEditValue(event.target.value)}
+												onKeyDown={(event) => {
+													if (event.key === "Enter") {
+														if (editValue.trim()) onRenameBranch(branch.entryId, editValue.trim());
+														setEditingBranch(null);
+													}
+													if (event.key === "Escape") setEditingBranch(null);
+												}}
+												onBlur={() => setEditingBranch(null)}
+												placeholder={t("分支名称")}
+												spellCheck={false}
+											/>
+										) : (
+											<Button
+												type="link"
+												size="small"
+												title={t("命名分支")}
+												onClick={() => {
+													setEditingBranch(branch.entryId);
+													setEditValue(branch.label);
+												}}
+											>
+												{t("命名")}
+											</Button>
+										)}
 									</div>
-								) : null}
-							</div>
-						);
-					})}
-
-					{forkPoints.length > 0 ? (
-						<>
-							<div className="branch-section-title" style={{ marginTop: 14 }}>
-								{t("从历史消息分叉")}
-							</div>
-							{forkPoints
-								.slice()
-								.reverse()
-								.slice(0, 8)
-								.map((point) => (
-									<button
-										key={point.entryId}
-										type="button"
-										className="fork-item"
-										onClick={() => jump(point.entryId)}
-										title={point.text}
-									>
-										↩ {point.text.slice(0, 40) || t("(空)")}
-									</button>
 								))}
-						</>
-					) : null}
-				</div>
-			</div>
-		</div>
+							</div>
+						),
+					}))}
+				/>
+			)}
+
+			{forkPoints.length > 0 ? (
+				<>
+					<Text strong>{t("从历史消息分叉")}</Text>
+					<List
+						size="small"
+						dataSource={forkPoints.slice().reverse().slice(0, 8)}
+						renderItem={(point) => (
+							<List.Item className="branchhub__point" onClick={() => jump(point.entryId)}>
+								<Text ellipsis title={point.text}>
+									↩ {point.text.slice(0, 40) || t("(空)")}
+								</Text>
+							</List.Item>
+						)}
+					/>
+				</>
+			) : null}
+		</Modal>
 	);
 }

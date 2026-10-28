@@ -14,7 +14,8 @@
  * be cut off on the last rows.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { Button, Popover, Space } from "antd";
+import { useState } from "react";
 import { t } from "../i18n.ts";
 import type { SentinelSessionStatus } from "../types.ts";
 
@@ -26,16 +27,6 @@ export const SESSION_STATUS_LABELS: Record<SentinelSessionStatus, string> = {
 	done: t("已完成"),
 	ignored: t("已忽略"),
 };
-
-const PICKER_WIDTH = 168;
-/**
- * Panel height for placement: five 30px rows, 2x5px padding, 2px border. The
- * picker is `position: fixed`, so without this the last rows of a session near
- * the window bottom (已完成 / 已忽略) fall outside the viewport and cannot be
- * clicked at all.
- */
-const PICKER_HEIGHT = 5 * 30 + 10 + 2;
-const VIEWPORT_MARGIN = 8;
 
 function chipClass(status: SentinelSessionStatus | null | undefined): string {
 	return `session-status-chip ${status ?? "none"}`;
@@ -88,108 +79,86 @@ export function SessionStatusControl({
 	 */
 	onOpenChange?: (open: boolean) => void;
 }) {
-	const [anchor, setAnchor] = useState<{ top: number; left: number } | null>(null);
-	const root = useRef<HTMLSpanElement>(null);
-	const trigger = useRef<HTMLButtonElement>(null);
-
-	useEffect(() => {
-		onOpenChange?.(anchor !== null);
-	}, [anchor, onOpenChange]);
-
-	useEffect(() => {
-		if (!anchor) return;
-		const close = (event: Event) => {
-			if (event.type === "mousedown" && root.current?.contains(event.target as Node)) return;
-			setAnchor(null);
-		};
-		// The panel is fixed, so anything that moves the trigger has to close it.
-		document.addEventListener("mousedown", close);
-		document.addEventListener("scroll", close, true);
-		window.addEventListener("resize", close);
-		return () => {
-			document.removeEventListener("mousedown", close);
-			document.removeEventListener("scroll", close, true);
-			window.removeEventListener("resize", close);
-		};
-	}, [anchor]);
-
-	const openPicker = () => {
-		const rect = trigger.current?.getBoundingClientRect();
-		if (!rect) return;
-		const left =
-			variant === "toolbar"
-				? Math.max(8, Math.min(rect.right - PICKER_WIDTH, window.innerWidth - PICKER_WIDTH - 8))
-				: Math.max(8, Math.min(rect.left - 26, window.innerWidth - PICKER_WIDTH - 8));
-		// Below the trigger when it fits, above it otherwise, so every row of the
-		// picker stays inside the viewport.
-		const below = rect.bottom + 5;
-		const top =
-			below + PICKER_HEIGHT <= window.innerHeight - VIEWPORT_MARGIN
-				? below
-				: Math.max(VIEWPORT_MARGIN, rect.top - 5 - PICKER_HEIGHT);
-		setAnchor({ top, left });
-	};
+	const [open, setOpen] = useState(false);
 
 	const pick = (next: SentinelSessionStatus | null) => {
-		setAnchor(null);
+		setOpen(false);
+		onOpenChange?.(false);
 		onPick(next);
 	};
 
+	const trigger = (
+		<button
+			type="button"
+			className={variant === "toolbar" ? `session-status-trigger ${status ?? "none"}` : chipClass(status)}
+			title={t("人工标记这个会话的状态：只影响控制台显示与过滤，不会告诉模型")}
+			onClick={(event) => {
+				// The session row behind the chip switches sessions on click.
+				event.stopPropagation();
+			}}
+		>
+			{variant === "toolbar" ? (
+				<>
+					<span className={`session-status-dot ${status ?? "none"}`} />
+					{status ? SESSION_STATUS_LABELS[status] : t("无状态")}
+					<span className="session-status-caret">▾</span>
+				</>
+			) : (
+				<>
+					{status ? SESSION_STATUS_LABELS[status] : t("无状态")}
+					<span className="session-status-caret">▾</span>
+				</>
+			)}
+		</button>
+	);
+
 	return (
-		<span className="session-status-control" ref={root}>
-			<button
-				ref={trigger}
-				type="button"
-				className={variant === "toolbar" ? `session-status-trigger ${status ?? "none"}` : chipClass(status)}
-				title={t("人工标记这个会话的状态：只影响控制台显示与过滤，不会告诉模型")}
-				onClick={(event) => {
-					// The session row behind the chip switches sessions on click.
-					event.stopPropagation();
-					if (anchor) setAnchor(null);
-					else openPicker();
+		<span
+			className="session-status-control"
+			onClick={(event) => event.stopPropagation()}
+		>
+			<Popover
+				open={open}
+				trigger="click"
+				placement={variant === "toolbar" ? "bottomRight" : "bottomLeft"}
+				onOpenChange={(next) => {
+					setOpen(next);
+					onOpenChange?.(next);
 				}}
-			>
-				{variant === "toolbar" ? (
-					<>
-						<span className={`session-status-dot ${status ?? "none"}`} />
-						{status ? SESSION_STATUS_LABELS[status] : t("无状态")}
-						<span className="session-status-caret">▾</span>
-					</>
-				) : (
-					<>
-						{status ? SESSION_STATUS_LABELS[status] : t("无状态")}
-						<span className="session-status-caret">▾</span>
-					</>
-				)}
-			</button>
-			{anchor ? (
-				<div
-					className="session-status-picker"
-					style={{ top: anchor.top, left: anchor.left }}
-					role="menu"
-					// The panel is a DOM child of the session row, whose own click
-					// switches sessions: picking a status must not also do that.
-					onClick={(event) => event.stopPropagation()}
-				>
-					<button type="button" className={status ? "" : "on"} onClick={() => pick(null)}>
-						<span className="session-status-dot none" />
-						{t("无状态")}
-						{status ? null : <span className="session-status-tick">✓</span>}
-					</button>
-					{SESSION_STATUSES.map((value) => (
-						<button
-							key={value}
-							type="button"
-							className={status === value ? "on" : ""}
-							onClick={() => pick(value)}
+				content={
+					<Space orientation="vertical" size={2} className="session-status-picker">
+						<Button
+							type={status ? "text" : "primary"}
+							block
+							size="small"
+							onClick={() => pick(null)}
 						>
-							<span className={`session-status-dot ${value}`} />
-							{SESSION_STATUS_LABELS[value]}
-							{status === value ? <span className="session-status-tick">✓</span> : null}
-						</button>
-					))}
-				</div>
-			) : null}
+							<Space size={6}>
+								<span className="session-status-dot none" />
+								{t("无状态")}
+								{status ? null : <span className="session-status-tick">✓</span>}
+							</Space>
+						</Button>
+						{SESSION_STATUSES.map((value) => (
+							<Button
+								key={value}
+								type={status === value ? "primary" : "text"}
+								block
+								size="small"
+								onClick={() => pick(value)}
+							>
+								<Space size={6}>
+									<span className={`session-status-dot ${value}`} />
+									{SESSION_STATUS_LABELS[value]}
+									{status === value ? <span className="session-status-tick">✓</span> : null}
+								</Space>
+							</Button>
+						))}
+					</Space>
+				}
+			>
+				{trigger}
+			</Popover>
 		</span>
 	);
 }

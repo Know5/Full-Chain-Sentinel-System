@@ -1,3 +1,4 @@
+import { Button, Space, Table, Tag, Typography } from "antd";
 import { t } from "../i18n.ts";
 import type {
 	SentinelOfficialPluginView,
@@ -5,6 +6,8 @@ import type {
 	SentinelPluginView,
 } from "../types.ts";
 import { PluginIcon } from "./icons.tsx";
+
+const { Text } = Typography;
 
 function formatSize(bytes: number): string {
 	if (bytes < 1024) return `${bytes} B`;
@@ -35,105 +38,129 @@ export function OfficialPluginsPanel({
 }) {
 	if (plugins.length === 0) {
 		return (
-			<div className="official-plugins empty">
-				<p className="muted">{t("当前版本没有内置官方插件。")}</p>
-			</div>
+			<Text type="secondary">{t("当前版本没有内置官方插件。")}</Text>
 		);
 	}
 
 	return (
-		<div className="official-plugins">
-			<p className="official-plugins__intro">
+		<div className="op">
+			<Text type="secondary">
 				{t("随控制台分发的官方插件。安装时仍会选择目标主机，并确认构建许可与网络/能力权限。")}
-			</p>
-			<div className="official-plugins__table-wrap">
-				<table className="official-plugin-table">
-					<thead>
-						<tr>
-							<th>{t("插件")}</th>
-							<th>{t("版本")}</th>
-							<th>{t("工具")}</th>
-							<th>{t("状态")}</th>
-							<th />
-						</tr>
-					</thead>
-					<tbody>
-						{plugins.map((plugin) => {
+			</Text>
+			<Table<SentinelOfficialPluginView>
+				rowKey={(plugin) => plugin.manifest.id}
+				size="small"
+				className="op__table"
+				dataSource={plugins}
+				pagination={false}
+				scroll={{ x: 860 }}
+				columns={[
+					{
+						title: t("插件"),
+						key: "name",
+						render: (_, plugin) => {
 							const manifest = plugin.manifest;
-							const mine = installed.filter((entry) => entry.manifest.id === manifest.id);
+							return (
+								<Space align="start" size={8}>
+									<span className="op__icon">
+										<PluginIcon size={17} />
+									</span>
+									<div className="op__text">
+										<Space size={6} wrap>
+											<Text strong>{manifest.name}</Text>
+											<Tag color="blue" variant="filled">
+												{t("官方")}
+											</Tag>
+										</Space>
+										<Text type="secondary">{manifest.description}</Text>
+										<Space size={8} wrap>
+											<Text type="secondary">{formatSize(plugin.sizeBytes)}</Text>
+											<Text type="secondary">network {manifest.permissions.network}</Text>
+											<Text type="secondary">{manifest.resources.memory}</Text>
+										</Space>
+									</div>
+								</Space>
+							);
+						},
+					},
+					{
+						title: t("版本"),
+						key: "version",
+						width: 90,
+						render: (_, plugin) => <Text code>v{plugin.manifest.version}</Text>,
+					},
+					{
+						title: t("工具"),
+						key: "tools",
+						width: 180,
+						render: (_, plugin) => (
+							<Space orientation="vertical" size={2}>
+								<Text type="secondary">{plugin.manifest.tools.length}</Text>
+								{plugin.manifest.tools.slice(0, 3).map((tool) => (
+									<Text code key={tool.name}>
+										{tool.name}
+									</Text>
+								))}
+							</Space>
+						),
+					},
+					{
+						title: t("状态"),
+						key: "state",
+						width: 150,
+						render: (_, plugin) => {
+							const mine = installed.filter((entry) => entry.manifest.id === plugin.manifest.id);
 							const current = mine[0] ? versionOf(mine[0]) : null;
-							const update = current !== null && current !== manifest.version;
+							const update = current !== null && current !== plugin.manifest.version;
+							if (current === null) return <Text type="secondary">{t("未安装")}</Text>;
+							if (update) {
+								return (
+									<Tag color="orange" variant="filled">
+										{t("已装 v{current}，可更新", { current })}
+									</Tag>
+								);
+							}
+							return (
+								<Tag color="green" variant="filled">
+									{t("已安装")}
+								</Tag>
+							);
+						},
+					},
+					{
+						title: "",
+						key: "actions",
+						width: 200,
+						render: (_, plugin) => {
+							const mine = installed.filter((entry) => entry.manifest.id === plugin.manifest.id);
+							const current = mine[0] ? versionOf(mine[0]) : null;
+							const update = current !== null && current !== plugin.manifest.version;
 							const label =
 								current === null
 									? t("安装")
 									: update
-										? t("更新到 v{version}", { version: manifest.version })
+										? t("更新到 v{version}", { version: plugin.manifest.version })
 										: t("安装到其他主机");
 							return (
-								<tr key={manifest.id}>
-									<td>
-										<div className="official-plugin-name">
-											<span className="official-plugin-name__icon">
-												<PluginIcon size={17} />
-											</span>
-											<div className="official-plugin-name__text">
-												<div className="official-plugin-name__title">
-													<b>{manifest.name}</b>
-													<span className="chip info">{t("官方")}</span>
-												</div>
-												<p>{manifest.description}</p>
-												<div className="official-plugin-name__meta">
-													<span>{formatSize(plugin.sizeBytes)}</span>
-													<span>network {manifest.permissions.network}</span>
-													<span>{manifest.resources.memory}</span>
-												</div>
-											</div>
-										</div>
-									</td>
-									<td className="mono">v{manifest.version}</td>
-									<td>
-										<span className="official-plugin-tools__count">{manifest.tools.length}</span>
-										<div className="official-plugin-tools">
-											{manifest.tools.slice(0, 3).map((tool) => (
-												<code key={tool.name}>{tool.name}</code>
-											))}
-										</div>
-									</td>
-									<td>
-										{current ? (
-											update ? (
-												<span className="official-plugin__update">
-													{t("已装 v{current}，可更新", { current })}
-												</span>
-											) : (
-												<span className="chip ok">{t("已安装")}</span>
-											)
-										) : (
-											<span className="muted">{t("未安装")}</span>
-										)}
-									</td>
-									<td>
-										<div className="official-plugin-row__actions">
-											<a href={manifest.source} target="_blank" rel="noreferrer">
-												{t("源码")}
-											</a>
-											<button
-												type="button"
-												className="primary"
-												disabled={busy || hosts.length === 0}
-												title={hosts.length === 0 ? t("先添加一个插件主机") : undefined}
-												onClick={() => onChoose(plugin)}
-											>
-												{label}
-											</button>
-										</div>
-									</td>
-								</tr>
+								<Space size={8} wrap>
+									<a href={plugin.manifest.source} target="_blank" rel="noreferrer">
+										{t("源码")}
+									</a>
+									<Button
+										type="primary"
+										size="small"
+										disabled={busy || hosts.length === 0}
+										title={hosts.length === 0 ? t("先添加一个插件主机") : undefined}
+										onClick={() => onChoose(plugin)}
+									>
+										{label}
+									</Button>
+								</Space>
 							);
-						})}
-					</tbody>
-				</table>
-			</div>
+						},
+					},
+				]}
+			/>
 		</div>
 	);
 }

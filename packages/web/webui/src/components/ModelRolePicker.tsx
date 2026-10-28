@@ -1,12 +1,12 @@
-import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
+import { Button, Modal, Radio, Space, Tag, Typography } from "antd";
+import { useState } from "react";
 import { t } from "../i18n.ts";
 import type {
 	SentinelModelLibraryView,
 	SentinelModelRoleName,
 	SentinelTestResult,
 } from "../types.ts";
-import { CloseIcon } from "./icons.tsx";
+
 import {
 	FOLLOW_MAIN,
 	hostOf,
@@ -17,6 +17,8 @@ import {
 	testState,
 	UsageTags,
 } from "./model-ui.tsx";
+
+const { Text } = Typography;
 
 /**
  * A role only ever points at a library entry (or at 主模型); editing the model
@@ -41,107 +43,84 @@ export function ModelRolePicker({
 	const resolved = library.resolved[role];
 	const mainEntry = library.entries.find((entry) => entry.id === library.roles.main);
 
-	useEffect(() => {
-		const closeOnEscape = (event: KeyboardEvent) => {
-			if (event.key === "Escape") onClose();
-		};
-		document.addEventListener("keydown", closeOnEscape);
-		return () => document.removeEventListener("keydown", closeOnEscape);
-	}, [onClose]);
+	const options = [
+		...(role === "main"
+			? [
+					{
+						value: "",
+						title: t("未选择"),
+						detail: t("主模型未配置时，依赖它的角色也无法解析"),
+						entry: null,
+					},
+				]
+			: [
+					{
+						value: FOLLOW_MAIN,
+						title: t("跟随主模型"),
+						detail: mainEntry
+							? t("使用 {name} · {model}", { name: mainEntry.name, model: mainEntry.modelId })
+							: t("主模型尚未配置"),
+						entry: null,
+					},
+				]),
+		...library.entries.map((entry) => ({
+			value: entry.id,
+			title: `${entry.name} · ${entry.modelId}`,
+			detail: hostOf(entry.baseUrl),
+			entry,
+		})),
+	];
 
-	return createPortal(
-		<div className="cockpit-layer">
-			<button type="button" className="cockpit-scrim" aria-label={t("关闭")} onClick={onClose} />
-			<div
-				className="cockpit-dialog"
-				role="dialog"
-				aria-modal="true"
-				aria-label={t("更换{role}", { role: ROLE_LABELS[role] })}
+	return (
+		<Modal
+			open
+			width={640}
+			title={t("更换{role}", { role: ROLE_LABELS[role] })}
+			okText={t("应用")}
+			cancelText={t("取消")}
+			onOk={() => onApply(selected === "" ? null : selected)}
+			onCancel={onClose}
+			destroyOnHidden
+			className="rolepicker"
+		>
+			<Text type="secondary">{t("{hint} · 同一模型可被多个角色复用", { hint: ROLE_HINTS[role] })}</Text>
+			<Text type="secondary" className="rolepicker__current">
+				{t("当前：{target}", {
+					target: resolved ? `${resolved.entryName} · ${resolved.modelId}` : t("未绑定"),
+				})}
+			</Text>
+			<Radio.Group
+				className="rolepicker__options"
+				value={selected}
+				onChange={(event) => setSelected(String(event.target.value))}
 			>
-				<div className="cockpit-dialog__head">
-					<div>
-						<h3>{t("更换{role}", { role: ROLE_LABELS[role] })}</h3>
-						<p>{t("{hint} · 同一模型可被多个角色复用", { hint: ROLE_HINTS[role] })}</p>
-					</div>
-					<button type="button" className="cockpit-iconbtn" aria-label={t("关闭")} onClick={onClose}>
-						<CloseIcon />
-					</button>
-				</div>
-				<div className="cockpit-dialog__body">
-					<p className="cockpit-dialog__note">
-						{t("当前：{target}", {
-							target: resolved ? `${resolved.entryName} · ${resolved.modelId}` : t("未绑定"),
-						})}
-					</p>
-					{role === "main" ? (
-						<label className={`cockpit-option${selected === "" ? " is-selected" : ""}`}>
-							<input
-								type="radio"
-								name="cockpit-role-model"
-								checked={selected === ""}
-								onChange={() => setSelected("")}
-							/>
-							<span className="cockpit-option__main">
-								<b>{t("未选择")}</b>
-								<span>{t("主模型未配置时，依赖它的角色也无法解析")}</span>
-							</span>
-						</label>
-					) : (
-						<label className={`cockpit-option${selected === FOLLOW_MAIN ? " is-selected" : ""}`}>
-							<input
-								type="radio"
-								name="cockpit-role-model"
-								checked={selected === FOLLOW_MAIN}
-								onChange={() => setSelected(FOLLOW_MAIN)}
-							/>
-							<span className="cockpit-option__main">
-								<b>{t("跟随主模型")}</b>
-								<span>
-									{mainEntry
-										? t("使用 {name} · {model}", { name: mainEntry.name, model: mainEntry.modelId })
-										: t("主模型尚未配置")}
-								</span>
-							</span>
-						</label>
-					)}
-					{library.entries.map((entry) => (
-						<label
-							className={`cockpit-option${selected === entry.id ? " is-selected" : ""}`}
-							key={entry.id}
+				<Space orientation="vertical" size={8} style={{ width: "100%" }}>
+					{options.map((option) => (
+						<Radio
+							key={option.value || "none"}
+							value={option.value}
+							className={selected === option.value ? "rolepicker__option is-on" : "rolepicker__option"}
 						>
-							<input
-								type="radio"
-								name="cockpit-role-model"
-								checked={selected === entry.id}
-								onChange={() => setSelected(entry.id)}
-							/>
-							<span className="cockpit-option__main">
-								<b>
-									{entry.name} · {entry.modelId}
-								</b>
-								<span>{hostOf(entry.baseUrl)}</span>
-							</span>
-							<span className="cockpit-option__tags">
-								<UsageTags roles={entry.roles} />
-								<ModelStatusTag
-									state={testState(false, results[entry.id])}
-									detail={testDetail(results[entry.id])}
-								/>
-							</span>
-						</label>
+							<div className="rolepicker__option-text">
+								<Text strong>{option.title}</Text>
+								<Text type="secondary">{option.detail}</Text>
+							</div>
+							{option.entry ? (
+								<Space size={4} wrap className="rolepicker__tags">
+									<UsageTags roles={option.entry.roles} />
+									<ModelStatusTag
+										state={testState(false, results[option.entry.id])}
+										detail={testDetail(results[option.entry.id])}
+									/>
+								</Space>
+							) : null}
+						</Radio>
 					))}
-				</div>
-				<div className="cockpit-dialog__foot">
-					<span className="cockpit-hint">{t("更多模型在「模型库」中添加")}</span>
-					<button type="button" onClick={onClose}>
-						{t("取消")}
-					</button>
-					<button type="button" className="primary" onClick={() => onApply(selected === "" ? null : selected)}>
-						{t("应用")}
-					</button>
-				</div>
-			</div>
-		</div>,
-		document.body,
+				</Space>
+			</Radio.Group>
+			<Text type="secondary" className="rolepicker__hint">
+				{t("更多模型在「模型库」中添加")}
+			</Text>
+		</Modal>
 	);
 }

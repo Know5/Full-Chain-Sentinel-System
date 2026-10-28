@@ -46,7 +46,7 @@ test("renders the MCP section with one labelled row per switch", () => {
 	// The section explains what it governs, which is not the bash gate above it.
 	expect(html).toContain("bash 命令在任何模式下都由上面的模式决定");
 	expect(html).toContain("默认不纳入");
-	expect(html).toContain("gate-option");
+	expect(html).toContain("gatekeeper__options");
 	expect(html).toContain("同时判定 MCP 工具");
 	expect(html).toContain("包含插件工具");
 	// Two real checkboxes, not two more text fields.
@@ -56,11 +56,11 @@ test("renders the MCP section with one labelled row per switch", () => {
 test("the plugin switch follows the master switch", () => {
 	const off = render({ mcpTools: { enabled: false, includePlugins: true } });
 	expect(off).toContain("disabled");
-	// Off reads as inert, so the row says so instead of looking merely broken.
-	expect(off).toContain("is-off");
+	// Off reads as inert, so the plugin checkbox is rendered disabled.
+	expect(off).toContain("ant-checkbox-disabled");
 
 	const on = render({ mcpTools: { enabled: true, includePlugins: false } });
-	expect(on).not.toContain("is-off");
+	expect(on).not.toContain("ant-checkbox-disabled");
 });
 
 test("a config without the switches still renders them at their defaults", () => {

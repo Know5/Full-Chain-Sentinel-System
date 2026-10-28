@@ -1,3 +1,4 @@
+import { Tag } from "antd";
 import type {
 	SentinelModelEntryView,
 	SentinelModelRoleName,
@@ -80,23 +81,29 @@ export function testDetail(result: SentinelTestResult | null | undefined): strin
 	return result.detail ? `${result.message}\n${result.detail}` : result.message;
 }
 
+const TONE_COLORS: Record<ModelTestState["tone"], string> = {
+	ok: "green",
+	warn: "orange",
+	bad: "red",
+	idle: "default",
+};
+
 export function ModelStatusTag({ state, detail }: { state: ModelTestState; detail?: string }) {
 	return (
-		<span className={`cockpit-tag is-${state.tone}`} title={detail}>
-			<i className={`cockpit-dot is-${state.tone}`} />
+		<Tag color={TONE_COLORS[state.tone]} variant="filled" title={detail}>
 			{state.label}
-		</span>
+		</Tag>
 	);
 }
 
 export function UsageTags({ roles }: { roles: SentinelModelRoleName[] }) {
-	if (roles.length === 0) return <span className="cockpit-tag is-muted">{t("未使用")}</span>;
+	if (roles.length === 0) return <Tag variant="filled">{t("未使用")}</Tag>;
 	return (
 		<>
 			{roles.map((role) => (
-				<span className={`cockpit-tag${role === "main" ? " is-accent" : ""}`} key={role}>
+				<Tag color={role === "main" ? "blue" : undefined} variant="filled" key={role}>
 					{ROLE_LABELS[role]}
-				</span>
+				</Tag>
 			))}
 		</>
 	);

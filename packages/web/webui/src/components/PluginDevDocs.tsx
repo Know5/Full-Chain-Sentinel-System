@@ -1,8 +1,11 @@
+import { Button, Typography } from "antd";
 import { useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { t } from "../i18n.ts";
 import { PLUGIN_DEV_GUIDE } from "../plugin-dev-guide.ts";
+
+const { Text } = Typography;
 
 /**
  * The AI-ready developer guide, as the second tab of the plugin page.
@@ -36,16 +39,16 @@ export function PluginDevDocs() {
 	};
 
 	return (
-		<div className="plugin-dev-docs">
-			<div className="plugin-dev-bar">
-				<span className="hint">
+		<div className="plugindev">
+			<div className="plugindev__bar">
+				<Text type="secondary">
 					{t("整段复制给 AI，它会拿到契约、约束、可运行骨架和验收清单；写完后回到「已安装」上传 zip 安装。")}
-				</span>
-				<button type="button" className="primary" onClick={copy}>
+				</Text>
+				<Button type="primary" size="small" onClick={copy}>
 					{copied ? t("已复制") : t("复制全文")}
-				</button>
+				</Button>
 			</div>
-			<div className="plugin-dev-md">
+			<div className="plugindev__md">
 				<Markdown
 					remarkPlugins={[remarkGfm]}
 					components={{ a: (props) => <a {...props} target="_blank" rel="noreferrer" /> }}

@@ -1,3 +1,7 @@
+import { CheckCircleOutlined, DeleteOutlined, SaveOutlined } from "@ant-design/icons";
+import { ProTable } from "@ant-design/pro-components";
+import type { ProColumns } from "@ant-design/pro-components";
+import { Alert, Avatar, Button, Input, InputNumber, Popconfirm, Space, Switch, Tag, Typography } from "antd";
 import { useState } from "react";
 import { getLanguage, t } from "../i18n.ts";
 import type {
@@ -7,6 +11,8 @@ import type {
 	SentinelAssetPlatformView,
 	SentinelTestResult,
 } from "../types.ts";
+
+const { Text, Link } = Typography;
 
 /** Tool name the platform mounts, shown so the operator can match it in 权限. */
 const TOOL_NAMES: Record<SentinelAssetPlatform, string> = {
@@ -63,7 +69,7 @@ function fullWhen(at: number | null): string {
 
 /**
  * Which of the four states a platform is in. It is the single source for both
- * the row's rail and the sentence that explains the missing tool, so the badge
+ * the row's badge and the sentence that explains the missing tool, so the badge
  * and the explanation can never disagree.
  */
 export type AssetPlatformState = "mounted" | "disabled" | "unkeyed" | "unverified";
@@ -81,12 +87,12 @@ const STATE_LABELS: Record<AssetPlatformState, string> = {
 	unverified: t("验证失败"),
 };
 
-/** Row rail and badge tone per state. */
-const STATE_TONES: Record<AssetPlatformState, string> = {
-	mounted: "ok",
-	disabled: "off",
-	unkeyed: "off",
-	unverified: "bad",
+/** Badge tone per state. */
+const STATE_COLORS: Record<AssetPlatformState, string> = {
+	mounted: "green",
+	disabled: "default",
+	unkeyed: "default",
+	unverified: "red",
 };
 
 /** Why a platform contributes no tool, phrased for the operator. */
@@ -155,14 +161,9 @@ export function AssetPanel({
 	const [baseDrafts, setBaseDrafts] = useState<Record<string, string>>(() =>
 		Object.fromEntries(config.platforms.map((platform) => [platform.id, platform.baseUrl])),
 	);
-	const [limits, setLimits] = useState(String(config.sessionQueryLimit));
+	const [limits, setLimits] = useState(config.sessionQueryLimit);
 	const [testing, setTesting] = useState<string | null>(null);
 	const [results, setResults] = useState<Record<string, SentinelTestResult | null>>({});
-	const [open, setOpen] = useState<Record<string, boolean>>(() =>
-		Object.fromEntries(
-			config.platforms.filter((platform) => platformState(platform) === "unverified").map((platform) => [platform.id, true]),
-		),
-	);
 
 	const setDraft = (id: SentinelAssetPlatform, value: string): void => {
 		setDrafts((prev) => ({ ...prev, [id]: value }));
@@ -170,10 +171,6 @@ export function AssetPanel({
 
 	const setBaseDraft = (id: SentinelAssetPlatform, value: string): void => {
 		setBaseDrafts((prev) => ({ ...prev, [id]: value }));
-	};
-
-	const toggle = (id: SentinelAssetPlatform): void => {
-		setOpen((prev) => ({ ...prev, [id]: !prev[id] }));
 	};
 
 	const runTest = async (platform: SentinelAssetPlatformView): Promise<void> => {
@@ -189,237 +186,283 @@ export function AssetPanel({
 		}
 	};
 
+	const columns: ProColumns<SentinelAssetPlatformView>[] = [
+		{
+			title: t("平台"),
+			key: "platform",
+			width: 210,
+			render: (_, platform) => {
+				const state = platformState(platform);
+				return (
+					<Space size={8}>
+						<Avatar shape="square" size={30} className="assethub-mark">
+							{PLATFORM_MARKS[platform.id]}
+						</Avatar>
+						<div className="assethub-plat">
+							<Text strong>{platform.label}</Text>
+							<Text type="secondary">
+								{TOOL_NAMES[platform.id]}
+								{state === "mounted" ? "" : t(" · 未挂载")}
+							</Text>
+						</div>
+					</Space>
+				);
+			},
+		},
+		{
+			title: t("状态"),
+			key: "state",
+			width: 170,
+			render: (_, platform) => {
+				const state = platformState(platform);
+				return (
+					<Space size={8}>
+						<Tag color={STATE_COLORS[state]} variant="filled">
+							{STATE_LABELS[state]}
+						</Tag>
+						<Switch
+							size="small"
+							checked={platform.enabled}
+							disabled={busy}
+							aria-label={t("启用 {label}", { label: platform.label })}
+							onChange={(checked) =>
+								onSave(
+									platformSaveInput(
+										platform.id,
+										checked,
+										drafts[platform.id],
+										baseDrafts[platform.id] ?? platform.baseUrl,
+									),
+								)
+							}
+						/>
+					</Space>
+				);
+			},
+		},
+		{
+			title: t("API Key / BaseURL"),
+			key: "key",
+			width: 320,
+			render: (_, platform) => (
+				<div className="assethub-key">
+					<Input.Password
+						value={drafts[platform.id] ?? ""}
+						onChange={(event) => setDraft(platform.id, event.target.value)}
+						placeholder={platform.hasKey ? t("已保存，留空不改") : t("粘贴 API Key")}
+						spellCheck={false}
+						autoComplete="off"
+						aria-label={t("{label} 的 API Key", { label: platform.label })}
+					/>
+					<Input
+						value={baseDrafts[platform.id] ?? platform.baseUrl}
+						onChange={(event) => setBaseDraft(platform.id, event.target.value)}
+						placeholder={`BaseURL · ${OFFICIAL_BASE_URLS[platform.id]}`}
+						title={t("自定义 BaseURL（留空使用官方地址）")}
+						spellCheck={false}
+						autoComplete="off"
+						aria-label={t("{label} 的自定义 BaseURL", { label: platform.label })}
+					/>
+				</div>
+			),
+		},
+		{
+			title: t("额度"),
+			key: "quota",
+			width: 130,
+			ellipsis: { showTitle: true },
+			render: (_, platform) => <Text type="secondary">{platform.status.quota ?? "—"}</Text>,
+		},
+		{
+			title: t("最近调用"),
+			key: "at",
+			width: 160,
+			render: (_, platform) => (
+				<Text type="secondary" title={fullWhen(platform.status.at)}>
+					{formatWhen(platform.status.at)}
+					{platform.status.at === null ? "" : platform.status.ok ? t(" · 成功") : t(" · 失败")}
+				</Text>
+			),
+		},
+		{
+			title: t("操作"),
+			key: "actions",
+			width: 230,
+			render: (_, platform) => (
+				<Space size={4} wrap>
+					<Button
+						size="small"
+						type="link"
+						icon={<CheckCircleOutlined />}
+						loading={testing === platform.id}
+						disabled={!platform.hasKey && !(drafts[platform.id] ?? "").trim()}
+						onClick={() => void runTest(platform)}
+					>
+						{t("测试")}
+					</Button>
+					<Button
+						size="small"
+						type="link"
+						icon={<SaveOutlined />}
+						disabled={busy}
+						onClick={() =>
+							onSave(
+								platformSaveInput(
+									platform.id,
+									platform.enabled,
+									drafts[platform.id],
+									baseDrafts[platform.id] ?? platform.baseUrl,
+								),
+							)
+						}
+					>
+						{t("保存")}
+					</Button>
+					<Popconfirm
+						title={t("清除已保存的密钥")}
+						description={t("清除后该平台的工具不再挂载，直到重新填写并验证。")}
+						okText={t("清除")}
+						okButtonProps={{ danger: true }}
+						cancelText={t("取消")}
+						disabled={busy || !platform.hasKey}
+						onConfirm={() => {
+							setDraft(platform.id, "");
+							// The empty string is the explicit "delete the stored key".
+							onSave({
+								id: platform.id,
+								enabled: platform.enabled,
+								key: "",
+								baseUrl: baseDrafts[platform.id] ?? platform.baseUrl,
+							});
+						}}
+					>
+						<Button size="small" type="link" danger icon={<DeleteOutlined />} disabled={busy || !platform.hasKey}>
+							{t("清除")}
+						</Button>
+					</Popconfirm>
+				</Space>
+			),
+		},
+	];
+
 	return (
-		<div className="asset-page">
-			<div className="asset-notice">
-				<b>{t("外发提示")}</b>{" "}
-				{t(
+		<>
+			<Alert
+				type="warning"
+				showIcon
+				className="ui-page__alert"
+				title={t("外发提示")}
+				description={t(
 					"查询内容与 API Key 会发送到对应第三方平台（FOFA / 360 Quake / 奇安信 Hunter），查询前请确认目标在授权范围内。",
 				)}
-			</div>
-			<p className="ws-panel__hint">
-				{t("这里配置测绘平台；Agent 上报的资产与测试记录在侧栏「资产库」。")}
-			</p>
+			/>
+			<Text type="secondary">{t("这里配置测绘平台；Agent 上报的资产与测试记录在侧栏「资产库」。")}</Text>
 
-			<div className="asset-toolbar">
-				<div className="asset-toolbar__stats">
-					{t("已挂载")} <b>{config.usable}</b> / {config.platforms.length}{" "}
+			<div className="assethub-toolbar">
+				<Text>
+					{t("已挂载")} <Text strong>{config.usable}</Text> / {config.platforms.length}{" "}
 					{t("个平台 · 只有「已启用 + 已配置密钥 + 已验证通过」的平台才把工具挂给 Agent")}
-				</div>
-				<div className="asset-toolbar__spacer" />
-				<div className="asset-limit">
-					<span>{t("每会话上限")}</span>
-					<input
+				</Text>
+				<Space size={6}>
+					<Text type="secondary">{t("每会话上限")}</Text>
+					<InputNumber
+						min={0}
+						size="small"
+						style={{ width: 90 }}
 						value={limits}
-						inputMode="numeric"
-						onChange={(event) => setLimits(event.target.value.replace(/[^\d]/g, ""))}
-						placeholder="0"
-						spellCheck={false}
 						aria-label={t("每个会话的查询次数上限")}
+						onChange={(value) => setLimits(value ?? 0)}
 					/>
-					<span>{t("次 · 0 = 不限")}</span>
-					<button type="button" className="primary" disabled={busy} onClick={() => onSaveLimit(Number(limits) || 0)}>
+					<Text type="secondary">{t("次 · 0 = 不限")}</Text>
+					<Button size="small" type="primary" disabled={busy} onClick={() => onSaveLimit(limits)}>
 						{t("保存")}
-					</button>
-				</div>
+					</Button>
+				</Space>
 			</div>
 
-			<div className="asset-table">
-				<div className="asset-row asset-row--head">
-					<div>{t("平台")}</div>
-					<div>{t("状态")}</div>
-					<div>{t("API Key / BaseURL")}</div>
-					<div>{t("额度")}</div>
-					<div>{t("最近调用")}</div>
-					<div className="asset-ops">{t("操作")}</div>
-				</div>
-
-				{config.platforms.map((platform) => {
-					const state = platformState(platform);
-					const tone = STATE_TONES[state];
-					const result = results[platform.id];
-					const draft = drafts[platform.id] ?? "";
-					const baseDraft = baseDrafts[platform.id] ?? platform.baseUrl;
-					const isOpen = open[platform.id] === true;
-					const note = SYNTAX_NOTES[platform.id];
-					return (
-						<div className={`asset-group is-${tone}`} key={platform.id}>
-							<div className="asset-row">
-								<div className="asset-plat">
-									<button
-										type="button"
-										className={`asset-toggle${isOpen ? " open" : ""}`}
-										aria-expanded={isOpen}
-										aria-label={t("展开 {label} 的详情", { label: platform.label })}
-										onClick={() => toggle(platform.id)}
+			<ProTable<SentinelAssetPlatformView>
+				rowKey="id"
+				size="middle"
+				columns={columns}
+				dataSource={config.platforms}
+				search={false}
+				options={false}
+				pagination={false}
+				scroll={{ x: 1180 }}
+				expandable={{
+					defaultExpandedRowKeys: config.platforms
+						.filter((platform) => platformState(platform) === "unverified")
+						.map((platform) => platform.id),
+					expandedRowRender: (platform) => {
+						const state = platformState(platform);
+						const result = results[platform.id];
+						const baseDraft = baseDrafts[platform.id] ?? platform.baseUrl;
+						const note = SYNTAX_NOTES[platform.id];
+						return (
+							<div className="assethub-detail">
+								{result ? (
+									<Alert
+										type={result.ok ? "success" : "error"}
+										showIcon
+										title={result.message}
+										description={result.detail ? <pre className="assethub-detail__pre">{result.detail}</pre> : undefined}
 									/>
-									<span className="asset-mark">{PLATFORM_MARKS[platform.id]}</span>
-									<div className="asset-plat__text">
-										<div className="asset-plat__name">{platform.label}</div>
-										<div className="asset-plat__tool" title={TOOL_NAMES[platform.id]}>
-											{TOOL_NAMES[platform.id]}
-											{state === "mounted" ? "" : t(" · 未挂载")}
-										</div>
-									</div>
-								</div>
-
-								<div className="asset-state">
-									<span className={`asset-pill is-${tone}`}>{STATE_LABELS[state]}</span>
-									<label className="asset-switch" title={t("启用 {label}", { label: platform.label })}>
-										<input
-											type="checkbox"
-											checked={platform.enabled}
-											disabled={busy}
-											aria-label={t("启用 {label}", { label: platform.label })}
-											onChange={(event) => {
-												onSave(
-													platformSaveInput(
-														platform.id,
-														event.target.checked,
-														drafts[platform.id],
-														baseDrafts[platform.id] ?? platform.baseUrl,
-													),
-												);
-											}}
-										/>
-										<span />
-									</label>
-								</div>
-
-								<div className="asset-key">
-									<input
-										value={draft}
-										onChange={(event) => setDraft(platform.id, event.target.value)}
-										placeholder={platform.hasKey ? t("已保存，留空不改") : t("粘贴 API Key")}
-										type="password"
-										spellCheck={false}
-										autoComplete="off"
-										aria-label={t("{label} 的 API Key", { label: platform.label })}
-									/>
-									<input
-										className="asset-key__base"
-										value={baseDraft}
-										onChange={(event) => setBaseDraft(platform.id, event.target.value)}
-										placeholder={`BaseURL · ${OFFICIAL_BASE_URLS[platform.id]}`}
-										title={t("自定义 BaseURL（留空使用官方地址）")}
-										type="url"
-										spellCheck={false}
-										autoComplete="off"
-										aria-label={t("{label} 的自定义 BaseURL", { label: platform.label })}
-									/>
-								</div>
-
-								<div className="asset-cell" title={platform.status.quota ?? ""}>
-									{platform.status.quota ?? "—"}
-								</div>
-
-								<div className="asset-cell asset-cell--nowrap" title={fullWhen(platform.status.at)}>
-									{formatWhen(platform.status.at)}
-									{platform.status.at === null ? "" : platform.status.ok ? t(" · 成功") : t(" · 失败")}
-								</div>
-
-								<div className="asset-ops">
-									<button
-										type="button"
-										disabled={testing === platform.id || (!platform.hasKey && !draft.trim())}
-										onClick={() => void runTest(platform)}
-									>
-										{testing === platform.id ? t("验证中…") : t("测试")}
-									</button>
-									<button
-										type="button"
-										className="primary"
-										disabled={busy}
-										onClick={() =>
-											onSave(
-												platformSaveInput(
-													platform.id,
-													platform.enabled,
-													drafts[platform.id],
-													baseDrafts[platform.id] ?? platform.baseUrl,
-												),
-											)
-										}
-									>
-										{t("保存")}
-									</button>
-									<button
-										type="button"
-										className="quiet"
-										disabled={busy || !platform.hasKey}
-										onClick={() => {
-											setDraft(platform.id, "");
-											// The empty string is the explicit "delete the stored key".
-											onSave({
-												id: platform.id,
-												enabled: platform.enabled,
-												key: "",
-												baseUrl: baseDrafts[platform.id] ?? platform.baseUrl,
-											});
-										}}
-									>
-										{t("清除")}
-									</button>
-								</div>
-							</div>
-
-							<div className="asset-detail" hidden={!isOpen}>
+								) : null}
+								{platform.status.error ? (
+									<Alert type="error" showIcon title={t("上次错误")} description={platform.status.error} />
+								) : null}
 								<div>
-									{result ? (
-										<div className={`asset-result is-${result.ok ? "ok" : "bad"}`}>
-											{result.message}
-											{result.detail ? <pre>{result.detail}</pre> : null}
-										</div>
-									) : null}
-									{platform.status.error ? (
-										<>
-											<div className="asset-detail__title">{t("上次错误")}</div>
-											<div className="asset-error">{platform.status.error}</div>
-										</>
-									) : null}
-									<div className="asset-detail__title">{t("请求 BaseURL（保存后生效）")}</div>
-									<div className="asset-syntax">{baseDraft || OFFICIAL_BASE_URLS[platform.id]}</div>
-									<div className="asset-note">
+									<Text strong>{t("请求 BaseURL（保存后生效）")}</Text>
+									<Text code>{baseDraft || OFFICIAL_BASE_URLS[platform.id]}</Text>
+									<Text type="secondary" className="assethub-detail__note">
 										{t(
 											"留空即使用官方地址；也可填反向代理前缀（如 https://proxy.example/fofa），控制台会拼接各平台的 API 路径。保存后会重新验证，验证失败则工具不挂载。",
 										)}
-									</div>
-									<div className="asset-detail__title">{t("查询语法（给 Agent 用）")}</div>
-									<div className="asset-syntax">{SYNTAX_EXAMPLES[platform.id]}</div>
-									{note ? <div className="asset-note">{note}</div> : null}
+									</Text>
 								</div>
 								<div>
-									<div className="asset-detail__title">{t("挂载状态")}</div>
-									<div className="asset-note">
+									<Text strong>{t("查询语法（给 Agent 用）")}</Text>
+									<Text code>{SYNTAX_EXAMPLES[platform.id]}</Text>
+									{note ? (
+										<Text type="secondary" className="assethub-detail__note">
+											{note}
+										</Text>
+									) : null}
+								</div>
+								<div>
+									<Text strong>{t("挂载状态")}</Text>
+									<Text type="secondary" className="assethub-detail__note">
 										{t("{reason}。", { reason: mountReason(platform) })}{" "}
 										{state === "mounted"
 											? t("Agent 的工具列表里能看到 {tool}。", { tool: TOOL_NAMES[platform.id] })
 											: t("条件不满足的平台不挂载工具，Agent 看不到。")}
-									</div>
-									<div className="asset-detail__title">{t("申请地址")}</div>
-									<div className="asset-note">
-										<a href={KEY_PAGES[platform.id]} target="_blank" rel="noreferrer">
-											{KEY_PAGES[platform.id]}
-										</a>
-									</div>
-									<div className="asset-detail__title">{t("密钥存放")}</div>
-									<div className="asset-note">
+									</Text>
+								</div>
+								<div>
+									<Text strong>{t("申请地址")}</Text>
+									<Link href={KEY_PAGES[platform.id]} target="_blank" rel="noreferrer">
+										{KEY_PAGES[platform.id]}
+									</Link>
+								</div>
+								<div>
+									<Text strong>{t("密钥存放")}</Text>
+									<Text type="secondary" className="assethub-detail__note">
 										{t(
 											"只写入本机 assets.json（0600），前端不回显；查询由控制台直接发出，不进容器、不进 bash 审计，原始响应写入项目 evidence/asset/。配置自定义 BaseURL 后，密钥与查询内容会发送到该地址。",
 										)}
-									</div>
+									</Text>
 								</div>
 							</div>
-						</div>
-					);
-				})}
-			</div>
+						);
+					},
+				}}
+			/>
 
-			<p className="asset-footnote">
+			<Text type="secondary" className="assethub-footnote">
 				{t(
 					"保存时会自动验证一次，也可以点「测试」单独验证（验证结果会立即生效，并按需重建活动会话）。上限按「每个会话、三家合计」计算，子代理共用同一个额度；修改上限同样会重建会话，请先中止正在运行的会话。",
 				)}
-			</p>
-		</div>
+			</Text>
+		</>
 	);
 }

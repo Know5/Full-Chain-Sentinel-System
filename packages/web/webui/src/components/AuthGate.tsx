@@ -7,8 +7,9 @@
  * the right. The left panel carries the animated skyline backdrop (see
  * LoginBackdrop) with the brand mark over it.
  */
-import { type FormEvent, useState } from "react";
-
+import { GithubOutlined } from "@ant-design/icons";
+import { Alert, Button, Card, Checkbox, Form, Input, Typography } from "antd";
+import { useState } from "react";
 import {
 	CONSOLE_VERSION,
 	PROJECT_LICENSE,
@@ -17,9 +18,11 @@ import {
 	PROJECT_REPOSITORY,
 } from "../branding.ts";
 import { t } from "../i18n.ts";
-import { GitHubIcon, SentinelMark } from "./icons.tsx";
+import { SentinelMark } from "./icons.tsx";
 import { LanguageSwitch } from "./LanguageSwitch.tsx";
 import { LoginBackdrop } from "./LoginBackdrop.tsx";
+
+const { Title, Text, Link } = Typography;
 
 export function AuthGate({ mode, onDone }: { mode: "setup" | "login"; onDone: () => void }) {
 	const [username, setUsername] = useState("");
@@ -29,8 +32,7 @@ export function AuthGate({ mode, onDone }: { mode: "setup" | "login"; onDone: ()
 	const [error, setError] = useState("");
 	const [busy, setBusy] = useState(false);
 
-	const submit = async (event: FormEvent) => {
-		event.preventDefault();
+	const submit = async () => {
 		if (busy) return;
 		if (mode === "setup" && password !== confirm) {
 			setError(t("两次输入的密码不一致"));
@@ -71,71 +73,82 @@ export function AuthGate({ mode, onDone }: { mode: "setup" | "login"; onDone: ()
 				<div className="auth-tagline">{t("授权渗透测试工作台")}</div>
 			</div>
 			<div className="auth-panel">
-				<form className="auth-form" onSubmit={submit}>
-					<h1>{mode === "setup" ? t("创建管理员账号") : t("登录到工作台")}</h1>
-					<p className="auth-hint">
+				<Card className="auth-card" variant="borderless">
+					<Title level={3} className="auth-title">
+						{mode === "setup" ? t("创建管理员账号") : t("登录到工作台")}
+					</Title>
+					<Text type="secondary">
 						{mode === "setup" ? t("首次使用：设置管理员用户名与密码，之后用它登录。") : t("输入你的凭据以继续。")}
-					</p>
-					<label className="auth-field">
-						{t("用户名")}
-						<input
-							value={username}
-							autoComplete="username"
-							autoFocus
-							spellCheck={false}
-							onChange={(event) => setUsername(event.target.value)}
-						/>
-					</label>
-					<label className="auth-field">
-						{t("密码")}
-						<input
-							type="password"
-							value={password}
-							autoComplete={mode === "setup" ? "new-password" : "current-password"}
-							onChange={(event) => setPassword(event.target.value)}
-						/>
-					</label>
-					{mode === "setup" ? (
-						<label className="auth-field">
-							{t("确认密码")}
-							<input
-								type="password"
-								value={confirm}
-								autoComplete="new-password"
-								onChange={(event) => setConfirm(event.target.value)}
+					</Text>
+
+					<Form layout="vertical" className="auth-form" onFinish={() => void submit()} requiredMark={false}>
+						<Form.Item label={t("用户名")} required>
+							<Input
+								value={username}
+								autoComplete="username"
+								autoFocus
+								spellCheck={false}
+								onChange={(event) => setUsername(event.target.value)}
 							/>
-						</label>
-					) : null}
-					{mode === "login" ? (
-						<label className="auth-remember">
-							<input
-								type="checkbox"
-								checked={remember}
-								onChange={(event) => setRemember(event.target.checked)}
+						</Form.Item>
+						<Form.Item label={t("密码")} required>
+							<Input.Password
+								value={password}
+								autoComplete={mode === "setup" ? "new-password" : "current-password"}
+								onChange={(event) => setPassword(event.target.value)}
+								onPressEnter={() => {
+									if (mode === "login") void submit();
+								}}
 							/>
-							{t("记住登录 30 天")}
-						</label>
-					) : null}
-					{error ? <div className="auth-error">{error}</div> : null}
-					<button type="submit" className="auth-submit" disabled={busy || !username.trim() || !password}>
-						{busy ? t("请稍候…") : mode === "setup" ? t("创建并登录") : t("登录")}
-					</button>
+						</Form.Item>
+						{mode === "setup" ? (
+							<Form.Item label={t("确认密码")} required>
+								<Input.Password
+									value={confirm}
+									autoComplete="new-password"
+									onChange={(event) => setConfirm(event.target.value)}
+									onPressEnter={() => void submit()}
+								/>
+							</Form.Item>
+						) : (
+							<Form.Item>
+								<Checkbox checked={remember} onChange={(event) => setRemember(event.target.checked)}>
+									{t("记住登录 30 天")}
+								</Checkbox>
+							</Form.Item>
+						)}
+
+						{error ? <Alert type="error" showIcon title={error} className="ui-page__alert" /> : null}
+
+						<Button
+							type="primary"
+							htmlType="submit"
+							block
+							size="large"
+							loading={busy}
+							disabled={!username.trim() || !password}
+						>
+							{mode === "setup" ? t("创建并登录") : t("登录")}
+						</Button>
+					</Form>
+
 					<div className="auth-foot">
-						<span>
+						<Text type="secondary">
 							{PROJECT_NAME} · v{CONSOLE_VERSION}
-						</span>
+						</Text>
 						<span className="auth-foot__links">
-							<a href={PROJECT_REPOSITORY} target="_blank" rel="noreferrer">
-								<GitHubIcon size={11} />
-								GitHub
-							</a>
-							<a href={PROJECT_LICENSE_URL} target="_blank" rel="noreferrer">
+							<Link href={PROJECT_REPOSITORY} target="_blank" rel="noreferrer">
+								<GithubOutlined /> GitHub
+							</Link>
+							<Link href={PROJECT_LICENSE_URL} target="_blank" rel="noreferrer">
 								{PROJECT_LICENSE}
-							</a>
+							</Link>
 						</span>
-						<span className="auth-foot__note">{t("密码只以哈希存在本机")}</span>
+						<Text type="secondary" className="auth-foot__note">
+							{t("密码只以哈希存在本机")}
+						</Text>
 					</div>
-				</form>
+				</Card>
 			</div>
 		</div>
 	);

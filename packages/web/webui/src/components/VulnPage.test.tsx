@@ -1,12 +1,14 @@
 /**
- * Render smoke test for the vulnerability hub's new controls.
+ * Render smoke test for the vulnerability hub.
  *
- * The hub gained provenance filters (target, session, 工程/任务) and batch
- * deletion. What is pinned here: every control is present, the task dropdown
- * waits for an engine (it is meaningless without one), the list offers a checkbox
- * per row plus a select-all, the batch button stays disabled until something is
- * ticked, the confirmation dialog states what disappears with the records, and
- * neither the list nor the detail pane offers a one-click single delete any more.
+ * The hub is read-mostly: the list states what was submitted and how it was
+ * reviewed, and the detail pane is where the operator's decision is recorded.
+ * What is pinned here: the totals and severity counts, the row content, the
+ * review calibration chips, the active filters as removable chips, the delete
+ * confirmation's counts, and the detail pane's provenance and review opinion.
+ *
+ * Both the delete dialog and the detail drawer render inline (`getContainer`
+ * false), so a static render contains their content and this test can read it.
  */
 
 import { createElement } from "react";
@@ -15,11 +17,12 @@ import { expect, test } from "vitest";
 import type {
 	SentinelEngine,
 	SentinelVulnerability,
+	SentinelVulnFilters,
 	SentinelVulnStats,
 	SentinelVulnSummary,
 	SessionInfoView,
 } from "../types.ts";
-import { VulnDetail, VulnPage } from "./VulnPage.tsx";
+import { VulnDeleteBody, VulnDetailBody, VulnPage } from "./VulnPage.tsx";
 
 const stats: SentinelVulnStats = {
 	total: 2,
@@ -134,7 +137,7 @@ const sessions: SessionInfoView[] = [
 ];
 
 function renderPage(options: {
-	filters?: Record<string, string>;
+	filters?: SentinelVulnFilters;
 	deletePending?: string[] | null;
 	preview?: { count: number; evidence: number; notes: number } | null;
 	items?: SentinelVulnSummary[];
@@ -164,53 +167,69 @@ function renderPage(options: {
 	);
 }
 
-test("the hub offers target, session and 工程/任务 filters", () => {
+test("the page states the project, the totals and the severity breakdown", () => {
 	const html = renderPage();
-	expect(html).toContain("目标（主机 / URL / IP:port）");
-	// The empty option means "do not filter by this dimension"; it must not read as
-	// a cross-project scope on a project-isolated page.
-	expect(html).toContain("不限会话");
-	expect(html).toContain("不限工程");
-	expect(html).not.toContain("全部工程");
-	expect(html).toContain("10.0.0.5 侦察");
-	// Only the active project's engines are offered.
-	expect(html).toContain("内网打点");
+	expect(html).toContain("漏洞中枢");
+	expect(html).toContain("靶场");
+	expect(html).toContain("2 条");
+	expect(html).toContain("待确认 2");
+	// Severity counts are tags, status counts are one dim line.
+	expect(html).toContain("高危 2");
+	expect(html).toContain("误报 0");
+});
+
+test("the ledger shows the columns and the submitted content", () => {
+	const html = renderPage();
+	for (const title of ["编号", "等级", "状态", "目标", "标题", "来源", "提交时间", "操作"]) {
+		expect(html).toContain(title);
+	}
+	expect(html).toContain("E2E-0001");
+	expect(html).toContain("未授权访问");
+	expect(html).toContain("10.0.0.5");
+	expect(html).toContain("工程任务「内网打点」");
+	expect(html).toContain("7.5");
+});
+
+test("the review chip distinguishes queued, failed, dubious and done", () => {
+	const queued = renderPage({ items: [summary({ review: { state: "queued", at: 0 } })] });
+	expect(queued).toContain("…评");
+	// A queued or failed review leaves the level as the agent's own guess.
+	expect(queued).toContain("自评");
+
+	const failed = renderPage({ items: [summary({ review: { state: "failed", at: 0, error: "超时" } })] });
+	expect(failed).toContain("未评");
+
+	const dubious = renderPage({
+		items: [summary({ review: { state: "done", at: 0, verdict: "dubious", reason: "证据不足" } })],
+	});
+	expect(dubious).toContain("⚠存疑");
+
+	const done = renderPage({
+		items: [summary({ review: { state: "done", at: 0, verdict: "solid", reason: "可复现" } })],
+	});
+	expect(done).toContain("✓评");
+	expect(done).not.toContain("自评");
+});
+
+test("the active filters are shown as removable chips, without opening the panel", () => {
+	const html = renderPage({ filters: { engineId: "e1", severity: "high" } });
+	expect(html).toContain("工程：内网打点");
+	expect(html).toContain("等级：高危");
+	// The project-isolated page never offers another project's engines.
 	expect(html).not.toContain("别的工程");
-	// The task dropdown waits for an engine.
-	expect(html).toContain("先选工程");
-	expect(html).not.toContain("Web 面侦察");
-	expect(html).toContain("清空全部");
-	expect(html).toContain("完成");
-	// The conditions live in a panel that starts collapsed; the row itself shows one
-	// search box, the panel trigger and the 存疑 toggle.
-	expect(html).toContain("vuln-filter-panel hidden");
-	expect(html).toContain("筛选");
-	expect(html).not.toContain("vuln-chip-row");
 });
 
-test("picking an engine lists its tasks and shows the condition as a chip", () => {
-	const html = renderPage({ filters: { engineId: "e1" } });
-	expect(html).toContain("不限任务");
-	expect(html).toContain("Web 面侦察");
-	// The engine in force is visible without opening the panel, and counted on the
-	// trigger, so the operator can see and drop it in one click.
-	expect(html).toContain("vuln-chip-row");
-	expect(html).toContain("工程");
-	expect(html).toContain("内网打点");
-	expect(html).toContain('vuln-filter-count">1<');
-});
-
-test("without a project id no engine is offered, even when engines exist", () => {
+test("without a project the page says so instead of rendering an empty ledger", () => {
 	const html = renderToStaticMarkup(
 		createElement(VulnPage, {
-			items: [summary()],
+			items: [],
 			stats,
 			filters: {},
-			projectName: "靶场",
+			projectName: null,
 			projectId: null,
 			engines,
 			sessions,
-			hasProject: true,
+			hasProject: false,
 			deletePending: null,
 			deletePreview: null,
 			onFiltersChange: () => {},
@@ -224,44 +243,43 @@ test("without a project id no engine is offered, even when engines exist", () =>
 			onCancelDelete: () => {},
 		}),
 	);
-	// The row's 来源 text names an engine too, so check the dropdown itself.
-	const engineAt = html.indexOf("工程（只列本项目");
-	const engineSelect = html.slice(engineAt, html.indexOf("</select>", engineAt));
-	expect(engineSelect).toContain("不限工程");
-	expect(engineSelect).not.toContain("内网打点");
-	expect(engineSelect).not.toContain("别的工程");
+	expect(html).toContain("尚未选择项目");
+	expect(html).not.toContain("E2E-0001");
 });
 
-test("every row has a checkbox, plus a select-all in the header", () => {
-	const html = renderPage();
-	expect((html.match(/type="checkbox"/g) ?? []).length).toBe(3);
-	expect(html).toContain("全选筛选结果");
-	// Nothing is ticked yet, so the batch action is offered but disabled.
-	const labelAt = html.indexOf("删除选中 (0)");
-	const openAt = html.lastIndexOf("<button", labelAt);
-	expect(html.slice(openAt, html.indexOf(">", openAt))).toContain("disabled");
-	// There is no per-row delete any more.
-	expect(html).not.toContain("确认删除");
-});
-
-test("the confirmation states the counts and asks once", () => {
-	const html = renderPage({ deletePending: ["v1", "v2"], preview: { count: 2, evidence: 3, notes: 4 } });
-	expect(html).toContain("删除漏洞记录");
+test("the delete confirmation states what disappears with the records", () => {
+	const html = renderToStaticMarkup(
+		createElement(VulnDeleteBody, {
+			pending: ["v1", "v2"],
+			preview: { count: 2, evidence: 3, notes: 4 },
+		}),
+	);
 	expect(html).toContain("将删除 2 条漏洞记录。");
 	expect(html).toContain("3 条证据");
 	expect(html).toContain("4 条复核备注");
-	expect(html).toContain("确认删除");
 });
 
-test("the detail pane shows provenance names and no single delete", () => {
+test("each row offers a jump to its reporting session, disabled when the session is gone", () => {
+	const html = renderPage();
+	expect(html).toContain('aria-label="打开对应对话"');
+
+	const gone = renderPage({ items: [summary({ sessionId: "deleted", sessionName: "旧会话" })] });
+	expect(gone).toContain('aria-label="对应会话已删除"');
+
+	const legacy = renderPage({ items: [summary({ sessionId: undefined, sessionName: undefined })] });
+	expect(legacy).toContain("该漏洞没有关联会话");
+});
+
+test("the detail pane shows provenance, review opinion and the timeline", () => {
 	const vuln: SentinelVulnerability = {
 		...summary(),
 		packet: "GET / HTTP/1.1",
 		evidence: [],
-		notes: [],
+		notes: [{ at: "2026-01-02T00:00:00.000Z", author: "operator", text: "已确认可复现" }],
+		review: { state: "done", at: 0, verdict: "dubious", reason: "证据不足以支撑结论" },
 	};
 	const html = renderToStaticMarkup(
-		createElement(VulnDetail, {
+		createElement(VulnDetailBody, {
 			vuln,
 			preview: null,
 			provenance: { engine: "内网打点", task: "Web 面侦察", session: "10.0.0.5 侦察" },
@@ -274,19 +292,9 @@ test("the detail pane shows provenance names and no single delete", () => {
 	);
 	expect(html).toContain("内网打点 / Web 面侦察");
 	expect(html).toContain("10.0.0.5 侦察");
-	expect(html).not.toContain("删除");
-});
-
-test("each row offers a jump to its reporting session, and a deleted session disables it", () => {
-	const html = renderPage();
-	expect(html).toContain('title="打开对应对话"');
-	expect(html).toContain('aria-label="打开对应对话"');
-	expect(html).toContain("vuln-session-jump");
-
-	const gone = renderPage({ items: [summary({ sessionId: "deleted", sessionName: "旧会话" })] });
-	expect(gone).toContain('title="对应会话已删除"');
-	expect(gone).toMatch(/class="vuln-jump" disabled/);
-
-	const legacy = renderPage({ items: [summary({ sessionId: undefined, sessionName: undefined })] });
-	expect(legacy).toContain("该漏洞没有关联会话");
+	expect(html).toContain("评审意见");
+	expect(html).toContain("证据不足以支撑结论");
+	expect(html).toContain("已确认可复现");
+	expect(html).toContain("漏洞详情");
+	expect(html).toContain("原始数据包");
 });

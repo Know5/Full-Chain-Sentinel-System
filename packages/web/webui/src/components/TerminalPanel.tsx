@@ -17,10 +17,13 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import { useEffect, useRef, useState } from "react";
 import "@xterm/xterm/css/xterm.css";
+import { Alert, Button, Space, Typography } from "antd";
 import { t } from "../i18n.ts";
 import { subscribeTerminal } from "../terminal-bus.ts";
 import type { SentinelTerminalSession } from "../types.ts";
 import { Overlay } from "./Overlay.tsx";
+
+const { Text } = Typography;
 
 /** Terminal palette read from the console's own theme, so the panel is not foreign. */
 function terminalTheme(): { background: string; foreground: string; cursor: string; selectionBackground: string } {
@@ -160,31 +163,36 @@ export function TerminalPanel({
 			className="terminal-panel"
 			onClose={onClosePanel}
 			actions={
-				<span className="terminal-actions">
-					<button type="button" className="ghost small" disabled={!running} onClick={() => onClose(projectId)}>
+				<Space size={6}>
+					<Button size="small" disabled={!running} onClick={() => onClose(projectId)}>
 						{t("结束终端")}
-					</button>
-					<button type="button" className="ghost small" disabled={running} onClick={open}>
+					</Button>
+					<Button size="small" disabled={running} onClick={open}>
 						{phase === "exited" ? t("重开") : t("打开终端")}
-					</button>
-				</span>
+					</Button>
+				</Space>
 			}
 		>
 			<div className="terminal-shell">
 				<div ref={hostRef} className="terminal-host" />
 				{phase === "failed" ? (
-					<div className="terminal-notice">
-						<span>{error}</span>
-						<button type="button" className="ghost small" onClick={open}>
-							{t("重试")}
-						</button>
-					</div>
+					<Alert
+						type="error"
+						showIcon
+						className="terminal-notice"
+						title={error}
+						action={
+							<Button size="small" onClick={open}>
+								{t("重试")}
+							</Button>
+						}
+					/>
 				) : null}
-				<p className="terminal-hint">
+				<Text type="secondary" className="terminal-hint">
 					{t(
 						"这个终端直接敲在项目容器里，不过审批、不进会话记录。窗口大小在打开时确定，全屏程序（top 等）要退出重进才对齐；关掉面板不会结束里面的进程。",
 					)}
-				</p>
+				</Text>
 			</div>
 		</Overlay>
 	);

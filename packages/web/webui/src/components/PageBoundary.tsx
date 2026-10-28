@@ -10,8 +10,11 @@
  * promise still reaches the console, which is where it is useful.
  */
 
+import { Button, Card, Result, Space, Typography } from "antd";
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { t } from "../i18n.ts";
+
+const { Text } = Typography;
 
 export function PageErrorCard({
 	message,
@@ -23,27 +26,25 @@ export function PageErrorCard({
 	onHome?: () => void;
 }) {
 	return (
-		<div className="page-card page-error-card">
-			<div className="ws-panel__head">
-				<div className="ws-panel__title">{t("这个页面出错了")}</div>
-			</div>
-			<div className="ws-panel__body">
-				<p className="confirm-note">
-					{t("页面渲染时抛出了下面的错误。切到别的页面或点「重试」可以继续用；错误详情也会打印在浏览器控制台。")}
-				</p>
+		<Card size="small" className="page-error-card">
+			<Result
+				status="error"
+				title={t("这个页面出错了")}
+				subTitle={t(
+					"页面渲染时抛出了下面的错误。切到别的页面或点「重试」可以继续用；错误详情也会打印在浏览器控制台。",
+				)}
+				extra={
+					<Space size={8}>
+						<Button type="primary" onClick={onRetry}>
+							{t("重试")}
+						</Button>
+						{onHome ? <Button onClick={onHome}>{t("回到工作台")}</Button> : null}
+					</Space>
+				}
+			>
 				<pre className="page-error-card__detail">{message}</pre>
-				<div className="page-error-card__actions">
-					<button type="button" className="primary" onClick={onRetry}>
-						{t("重试")}
-					</button>
-					{onHome ? (
-						<button type="button" onClick={onHome}>
-							{t("回到工作台")}
-						</button>
-					) : null}
-				</div>
-			</div>
-		</div>
+			</Result>
+		</Card>
 	);
 }
 

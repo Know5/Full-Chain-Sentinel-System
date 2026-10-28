@@ -11,7 +11,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { expect, test } from "vitest";
 import { EMPTY_OPENVPN, EMPTY_WIREGUARD } from "../types.ts";
 import type { SentinelProjectInfo, SentinelProxy, SentinelProxyConfigView } from "../types.ts";
-import { ProjectProxyDialog, projectProxyChoice, projectProxyNode } from "./ProjectProxyDialog.tsx";
+import { ProjectProxyDialogBody, projectProxyChoice, projectProxyNode } from "./ProjectProxyDialog.tsx";
 
 function profile(overrides: Partial<SentinelProxy> = {}): SentinelProxy {
 	return {
@@ -60,7 +60,7 @@ function project(overrides: Partial<SentinelProjectInfo> = {}): SentinelProjectI
 
 function render(target: SentinelProjectInfo): string {
 	return renderToStaticMarkup(
-		createElement(ProjectProxyDialog, {
+		createElement(ProjectProxyDialogBody, {
 			project: target,
 			config: {
 				proxies: [profile(), subscription()],
@@ -91,13 +91,14 @@ test("a plain profile offers no node list", () => {
 	const html = render(project({ proxyId: "p1", proxyName: "机场" }));
 	// The profile is selected, and being an address it has nothing to expand.
 	expect(html).toContain("SOCKS5 1.2.3.4:1080");
-	expect(html).not.toContain("project-proxy-node");
+	expect(html).not.toContain("香港 01");
 });
 
 test("a pinned node is what the dialog starts from", () => {
 	const html = render(project({ proxyNode: "日本" }));
 	// The project starts on step one with its existing proxy profile selected.
-	expect(html).toContain('<label class="selected"><input type="radio" name="project-proxy" checked=""/><span class="env-network-label">机场订阅</span>');
+	expect(html).toContain("机场订阅");
+	expect(html).toContain("2 个节点，可以只给这个项目指定一个");
 });
 
 test("the stored choice round-trips through the helpers", () => {

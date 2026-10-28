@@ -29,7 +29,8 @@ test("a stutter notice folds under its own label", () => {
 		}),
 	);
 	expect(html).toContain("输出重复已中止");
-	expect(html).toContain("loop-guard-stutter");
+	expect(html).toContain("foldrow is-warn");
+	expect(html).toContain("ant-tag-red");
 	expect(html).toContain("【输出重复】");
 });
 
@@ -40,7 +41,8 @@ test("a repeated tool call folds under the reminder label", () => {
 		}),
 	);
 	expect(html).toContain("重复工具调用提醒");
-	expect(html).toContain("loop-guard-repeat");
+	expect(html).toContain("foldrow is-warn");
+	expect(html).toContain("ant-tag-orange");
 });
 
 test("an unknown custom message still renders nothing", () => {
@@ -79,7 +81,7 @@ function thinkingOnly(text: string): AgentMessageView {
 
 const LONG_THINKING = Array.from({ length: 9 }, (_, index) => `第 ${index + 1} 行推理`).join("\n");
 
-test("a thinking row's 查看全部 opens the shared viewer", () => {
+test("a thinking row opens the shared viewer from its fullscreen action", () => {
 	const html = renderToStaticMarkup(
 		createElement(MessageView, {
 			message: thinkingOnly(LONG_THINKING),
@@ -87,17 +89,20 @@ test("a thinking row's 查看全部 opens the shared viewer", () => {
 			onFullscreen: () => {},
 		}),
 	);
-	// React separates adjacent text nodes with comment markers in SSR output,
-	// so the count is matched loosely rather than as one literal string.
-	expect(html).toMatch(/还有[\s\S]*?行，点击查看全部/);
+	// The row is one collapsible line: time, 思考 tag and the first line.
+	expect(html).toContain("steprow");
+	expect(html).toContain("思考");
 	expect(html).toContain("在查看器中打开全部内容");
 });
 
-test("a thinking row without a viewer expands in place instead of doing nothing", () => {
+test("a thinking row without a viewer still expands in place", () => {
 	const html = renderToStaticMarkup(
 		createElement(MessageView, { message: thinkingOnly(LONG_THINKING), compact: true }),
 	);
-	expect(html).toContain("就地展开全部内容");
+	// The collapsible row itself is the expansion affordance; no dead button.
+	expect(html).toContain("ant-collapse");
+	expect(html).toContain("第 1 行推理");
+	expect(html).not.toContain("在查看器中打开全部内容");
 });
 
 test("a live tool card keeps the call time at the front", () => {
@@ -110,6 +115,6 @@ test("a live tool card keeps the call time at the front", () => {
 			output: "",
 		}),
 	);
-	expect(html).toContain('class="tool-time"');
+	expect(html).toContain('toolcard__time');
 	expect(html).toContain("20:31:50");
 });

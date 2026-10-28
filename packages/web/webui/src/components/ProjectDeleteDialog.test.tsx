@@ -56,7 +56,7 @@ test("both scopes are footer buttons, and both wait for the typed name", () => {
 	expect(html).toContain("取消");
 	// Disabled until the name matches: the actions are the choice, so neither may
 	// be reachable by a stray click.
-	const buttons = [...html.matchAll(/<button[^>]*>([^<]*)<\/button>/g)];
+	const buttons = [...html.matchAll(/<button[^>]*>(?:<span[^>]*>)?([^<]*)/g)];
 	const containerButton = buttons.find((match) => match[1] === "仅删除容器");
 	const dataButton = buttons.find((match) => match[1] === "删除项目数据");
 	expect(containerButton?.[0]).toContain("disabled");

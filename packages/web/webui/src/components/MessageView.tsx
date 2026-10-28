@@ -1,3 +1,5 @@
+import { ExpandOutlined } from "@ant-design/icons";
+import { Alert, Button, Collapse, Space, Tag, Typography } from "antd";
 import { useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -5,6 +7,8 @@ import { t } from "../i18n.ts";
 import { formatTokens, textFromContent } from "../transcript.ts";
 import type { AgentMessageView, ContentBlockView } from "../types.ts";
 import { ToolCard } from "./ToolCard.tsx";
+
+const { Text } = Typography;
 
 /** Markdown renderer for model output; raw HTML is never rendered. */
 export function MarkdownText({ text }: { text: string }) {
@@ -49,17 +53,21 @@ export function formatTime(timestamp?: number): string {
  */
 function OperatorEntry({ timestamp, children }: { timestamp?: number; children: React.ReactNode }) {
 	return (
-		<div className="log-op">
-			<span className="log-op-mark">&gt;</span>
-			<div className="log-op-body">
+		<div className="entry entry--operator">
+			<span className="entry__mark">&gt;</span>
+			<div className="entry__body">
 				{children}
-				{timestamp ? <span className="log-time">{formatTime(timestamp)}</span> : null}
+				{timestamp ? (
+					<Text type="secondary" className="entry__time">
+						{formatTime(timestamp)}
+					</Text>
+				) : null}
 			</div>
 		</div>
 	);
 }
 
-/** One agent entry: plain prose in the flow, with a quiet timestamp gutter. */
+/** One agent entry: plain prose in the flow, with a quiet role tag and timestamp. */
 export function AgentEntry({
 	subagent,
 	timestamp,
@@ -70,11 +78,19 @@ export function AgentEntry({
 	children: React.ReactNode;
 }) {
 	return (
-		<div className={`log-agent ${subagent ? "subagent" : ""}`}>
-			<span className="log-gutter">{subagent ? "SA" : "AI"}</span>
-			<div className="log-body">
+		<div className={subagent ? "entry entry--agent is-sub" : "entry entry--agent"}>
+			<span className="entry__gutter">
+				<Tag color={subagent ? "purple" : "blue"} variant="filled">
+					{subagent ? "SA" : "AI"}
+				</Tag>
+			</span>
+			<div className="entry__body">
 				{children}
-				{timestamp ? <span className="log-time">{formatTime(timestamp)}</span> : null}
+				{timestamp ? (
+					<Text type="secondary" className="entry__time">
+						{formatTime(timestamp)}
+					</Text>
+				) : null}
 			</div>
 		</div>
 	);
@@ -111,39 +127,47 @@ function hintForError(message: string): string {
  * full contract text for auditing.
  */
 function GoalMarker({ text, timestamp, elapsedMs }: { text: string; timestamp?: number; elapsedMs?: number }) {
-	if (text.startsWith("【持续目标已启动】")) {
-		const objective = /^目标（来自操作员）：(.+)$/m.exec(text)?.[1];
-		const limit = /自动续跑上限为 (\d+) 轮/.exec(text)?.[1];
-		return (
-			<details className="goal-start">
-				<summary>
-					<span className="goal-start__title">{t("持续目标已启动")}</span>
-					<span className="goal-start__sub">
-						{objective ? t("目标：{objective}", { objective }) : t("见合约")}
-						{limit ? t(" · 轮数上限 {limit}", { limit }) : ""}
-					</span>
-				</summary>
-				<pre className="goal-start__body">{text}</pre>
-			</details>
-		);
-	}
-	const round = /第 (\d+)\/(\d+) 轮/.exec(text);
+	const started = text.startsWith("【持续目标已启动】");
+	const objective = started ? /^目标（来自操作员）：(.+)$/m.exec(text)?.[1] : undefined;
+	const limit = started ? /自动续跑上限为 (\d+) 轮/.exec(text)?.[1] : undefined;
+	const round = started ? null : /第 (\d+)\/(\d+) 轮/.exec(text);
 	const iteration = round?.[1] ?? "?";
 	const roundLimit = round?.[2] ?? "?";
+
 	return (
-		<details className="goal-iter-badge">
-			<summary>
-				<span className="chip">
-					<b>{t("迭代")} {iteration}</b>
-					<span className="t">
-						{t("轮")} {iteration}/{roundLimit}
-						{elapsedMs !== undefined ? ` · ${formatDurationShort(elapsedMs)}` : ""}
-						{timestamp ? ` · ${formatTime(timestamp)}` : ""}
-					</span>
-				</span>
-			</summary>
-			<pre className="goal-iter-body">{text}</pre>
-		</details>
+		<Collapse
+			ghost
+			size="small"
+			className="goalmark"
+			items={[
+				{
+					key: "contract",
+					label: started ? (
+						<Space size={8} wrap>
+							<Tag color="blue" variant="filled">
+								{t("持续目标已启动")}
+							</Tag>
+							<Text type="secondary">
+								{objective ? t("目标：{objective}", { objective }) : t("见合约")}
+								{limit ? t(" · 轮数上限 {limit}", { limit }) : ""}
+							</Text>
+						</Space>
+					) : (
+						<Space size={8} wrap>
+							<Tag color="geekblue" variant="filled">
+								{t("迭代")} {iteration}
+							</Tag>
+							<Text type="secondary">
+								{t("轮")} {iteration}/{roundLimit}
+								{elapsedMs !== undefined ? ` · ${formatDurationShort(elapsedMs)}` : ""}
+								{timestamp ? ` · ${formatTime(timestamp)}` : ""}
+							</Text>
+						</Space>
+					),
+					children: <pre className="goalmark__body">{text}</pre>,
+				},
+			]}
+		/>
 	);
 }
 
@@ -182,45 +206,63 @@ function StepRow({
 	/** Title for the shared viewer; defaults to the generic tool-output label. */
 	viewerTitle?: string;
 }) {
-	const lines = output ? output.replace(/\n+$/, "").split("\n") : [];
-	const preview = lines.slice(0, 3).join("\n");
-	const rest = lines.length - Math.min(lines.length, 3);
-	// The preview is three lines; "查看全部" has to lead somewhere even when the
-	// host did not supply a viewer, otherwise the row offers a button that does
-	// nothing. Thinking rows used to hit exactly that: they never forwarded
-	// `onFullscreen`, so the click was swallowed.
-	const [expanded, setExpanded] = useState(false);
-	const showAll = () => {
-		if (onFullscreen) onFullscreen(viewerTitle, output);
-		else setExpanded(true);
-	};
+	const duration = durationMs ? (durationMs >= 1000 ? `${(durationMs / 1000).toFixed(1)}s` : `${durationMs}ms`) : "";
 	return (
-		<details className={isError ? "step-row step-err" : "step-row"}>
-			<summary>
-				<span className="step-time">{time ? formatTime(time) : ""}</span>
-				<span className={`step-tool ${tool}`}>{tool}</span>
-				<span className="step-arg">{argument || t("(无参数)")}</span>
-				{durationMs ? (
-					<span className="step-dur">{durationMs >= 1000 ? `${(durationMs / 1000).toFixed(1)}s` : `${durationMs}ms`}</span>
-				) : null}
-			</summary>
-			<div className="step-out">
-				<pre>{expanded ? lines.join("\n") : preview}</pre>
-				{rest > 0 && !expanded ? (
-					<button
-						type="button"
-						className="step-more"
-						title={onFullscreen ? t("在查看器中打开全部内容") : t("就地展开全部内容")}
-						onClick={(event) => {
-							event.preventDefault();
-							showAll();
-						}}
-					>
-						{t("… 还有 {rest} 行，点击查看全部", { rest })}
-					</button>
-				) : null}
-			</div>
-		</details>
+		<Collapse
+			ghost
+			size="small"
+			className={isError ? "steprow is-error" : "steprow"}
+			items={[
+				{
+					key: "output",
+					label: (
+						<Space size={8} className="steprow__label">
+							{time ? (
+								<Text type="secondary" className="steprow__time">
+									{formatTime(time)}
+								</Text>
+							) : null}
+							<Tag variant="filled" className="steprow__tool">
+								{tool}
+							</Tag>
+							<Text type="secondary" ellipsis className="steprow__arg">
+								{argument || t("(无参数)")}
+							</Text>
+							{duration ? (
+								<Text type="secondary" className="steprow__dur">
+									{duration}
+								</Text>
+							) : null}
+							{onFullscreen && output ? (
+								<Button
+									type="text"
+									size="small"
+									icon={<ExpandOutlined />}
+									aria-label={t("在查看器中打开全部内容")}
+									onClick={(event) => {
+										event.stopPropagation();
+										onFullscreen(viewerTitle, output);
+									}}
+								/>
+							) : null}
+						</Space>
+					),
+					children: <pre className="steprow__pre">{output || t("（无输出）")}</pre>,
+				},
+			]}
+		/>
+	);
+}
+
+/** One folded boundary row (summary, modeling note, loop guard). */
+function FoldRow({ label, warn, children }: { label: React.ReactNode; warn?: boolean; children: React.ReactNode }) {
+	return (
+		<Collapse
+			ghost
+			size="small"
+			className={warn ? "foldrow is-warn" : "foldrow"}
+			items={[{ key: "body", label, children, forceRender: true }]}
+		/>
 	);
 }
 
@@ -271,9 +313,9 @@ export function MessageView({
 				) : null}
 				{text ? <div className="log-op-text">{text}</div> : null}
 				{forkEntryId && onFork ? (
-					<button type="button" className="ghost small fork-button" onClick={() => onFork(forkEntryId)}>
+					<Button size="small" type="link" className="fork-button" onClick={() => onFork(forkEntryId)}>
 						{t("从此分叉")}
-					</button>
+					</Button>
 				) : null}
 			</OperatorEntry>
 		);
@@ -316,10 +358,9 @@ export function MessageView({
 							viewerTitle={t("思考过程")}
 						/>
 					) : (
-						<details className="thinking">
-							<summary>{t("思考过程")}</summary>
-							<pre>{thinkingText}</pre>
-						</details>
+						<FoldRow label={t("思考过程")}>
+							<pre className="foldrow__pre">{thinkingText}</pre>
+						</FoldRow>
 					)
 				) : null}
 				{text ? (
@@ -396,19 +437,22 @@ export function MessageView({
 		// context, and the transcript above the marker is what it replaced.
 		const before = message.role === "compactionSummary" && message.tokensBefore ? message.tokensBefore : 0;
 		return (
-			<details className="summary">
-				<summary>
-					{t("会话摘要（{kind}）", {
-						kind: message.role === "compactionSummary" ? t("压缩") : t("分支"),
-					})}
-					{before > 0 ? (
-						<span className="summary-meta">
-							{t(" · 压缩前 {tokens} tokens", { tokens: formatTokens(before) })}
-						</span>
-					) : null}
-				</summary>
-				<pre>{message.summary ?? ""}</pre>
-			</details>
+			<FoldRow
+				label={
+					<Space size={6}>
+						<Text type="secondary">
+							{t("会话摘要（{kind}）", {
+								kind: message.role === "compactionSummary" ? t("压缩") : t("分支"),
+							})}
+						</Text>
+						{before > 0 ? (
+							<Text type="secondary">{t(" · 压缩前 {tokens} tokens", { tokens: formatTokens(before) })}</Text>
+						) : null}
+					</Space>
+				}
+			>
+				<pre className="foldrow__pre">{message.summary ?? ""}</pre>
+			</FoldRow>
 		);
 	}
 
@@ -428,15 +472,19 @@ export function MessageView({
 			const text = textFromContent(message.content);
 			const stutter = text.startsWith("【输出重复】");
 			return (
-				<details className="summary loop-guard-row">
-					<summary>
-						<span className={stutter ? "loop-guard-stutter" : "loop-guard-repeat"}>
-							{stutter ? t("输出重复已中止") : t("重复工具调用提醒")}
-						</span>
-						{message.timestamp ? <span className="summary-meta"> · {formatTime(message.timestamp)}</span> : null}
-					</summary>
-					<pre>{text}</pre>
-				</details>
+				<FoldRow
+					warn
+					label={
+						<Space size={6}>
+							<Tag color={stutter ? "red" : "orange"} variant="filled">
+								{stutter ? t("输出重复已中止") : t("重复工具调用提醒")}
+							</Tag>
+							{message.timestamp ? <Text type="secondary">{formatTime(message.timestamp)}</Text> : null}
+						</Space>
+					}
+				>
+					<pre className="foldrow__pre">{text}</pre>
+				</FoldRow>
 			);
 		}
 		// Supervisor advice is a real intervention: unlike an internal marker it
@@ -444,13 +492,18 @@ export function MessageView({
 		if (message.customType === "zg-supervisor-advice") {
 			const text = textFromContent(message.content);
 			return (
-				<div className="supervisor-advice-row">
-					<div className="supervisor-advice-row__head">
-						<span>{t("监督建议已介入")}</span>
-						{message.timestamp ? <span>{formatTime(message.timestamp)}</span> : null}
-					</div>
-					<pre>{text}</pre>
-				</div>
+				<Alert
+					type="warning"
+					showIcon
+					className="supervisor-advice-row"
+					title={
+						<Space size={8}>
+							<Text strong>{t("监督建议已介入")}</Text>
+							{message.timestamp ? <Text type="secondary">{formatTime(message.timestamp)}</Text> : null}
+						</Space>
+					}
+					description={<pre className="foldrow__pre">{text}</pre>}
+				/>
 			);
 		}
 		// Business-modeling rows: the briefing the button injected and the line that
@@ -460,15 +513,18 @@ export function MessageView({
 			const text = textFromContent(message.content);
 			const closing = text.startsWith("【业务建模 · 结束】");
 			return (
-				<details className="summary modeling-row">
-					<summary>
-						<span className={closing ? "modeling-row__close" : "modeling-row__open"}>
-							{closing ? t("业务建模已结束") : t("业务建模已启动")}
-						</span>
-						{message.timestamp ? <span className="summary-meta"> · {formatTime(message.timestamp)}</span> : null}
-					</summary>
-					<pre>{text}</pre>
-				</details>
+				<FoldRow
+					label={
+						<Space size={6}>
+							<Tag color={closing ? "default" : "blue"} variant="filled">
+								{closing ? t("业务建模已结束") : t("业务建模已启动")}
+							</Tag>
+							{message.timestamp ? <Text type="secondary">{formatTime(message.timestamp)}</Text> : null}
+						</Space>
+					}
+				>
+					<pre className="foldrow__pre">{text}</pre>
+				</FoldRow>
 			);
 		}
 		// Attached-records rows: the catalog that rode the first message of a
@@ -479,19 +535,22 @@ export function MessageView({
 			const removed = text.startsWith("【业务建模 · 已移除");
 			const attached = text.match(/已带入 (\d+) 份/);
 			return (
-				<details className="summary modeling-row">
-					<summary>
-						<span className={removed ? "modeling-row__close" : "modeling-row__open"}>
-							{removed
-								? t("已移除带入的建模数据")
-								: attached
-									? t("已带入业务建模 {count} 份", { count: attached[1] })
-									: t("已带入业务建模数据")}
-						</span>
-						{message.timestamp ? <span className="summary-meta"> · {formatTime(message.timestamp)}</span> : null}
-					</summary>
-					<pre>{text}</pre>
-				</details>
+				<FoldRow
+					label={
+						<Space size={6}>
+							<Tag color={removed ? "default" : "geekblue"} variant="filled">
+								{removed
+									? t("已移除带入的建模数据")
+									: attached
+										? t("已带入业务建模 {count} 份", { count: attached[1] })
+										: t("已带入业务建模数据")}
+							</Tag>
+							{message.timestamp ? <Text type="secondary">{formatTime(message.timestamp)}</Text> : null}
+						</Space>
+					}
+				>
+					<pre className="foldrow__pre">{text}</pre>
+				</FoldRow>
 			);
 		}
 		return null;

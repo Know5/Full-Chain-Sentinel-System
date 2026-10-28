@@ -1,23 +1,26 @@
 /**
  * 工作台 → 监督: a read-only audit of every conversation that was armed.
  *
- * Option A (Ops Table): filters + KPI strip + dense table, with a detail
- * inspector pinned to the right edge. The live view belongs to the floating
- * window; this page never changes a running session.
+ * Filters + KPI strip + dense table, with a detail drawer opened from a row.
+ * The live view belongs to the floating window; this page never changes a
+ * running session.
  *
  * Two layout rules worth keeping:
- * - The detail opens as a modal over the table. The console already has that
- *   shell (Overlay), and the supervisor detail is three blocks of reading
- *   material — Episode, 建议, 日志 — that want the full width side by side
- *   rather than a 380px column.
+ * - The detail opens as a drawer over the table: the supervisor detail is three
+ *   blocks of reading material — Episode, 建议, 日志 — that want the full width
+ *   side by side rather than a 380px column.
  * - Filters apply the moment they change. The keyword box waits for Enter or
  *   查询, and the pager re-uses the filter that was applied — not the one
  *   half-typed in the box.
  */
 
+import { ReloadOutlined, SearchOutlined } from "@ant-design/icons";
+import { ProTable } from "@ant-design/pro-components";
+import type { ProColumns } from "@ant-design/pro-components";
+import { Alert, Badge, Button, Col, Descriptions, Drawer, Empty, Input, Row, Select, Space, Statistic, Tag, Typography } from "antd";
 import { useEffect, useState } from "react";
-import { Overlay } from "./Overlay.tsx";
 import { getLanguage, t } from "../i18n.ts";
+import { SUPERVISOR_STRATEGY_OPTIONS, supervisorStrategyLabel } from "../supervisor-strategy.ts";
 import type {
 	SentinelProjectInfo,
 	SentinelSupervisorAuditItem,
@@ -30,7 +33,9 @@ import type {
 	SentinelSupervisorProgress,
 	SentinelSupervisorStrategy,
 } from "../types.ts";
-import { SUPERVISOR_STRATEGY_OPTIONS, supervisorStrategyLabel } from "../supervisor-strategy.ts";
+import { Page } from "../ui/Page.tsx";
+
+const { Text } = Typography;
 
 const PHASE_LABELS: Record<string, string> = {
 	recon: t("侦察"),
@@ -69,6 +74,13 @@ const TRIGGER_LABELS: Record<string, string> = {
 	"error-streak": t("连续报错"),
 	manual: t("手动触发"),
 	settled: t("运行结算"),
+};
+
+const PROGRESS_COLORS: Record<string, string> = {
+	advancing: "green",
+	stalled: "orange",
+	looping: "red",
+	unknown: "default",
 };
 
 function timeLabel(at: number): string {
@@ -120,25 +132,12 @@ function formatTokens(value: number): string {
 	return String(value);
 }
 
-function statusClass(status: string): string {
-	if (status === "running") return "ok";
-	if (status === "waiting") return "warn";
-	if (status === "error") return "bad";
-	return "";
-}
-
-function progressClass(progress: string): string {
-	if (progress === "advancing") return "ok";
-	if (progress === "stalled") return "warn";
-	if (progress === "looping") return "bad";
-	return "";
-}
-
-/** How an advice ended up: sent, dropped by the operator, or still waiting. */
-function adviceStatusClass(status: string): string {
-	if (status === "sent") return "ok";
-	if (status === "ignored") return "";
-	return "warn";
+function statusBadge(status: string): "success" | "processing" | "warning" | "error" | "default" {
+	if (status === "running") return "processing";
+	if (status === "waiting") return "warning";
+	if (status === "error") return "error";
+	if (status === "stopped") return "default";
+	return "default";
 }
 
 /** The mode a session was armed with, including how an advice is delivered. */
@@ -147,107 +146,57 @@ function modeHint(item: { mode: SentinelSupervisorMode; delivery: string }): str
 	return item.delivery === "auto" ? t("介入模式：建议自动发送") : t("介入模式：建议需操作员确认后发送");
 }
 
-/**
- * How much of each column one page holds. A page is sized to fit the column
- * so the common case needs no scrolling at all; the column still scrolls when
- * one entry is unusually tall. An episode is the tallest entry (intent, a few
- * outcomes, what was ruled out, what is next), so it gets the smallest page;
- * a log line is one row, so it gets the largest.
- */
-const EPISODE_PAGE_SIZE = 3;
-const ADVICE_PAGE_SIZE = 3;
-const LOG_PAGE_SIZE = 20;
-
-function pageCount(total: number, size: number): number {
-	return Math.max(1, Math.ceil(total / size));
-}
-
-function pageItems<T>(items: T[], page: number, size: number): T[] {
-	const start = (page - 1) * size;
-	return items.slice(start, start + size);
-}
-
-/** The pager at the bottom of a column. Hidden when one page holds it all. */
-function ColumnPager({
-	page,
-	pages,
-	onChange,
-}: {
-	page: number;
-	pages: number;
-	onChange: (page: number) => void;
-}) {
-	if (pages <= 1) return null;
-	return (
-		<div className="sva-col-pager">
-			<button type="button" disabled={page <= 1} onClick={() => onChange(page - 1)} aria-label={t("上一页")}>
-				‹
-			</button>
-			<span>
-				{page} / {pages}
-			</span>
-			<button type="button" disabled={page >= pages} onClick={() => onChange(page + 1)} aria-label={t("下一页")}>
-				›
-			</button>
-		</div>
-	);
-}
-
 function EpisodeBlock({ episode }: { episode: SentinelSupervisorEpisode }) {
 	return (
 		<div className="sva-episode">
 			<div className="sva-episode-head">
-				<span className="sva-mono">{timeLabel(episode.at)}</span>
-				<span className={`sva-flag ${progressClass(episode.progress)}`}>{progressLabel(episode.progress)}</span>
-				<span className="sva-episode-phase">{phaseLabel(episode.phase)}</span>
-				{episode.error ? <span className="sva-flag bad">{t("失败")}</span> : null}
-				<span className="sva-episode-trigger" title={t("触发原因")}>
+				<Text type="secondary" className="sva-mono">
+					{timeLabel(episode.at)}
+				</Text>
+				<Tag color={PROGRESS_COLORS[episode.progress]} variant="filled">
+					{progressLabel(episode.progress)}
+				</Tag>
+				<Text type="secondary">{phaseLabel(episode.phase)}</Text>
+				{episode.error ? (
+					<Tag color="red" variant="filled">
+						{t("失败")}
+					</Tag>
+				) : null}
+				<Text type="secondary" title={t("触发原因")}>
 					{triggerLabel(episode.trigger)}
-				</span>
+				</Text>
 			</div>
-			<p>{episode.intent || episode.error || t("（无摘要）")}</p>
+			<Text>{episode.intent || episode.error || t("（无摘要）")}</Text>
 			{episode.outcomes.length > 0 ? (
-				<ul>
+				<ul className="sva-list">
 					{episode.outcomes.map((item, index) => (
 						<li key={index}>{item}</li>
 					))}
 				</ul>
 			) : null}
 			{episode.deadEnds.length > 0 ? (
-				<p className="sva-dead">{t("已排除：{items}", { items: episode.deadEnds.join("；") })}</p>
+				<Text type="secondary">{t("已排除：{items}", { items: episode.deadEnds.join("；") })}</Text>
 			) : null}
 			{episode.nextCandidates.length > 0 ? (
-				<p className="sva-next">{t("下一步：{items}", { items: episode.nextCandidates.join("；") })}</p>
+				<Text>{t("下一步：{items}", { items: episode.nextCandidates.join("；") })}</Text>
 			) : null}
 		</div>
 	);
 }
 
 function LogBlock({ logs }: { logs: SentinelSupervisorLog[] }) {
+	if (logs.length === 0) return <Text type="secondary">{t("暂无日志。")}</Text>;
 	return (
 		<div className="sva-log">
-			{logs.length === 0 ? <p className="sva-empty">{t("暂无日志。")}</p> : null}
 			{logs.map((log, index) => (
-				<div key={`${log.at}-${index}`} className={`sv-log__line ${log.kind === "error" ? "bad" : ""}`}>
-					<span>{timeLabel(log.at)}</span>
-					<span>{log.text}</span>
+				<div key={`${log.at}-${index}`} className={log.kind === "error" ? "sva-log__line is-bad" : "sva-log__line"}>
+					<Text type="secondary" className="sva-mono">
+						{timeLabel(log.at)}
+					</Text>
+					<Text>{log.text}</Text>
 				</div>
 			))}
 		</div>
-	);
-}
-
-function StatusCell({ item }: { item: SentinelSupervisorAuditItem }) {
-	return (
-		<span className="sva-status-cell">
-			<span className="sva-status">
-				<span className={`sva-dot ${statusClass(item.status)}`} />
-				{STATUS_LABELS[item.status] ?? item.status}
-			</span>
-			<span className="sva-status-mode" title={modeHint(item)}>
-				{MODE_LABELS[item.mode]}
-			</span>
-		</span>
 	);
 }
 
@@ -301,14 +250,8 @@ export function SupervisorAuditPage({
 	// The filter that is actually on screen. The pager re-uses it, so typing
 	// in the keyword box without pressing 查询 cannot change what page 2 shows.
 	const [applied, setApplied] = useState<FilterState>(EMPTY_FILTER);
-	// Each column pages on its own: the episode list, the advice and the log
-	// grow at very different rates, and one shared pager would drag all three.
-	const [episodePage, setEpisodePage] = useState(1);
-	const [advicePage, setAdvicePage] = useState(1);
-	const [logPage, setLogPage] = useState(1);
 
-	// The detail is a real dialog: Escape closes it. The backdrop click is
-	// handled by the console's own Overlay shell.
+	// The detail is a real drawer: Escape closes it.
 	useEffect(() => {
 		if (!detail) return;
 		const onKeyDown = (event: KeyboardEvent) => {
@@ -317,17 +260,6 @@ export function SupervisorAuditPage({
 		window.addEventListener("keydown", onKeyDown);
 		return () => window.removeEventListener("keydown", onKeyDown);
 	}, [detail, onBack]);
-
-	// A new session means a new set of columns: start every pager at the top.
-	useEffect(() => {
-		setEpisodePage(1);
-		setAdvicePage(1);
-		setLogPage(1);
-	}, [detail?.session.sessionId]);
-
-	const episodePages = pageCount(detail?.episodes.length ?? 0, EPISODE_PAGE_SIZE);
-	const advicePages = pageCount(detail?.advice.length ?? 0, ADVICE_PAGE_SIZE);
-	const logPages = pageCount(detail?.logs.length ?? 0, LOG_PAGE_SIZE);
 
 	const stats = page?.stats ?? {
 		total: 0,
@@ -370,365 +302,378 @@ export function SupervisorAuditPage({
 			applied.search.trim(),
 	);
 
-	return (
-		<div className="page-card sva-page supervisor-audit-page">
-			<div className="ws-panel__head">
-				<div className="ws-panel__title">
-					{t("监督")}
-					<span className="ws-panel__sub">
-						{t("全部对话的监督审计 · 只读")}
-						{page ? t(" · 共 {count} 个会话", { count: page.total }) : ""}
-					</span>
+	const columns: ProColumns<SentinelSupervisorAuditItem>[] = [
+		{
+			title: t("状态"),
+			key: "status",
+			width: 150,
+			render: (_, item) => (
+				<Space size={6} wrap>
+					<Badge status={statusBadge(item.status)} text={STATUS_LABELS[item.status] ?? item.status} />
+					<Tag variant="filled" title={modeHint(item)}>
+						{MODE_LABELS[item.mode]}
+					</Tag>
+				</Space>
+			),
+		},
+		{
+			title: t("会话 / 项目"),
+			key: "session",
+			ellipsis: true,
+			render: (_, item) => (
+				<div className="sva-session">
+					<Text strong ellipsis title={item.sessionName}>
+						{item.sessionName}
+					</Text>
+					<Text type="secondary">{item.projectName ?? "—"}</Text>
 				</div>
-				<button type="button" className="ghost" onClick={() => onQuery(toQuery(applied, page?.page ?? 1))}>
+			),
+		},
+		{
+			title: t("阶段"),
+			key: "phase",
+			width: 96,
+			render: (_, item) => phaseLabel(item.phase),
+		},
+		{
+			title: t("进度"),
+			key: "progress",
+			width: 96,
+			render: (_, item) => (
+				<Tag color={PROGRESS_COLORS[item.progress]} variant="filled">
+					{progressLabel(item.progress)}
+				</Tag>
+			),
+		},
+		{
+			title: t("策略"),
+			key: "strategy",
+			width: 170,
+			ellipsis: { showTitle: true },
+			render: (_, item) => (
+				<Tag variant="filled" title={strategyNames(item)}>
+					{strategyNames(item)}
+				</Tag>
+			),
+		},
+		{
+			title: t("调用 / Episode"),
+			key: "calls",
+			width: 130,
+			render: (_, item) => (
+				<Text type="secondary" className="sva-mono">
+					{item.callCount} / {item.episodeCount}
+				</Text>
+			),
+		},
+		{
+			title: t("建议"),
+			key: "advice",
+			width: 80,
+			render: (_, item) =>
+				item.adviceCount > 0 ? (
+					<Tag variant="filled" title={t("{count} 条监督建议", { count: item.adviceCount })}>
+						{item.adviceCount}
+					</Tag>
+				) : (
+					<Text type="secondary">—</Text>
+				),
+		},
+		{
+			title: "tokens",
+			key: "tokens",
+			width: 90,
+			render: (_, item) => (
+				<Text type="secondary" className="sva-mono">
+					{formatTokens(item.usage.total)}
+				</Text>
+			),
+		},
+		{
+			title: t("最近更新"),
+			key: "updatedAt",
+			width: 130,
+			render: (_, item) => <Text type="secondary">{timeLabel(item.updatedAt)}</Text>,
+		},
+	];
+
+	return (
+		<Page
+			title={t("监督")}
+			description={
+				<>
+					{t("全部对话的监督审计 · 只读")}
+					{page ? t(" · 共 {count} 个会话", { count: page.total }) : ""}
+				</>
+			}
+			extra={
+				<Button icon={<ReloadOutlined />} onClick={() => onQuery(toQuery(applied, page?.page ?? 1))}>
 					{t("刷新")}
-				</button>
+				</Button>
+			}
+		>
+			<div className="sva-summary">
+				<Statistic title={t("监督会话")} value={stats.total} />
+				<Statistic title={t("有进展")} value={stats.advancing} styles={{ content: { color: "#16a34a" } }} />
+				<Statistic title={t("停滞")} value={stats.stalled} styles={{ content: stats.stalled > 0 ? { color: "#d97706" } : undefined }} />
+				<Statistic title={t("循环")} value={stats.looping} styles={{ content: stats.looping > 0 ? { color: "#dc2626" } : undefined }} />
+				<Statistic title={t("已停止")} value={stats.stopped} />
+				<Statistic
+					title={t("待确认建议")}
+					value={stats.pendingAdvice}
+					styles={{ content: stats.pendingAdvice > 0 ? { color: "#d97706" } : undefined }}
+				/>
+				<Text type="secondary" className="sva-summary__note">
+					{t("进度与停止按每个会话的最新状态统计")}
+				</Text>
 			</div>
 
-			<div className="ws-panel__body sva-body">
-				<div className="sva-content">
-					<div className="gate-filters sva-filters">
-						<label>
-							{t("项目")}
-							<select
+			<ProTable<SentinelSupervisorAuditItem>
+				rowKey="sessionId"
+				size="middle"
+				columns={columns}
+				dataSource={page?.items ?? []}
+				loading={!page}
+				search={false}
+				scroll={{ x: 1080 }}
+				pagination={
+					page
+						? {
+								current: page.page,
+								pageSize: page.pageSize,
+								total: page.total,
+								showSizeChanger: false,
+								showTotal: (count) => t("共 {count} 个会话", { count }),
+								onChange: (next) => onQuery(toQuery(applied, next)),
+							}
+						: false
+				}
+				toolbar={{
+					title: (
+						<div className="sva-toolbar">
+							<Select
 								value={filter.projectId}
-								onChange={(event) => apply({ projectId: event.target.value })}
-							>
-								<option value="">{t("全部项目")}</option>
-								{projects.map((project) => (
-									<option value={project.id} key={project.id}>
-										{project.name}
-									</option>
-								))}
-							</select>
-						</label>
-						<label>
-							{t("模式")}
-							<select
+								style={{ width: 150 }}
+								onChange={(value) => apply({ projectId: value })}
+								options={[
+									{ value: "", label: t("全部项目") },
+									...projects.map((project) => ({ value: project.id, label: project.name })),
+								]}
+							/>
+							<Select
 								value={filter.mode}
-								onChange={(event) => apply({ mode: event.target.value as "" | SentinelSupervisorMode })}
-							>
-								<option value="">{t("全部模式")}</option>
-								<option value="observe">{t("观察")}</option>
-								<option value="intervene">{t("介入")}</option>
-							</select>
-						</label>
-						<label>
-							{t("进度")}
-							<select
+								style={{ width: 120 }}
+								onChange={(value) => apply({ mode: value as "" | SentinelSupervisorMode })}
+								options={[
+									{ value: "", label: t("全部模式") },
+									{ value: "observe", label: t("观察") },
+									{ value: "intervene", label: t("介入") },
+								]}
+							/>
+							<Select
 								value={filter.progress}
-								onChange={(event) => apply({ progress: event.target.value as "" | SentinelSupervisorProgress })}
-							>
-								<option value="">{t("全部进度")}</option>
-								<option value="advancing">{t("有进展")}</option>
-								<option value="stalled">{t("停滞")}</option>
-								<option value="looping">{t("循环")}</option>
-								<option value="unknown">{t("未判断")}</option>
-							</select>
-						</label>
-						<label>
-							{t("策略")}
-							<select
+								style={{ width: 120 }}
+								onChange={(value) => apply({ progress: value as "" | SentinelSupervisorProgress })}
+								options={[
+									{ value: "", label: t("全部进度") },
+									{ value: "advancing", label: t("有进展") },
+									{ value: "stalled", label: t("停滞") },
+									{ value: "looping", label: t("循环") },
+									{ value: "unknown", label: t("未判断") },
+								]}
+							/>
+							<Select
 								value={filter.strategy}
-								onChange={(event) => apply({ strategy: event.target.value as "" | SentinelSupervisorStrategy })}
-							>
-								<option value="">{t("全部预设")}</option>
-								{SUPERVISOR_STRATEGY_OPTIONS.map((option) => (
-									<option value={option.id} key={option.id}>
-										{option.label}
-									</option>
-								))}
-							</select>
-						</label>
-						{customStrategies.length > 0 ? (
-							<label>
-								{t("自定义")}
-								<select
+								style={{ width: 140 }}
+								onChange={(value) => apply({ strategy: value as "" | SentinelSupervisorStrategy })}
+								options={[
+									{ value: "", label: t("全部预设") },
+									...SUPERVISOR_STRATEGY_OPTIONS.map((option) => ({ value: option.id, label: option.label })),
+								]}
+							/>
+							{customStrategies.length > 0 ? (
+								<Select
 									value={filter.customStrategyId}
-									onChange={(event) => apply({ customStrategyId: event.target.value })}
-								>
-									<option value="">{t("全部")}</option>
-									{customStrategies.map((custom) => (
-										<option value={custom.id} key={custom.id}>
-											{custom.name}
-										</option>
-									))}
-								</select>
-							</label>
-						) : null}
-						<label className="sva-search">
-							{t("关键字")}
-							<input
+									style={{ width: 140 }}
+									onChange={(value) => apply({ customStrategyId: value })}
+									options={[
+										{ value: "", label: t("全部自定义") },
+										...customStrategies.map((custom) => ({ value: custom.id, label: custom.name })),
+									]}
+								/>
+							) : null}
+							<Input
+								allowClear
+								className="sva-search"
+								prefix={<SearchOutlined />}
 								placeholder={t("会话 / 项目 / 意图")}
 								value={filter.search}
 								spellCheck={false}
 								onChange={(event) => setFilter({ ...filter, search: event.target.value })}
-								onKeyDown={(event) => {
-									if (event.key === "Enter") apply({ search: filter.search });
-								}}
+								onPressEnter={() => apply({ search: filter.search })}
 							/>
-						</label>
-						<button type="button" onClick={() => apply({ search: filter.search })}>
-							{t("查询")}
-						</button>
-						{filtered ? (
-							<button type="button" className="ghost" onClick={clearFilters}>
-								{t("清空")}
-							</button>
-						) : null}
-					</div>
-
-					<div className="gate-summary sva-summary">
-						<span>
-							{t("监督会话")} <b>{stats.total}</b>
-						</span>
-						<span className="ok">
-							{t("有进展")} <b>{stats.advancing}</b>
-						</span>
-						<span className={stats.stalled > 0 ? "warn" : ""}>
-							{t("停滞")} <b>{stats.stalled}</b>
-						</span>
-						<span className={stats.looping > 0 ? "bad" : ""}>
-							{t("循环")} <b>{stats.looping}</b>
-						</span>
-						<span>
-							{t("已停止")} <b>{stats.stopped}</b>
-						</span>
-						<span className={stats.pendingAdvice > 0 ? "warn" : ""}>
-							{t("待确认建议")} <b>{stats.pendingAdvice}</b>
-						</span>
-						<span className="gate-summary__note">{t("进度与停止按每个会话的最新状态统计")}</span>
-					</div>
-
-					{!page ? (
-						<div className="ws-empty">
-							<span>{t("正在读取监督审计…")}</span>
+							<Button onClick={() => apply({ search: filter.search })}>{t("查询")}</Button>
+							{filtered ? (
+								<Button type="link" onClick={clearFilters}>
+									{t("清空")}
+								</Button>
+							) : null}
 						</div>
-					) : page.items.length === 0 ? (
-						<div className="ws-empty">
-							<span>{filtered ? t("没有符合条件的监督会话") : t("还没有开启过监督的会话")}</span>
-							<span>
-								{filtered
-									? t("清空筛选条件，或换个关键字再试一次。")
-									: t("开始对话前在输入框上方点「监督」，这里就会出现记录。")}
-							</span>
-						</div>
-					) : (
-						<>
-							<div className="sva-table-scroll">
-								<table className="sva-table">
-									<thead>
-										<tr>
-											<th title={t("监督状态与模式")}>{t("状态")}</th>
-											<th>{t("会话 / 项目")}</th>
-											<th title={t("监督模型判断的当前阶段")}>{t("阶段")}</th>
-											<th title={t("监督模型判断的进展")}>{t("进度")}</th>
-											<th>{t("策略")}</th>
-											<th title={t("工具调用次数 / 监督 Episode 数")}>{t("调用 / Episode")}</th>
-											<th title={t("监督建议条数")}>{t("建议")}</th>
-											<th title={t("监督模型消耗的 tokens")}>tokens</th>
-											<th>{t("最近更新")}</th>
-										</tr>
-									</thead>
-									<tbody>
-										{page.items.map((item) => (
-											<tr
-												key={item.sessionId}
-												className={detail?.session.sessionId === item.sessionId ? "selected" : ""}
-												tabIndex={0}
-												onClick={() => onSelect(item.sessionId)}
-												onKeyDown={(event) => {
-													if (event.key === "Enter" || event.key === " ") {
-														event.preventDefault();
-														onSelect(item.sessionId);
-													}
-												}}
-											>
-												<td>
-													<StatusCell item={item} />
-												</td>
-												<td>
-													<div className="sva-session">
-														<b title={item.sessionName}>{item.sessionName}</b>
-														<span title={item.projectName ?? undefined}>{item.projectName ?? "—"}</span>
-													</div>
-												</td>
-												<td>{phaseLabel(item.phase)}</td>
-												<td>
-													<span className={`sva-pill ${progressClass(item.progress)}`}>
-														{progressLabel(item.progress)}
-													</span>
-												</td>
-												<td>
-													<span className="sva-pill" title={strategyNames(item)}>
-														{strategyNames(item)}
-													</span>
-												</td>
-												<td className="sva-mono">
-													{item.callCount} / {item.episodeCount}
-												</td>
-												<td>
-													{item.adviceCount > 0 ? (
-														<span
-															className="sva-advice-count"
-															title={t("{count} 条监督建议", { count: item.adviceCount })}
-														>
-															{item.adviceCount}
-														</span>
-													) : (
-														<span className="sva-faint">—</span>
-													)}
-												</td>
-												<td className="sva-mono">{formatTokens(item.usage.total)}</td>
-												<td className="sva-time">{timeLabel(item.updatedAt)}</td>
-											</tr>
-										))}
-									</tbody>
-								</table>
-							</div>
-							<div className="sva-table-foot">
-								<span>{t("共 {count} 个会话", { count: page.total })}</span>
-								<div className="sva-pager">
-									<button
-										type="button"
-										disabled={page.page <= 1}
-										onClick={() => onQuery(toQuery(applied, page.page - 1))}
-									>
-										{t("上一页")}
-									</button>
-									<span>
-										{page.page} / {Math.max(1, Math.ceil(page.total / page.pageSize))}
-									</span>
-									<button
-										type="button"
-										disabled={page.page * page.pageSize >= page.total}
-										onClick={() => onQuery(toQuery(applied, page.page + 1))}
-									>
-										{t("下一页")}
-									</button>
-								</div>
-							</div>
-						</>
-					)}
-				</div>
+					),
+				}}
+				onRow={(record) => ({
+					onClick: (event) => {
+						const target = event.target as HTMLElement;
+						if (target.closest("button, a")) return;
+						onSelect(record.sessionId);
+					},
+					style: { cursor: "pointer" },
+				})}
+				locale={{
+					emptyText: (
+						<Empty
+							image={Empty.PRESENTED_IMAGE_SIMPLE}
+							description={
+								<>
+									<div>{filtered ? t("没有符合条件的监督会话") : t("还没有开启过监督的会话")}</div>
+									<div className="sva-empty-hint">
+										{filtered
+											? t("清空筛选条件，或换个关键字再试一次。")
+											: t("开始对话前在输入框上方点「监督」，这里就会出现记录。")}
+									</div>
+								</>
+							}
+						/>
+					),
+				}}
+			/>
 
-				{detail ? (
-					<Overlay
-						title={detail.session.sessionName}
-						className="sva-modal"
-						subtitle={`${detail.session.projectName ?? t("未选择项目")} · ${
+			{detail ? (
+				<Drawer
+					open
+					width={1040}
+					onClose={onBack}
+					destroyOnHidden
+					className="sva-drawer"
+					title={detail.session.sessionName}
+					extra={
+						detail.session.sessionPath ? (
+							<Button type="primary" onClick={() => onOpenSession(detail.session.sessionPath as string)}>
+								{t("打开会话")}
+							</Button>
+						) : null
+					}
+				>
+					<Text type="secondary">
+						{`${detail.session.projectName ?? t("未选择项目")} · ${
 							detail.session.mode === "observe"
 								? t("观察")
 								: t("介入 · {delivery}", {
 										delivery: detail.session.delivery === "auto" ? t("自动") : t("确认"),
 									})
 						} · ${strategyNames(detail.session)}`}
-						actions={
-							detail.session.sessionPath ? (
-								<button
-									type="button"
-									className="primary"
-									onClick={() => onOpenSession(detail.session.sessionPath!)}
-								>
-									{t("打开会话")}
-								</button>
-							) : null
-						}
-						onClose={onBack}
-					>
-						<div className="sva-meta-inline">
-							<span>
-								{t("阶段")} <b>{phaseLabel(detail.session.phase)}</b>
-							</span>
-							<span>
-								{t("进度")} <b>{progressLabel(detail.session.progress)}</b>
-							</span>
-							<span>
-								{t("工具调用")} <b>{detail.session.callCount}</b>
-							</span>
-							<span>
-								Episode <b>{detail.session.episodeCount}</b>
-							</span>
-							<span>
-								tokens <b>{formatTokens(detail.session.usage.total)}</b>
-							</span>
-							<span>
-								{t("模式")} <b>{MODE_LABELS[detail.session.mode]}</b>
-							</span>
-							<span>
-								{t("策略")} <b>{strategyNames(detail.session)}</b>
-							</span>
-						</div>
-						{strategyNotes(detail.session).map((note, index) => (
-							<p className="sva-note" key={`${note.name}-${index}`}>
-								{t("策略说明 · {name}：{instructions}", {
-									name: note.name,
-									instructions: note.instructions,
-								})}
-							</p>
-						))}
-						{detail.session.strategyNote ? (
-							<p className="sva-note">{t("补充：{note}", { note: detail.session.strategyNote })}</p>
-						) : null}
-						{detail.session.intent ? <p className="sva-intent">{detail.session.intent}</p> : null}
-						{detail.session.lastError ? (
-							<p className="sva-error">{t("最近错误：{error}", { error: detail.session.lastError })}</p>
-						) : null}
-						<div className="sva-modal-cols">
+					</Text>
+
+					<Descriptions
+						size="small"
+						column={3}
+						bordered
+						className="sva-desc"
+						items={[
+							{ key: "phase", label: t("阶段"), children: phaseLabel(detail.session.phase) },
+							{ key: "progress", label: t("进度"), children: progressLabel(detail.session.progress) },
+							{ key: "calls", label: t("工具调用"), children: detail.session.callCount },
+							{ key: "episodes", label: "Episode", children: detail.session.episodeCount },
+							{ key: "tokens", label: "tokens", children: formatTokens(detail.session.usage.total) },
+							{ key: "mode", label: t("模式"), children: MODE_LABELS[detail.session.mode] },
+						]}
+					/>
+
+					{strategyNotes(detail.session).map((note, index) => (
+						<Alert
+							key={`${note.name}-${index}`}
+							type="info"
+							showIcon
+							className="ui-page__alert"
+							title={t("策略说明 · {name}", { name: note.name })}
+							description={note.instructions}
+						/>
+					))}
+					{detail.session.strategyNote ? (
+						<Alert
+							type="info"
+							showIcon
+							className="ui-page__alert"
+							title={t("补充：{note}", { note: detail.session.strategyNote })}
+						/>
+					) : null}
+					{detail.session.intent ? <Text className="sva-intent">{detail.session.intent}</Text> : null}
+					{detail.session.lastError ? (
+						<Alert type="error" showIcon className="ui-page__alert" title={t("最近错误：{error}", { error: detail.session.lastError })} />
+					) : null}
+
+					<Row gutter={[16, 16]} className="sva-detail-cols">
+						<Col xs={24} lg={8}>
 							<div className="sva-section">
-								<h4>
-									Episode <span className="sva-count">{detail.episodes.length}</span>
-								</h4>
+								<Text strong>
+									Episode <Tag variant="filled">{detail.episodes.length}</Tag>
+								</Text>
 								<div className="sva-col-scroll">
-									{pageItems(detail.episodes, episodePage, EPISODE_PAGE_SIZE).map((episode) => (
-										<EpisodeBlock key={episode.id} episode={episode} />
-									))}
 									{detail.episodes.length === 0 ? (
-										<p className="sva-empty">{t("还没有 episode。")}</p>
-									) : null}
+										<Text type="secondary">{t("还没有 episode。")}</Text>
+									) : (
+										detail.episodes.map((episode) => <EpisodeBlock key={episode.id} episode={episode} />)
+									)}
 								</div>
-								<ColumnPager page={episodePage} pages={episodePages} onChange={setEpisodePage} />
 							</div>
+						</Col>
+						<Col xs={24} lg={8}>
 							<div className="sva-section">
-								<h4>
-									{t("建议")} <span className="sva-count">{detail.advice.length}</span>
-								</h4>
+								<Text strong>
+									{t("建议")} <Tag variant="filled">{detail.advice.length}</Tag>
+								</Text>
 								<div className="sva-col-scroll">
 									{detail.advice.length === 0 ? (
-										<p className="sva-empty">{t("这次监督没有给出建议。")}</p>
-									) : null}
-									{pageItems(detail.advice, advicePage, ADVICE_PAGE_SIZE).map((advice) => (
-										<div className={`sva-advice ${advice.status}`} key={advice.id}>
-											<div className="sva-advice-head">
-												<span className="sva-mono">{timeLabel(advice.at)}</span>
-												<span>{advice.delivery === "auto" ? t("自动") : t("确认")}</span>
-												<span className={`sva-advice-status sva-flag ${adviceStatusClass(advice.status)}`}>
-													{advice.status === "sent"
-														? t("已发送")
-														: advice.status === "ignored"
-															? t("已忽略")
-															: t("待确认")}
-												</span>
+										<Text type="secondary">{t("这次监督没有给出建议。")}</Text>
+									) : (
+										detail.advice.map((advice) => (
+											<div key={advice.id} className="sva-advice">
+												<div className="sva-advice-head">
+													<Text type="secondary" className="sva-mono">
+														{timeLabel(advice.at)}
+													</Text>
+													<Text type="secondary">{advice.delivery === "auto" ? t("自动") : t("确认")}</Text>
+													<Tag
+														color={advice.status === "sent" ? "green" : advice.status === "ignored" ? "default" : "orange"}
+														variant="filled"
+													>
+														{advice.status === "sent"
+															? t("已发送")
+															: advice.status === "ignored"
+																? t("已忽略")
+																: t("待确认")}
+													</Tag>
+												</div>
+												<pre className="sva-advice-text">{advice.text}</pre>
 											</div>
-											<pre>{advice.text}</pre>
-										</div>
-									))}
+										))
+									)}
 								</div>
-								<ColumnPager page={advicePage} pages={advicePages} onChange={setAdvicePage} />
 							</div>
+						</Col>
+						<Col xs={24} lg={8}>
 							<div className="sva-section">
-								<h4>
-									{t("日志")} <span className="sva-count">{detail.logs.length}</span>
-								</h4>
+								<Text strong>
+									{t("日志")} <Tag variant="filled">{detail.logs.length}</Tag>
+								</Text>
 								<div className="sva-col-scroll">
-									<LogBlock logs={pageItems(detail.logs, logPage, LOG_PAGE_SIZE)} />
+									<LogBlock logs={detail.logs} />
 								</div>
-								<ColumnPager page={logPage} pages={logPages} onChange={setLogPage} />
 							</div>
-						</div>
-					</Overlay>
-				) : null}
-			</div>
-		</div>
+						</Col>
+					</Row>
+				</Drawer>
+			) : null}
+		</Page>
 	);
 }

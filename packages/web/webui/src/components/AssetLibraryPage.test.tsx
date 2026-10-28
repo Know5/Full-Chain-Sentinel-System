@@ -1,8 +1,9 @@
 /**
  * Render smoke tests for the inventory page: the project empty state, the two
- * empty states, the paged table, the delete impact dialog, the detail timeline
- * and the vulnerable-without-finding warning. No browser is needed; the point
- * is a null dereference or a missing control failing here first.
+ * empty states, the paged ledger, the delete impact dialog, the detail timeline
+ * and the vulnerable-without-finding warning. The delete dialog and the detail
+ * drawer render through portals in the browser, so their content is exported as
+ * standalone bodies and rendered directly here.
  */
 
 import { renderToStaticMarkup } from "react-dom/server";
@@ -14,7 +15,7 @@ import type {
 	SentinelAssetSummary,
 	SentinelVulnSummary,
 } from "../types.ts";
-import { AssetLibraryPage } from "./AssetLibraryPage.tsx";
+import { AssetDeleteBody, AssetDetailBody, AssetLibraryPage } from "./AssetLibraryPage.tsx";
 
 const AT = "2026-10-26T10:00:00.000Z";
 
@@ -124,7 +125,7 @@ test("a project with no assets explains how they arrive", () => {
 	expect(html).toContain("asset_report");
 });
 
-test("the table renders the label, kind, state and test summary plus the pager", () => {
+test("the ledger renders the label, kind, state and test summary", () => {
 	const service = summary({
 		id: "a2",
 		label: "E2E-A0002",
@@ -151,17 +152,13 @@ test("the table renders the label, kind, state and test summary plus the pager",
 	expect(html).toContain("2 · 无发现");
 	expect(html).toContain("—");
 	expect(html).toContain("全选本页");
-	expect(html).toContain("下一页");
-	expect(html).toContain("每页 50");
+	// Server pagination: the total comes from the server, not the page length.
+	expect(html).toContain("共 51 条");
 });
 
 test("the delete dialog states assets, timeline entries and unlinked findings", () => {
 	const html = renderToStaticMarkup(
-		<AssetLibraryPage
-			{...base}
-			deletePending={["a1", "a2"]}
-			deletePreview={{ count: 2, records: 5, vulns: 1 }}
-		/>,
+		<AssetDeleteBody pending={["a1", "a2"]} preview={{ count: 2, records: 5, vulns: 1 }} />,
 	);
 	expect(html).toContain("将删除 2 条资产");
 	expect(html).toContain("5 条时间线记录");
@@ -169,20 +166,36 @@ test("the delete dialog states assets, timeline entries and unlinked findings", 
 });
 
 test("the detail renders both timeline kinds, linked findings and the warning", () => {
-	const vuln = { id: "v1", label: "E2E-0003", severity: "high", status: "pending", title: "注入" } as SentinelVulnSummary;
+	const vuln = {
+		id: "v1",
+		label: "E2E-0003",
+		severity: "high",
+		status: "pending",
+		title: "注入",
+	} as SentinelVulnSummary;
 	const withVuln = renderToStaticMarkup(
-		<AssetLibraryPage {...base} detail={detail({}, [vuln])} />,
+		<AssetDetailBody
+			detail={detail({}, [vuln])}
+			onClose={() => {}}
+			onUpdate={() => {}}
+			onRequestDelete={() => {}}
+			onOpenVuln={() => {}}
+		/>,
 	);
 	expect(withVuln).toContain("时间线");
 	expect(withVuln).toContain("仅 80/443 开放");
 	expect(withVuln).toContain("状态 待测试 → 已测试");
 	expect(withVuln).toContain("E2E-0003");
 	expect(withVuln).toContain("关联漏洞");
+	expect(withVuln).toContain("admin.example.com");
 
 	const orphan = renderToStaticMarkup(
-		<AssetLibraryPage
-			{...base}
+		<AssetDetailBody
 			detail={detail({ lastOutcome: "vulnerable", lastTestedAt: AT }, [])}
+			onClose={() => {}}
+			onUpdate={() => {}}
+			onRequestDelete={() => {}}
+			onOpenVuln={() => {}}
 		/>,
 	);
 	expect(orphan).toContain("没有关联的漏洞中枢记录");

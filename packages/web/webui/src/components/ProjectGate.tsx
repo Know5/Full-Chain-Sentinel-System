@@ -1,12 +1,17 @@
-import { useState } from "react";
-import { t } from "../i18n.ts";
-import type { SentinelProjectInfo } from "../types.ts";
-
 /**
  * Blocking onboarding shown while no project is selected. The console runs every
  * tool inside a project container, so there is deliberately no default directory
  * to chat from.
  */
+
+import { FolderOpenOutlined, PlusOutlined, SettingOutlined } from "@ant-design/icons";
+import { Alert, Button, Card, Input, List, Space, Typography } from "antd";
+import { useState } from "react";
+import { t } from "../i18n.ts";
+import type { SentinelProjectInfo } from "../types.ts";
+
+const { Title, Text } = Typography;
+
 export function ProjectGate({
 	projects,
 	busy,
@@ -37,66 +42,81 @@ export function ProjectGate({
 	};
 
 	return (
-		<div className="project-gate">
-			<div className="project-gate-card">
-				<h2>{t("先创建一个项目")}</h2>
-				<p className="project-gate-lead">
+		<div className="gate-page">
+			<Card className="gate-card" variant="borderless">
+				<Title level={3}>{t("先创建一个项目")}</Title>
+				<Text type="secondary" className="gate-lead">
 					{t(
 						"全链哨兵 的每条命令都在项目专属的 Docker 容器里执行，文件写入该项目的工作目录。没有项目就没有可执行的环境，因此不提供默认目录。",
 					)}
-				</p>
-				<div className="project-gate-form">
-					<input
+				</Text>
+
+				<Space.Compact className="gate-form">
+					<Input
 						autoFocus
 						value={name}
 						placeholder={t("项目名称，如 靶场-01")}
 						spellCheck={false}
 						disabled={submitting || busy}
 						onChange={(event) => setName(event.target.value)}
-						onKeyDown={(event) => {
-							if (event.key === "Enter" && name.trim()) void submit();
+						onPressEnter={() => {
+							if (name.trim()) void submit();
 						}}
 					/>
-					<button
-						type="button"
-						className="primary"
-						disabled={submitting || busy || !name.trim()}
+					<Button
+						type="primary"
+						icon={<PlusOutlined />}
+						loading={submitting || busy}
+						disabled={!name.trim()}
 						onClick={() => void submit()}
 					>
-						{submitting || busy ? t("创建中…") : t("创建并进入")}
-					</button>
-				</div>
-				{error ? <div className="project-gate-error">{error}</div> : null}
-				<div className="project-gate-note">
+						{t("创建并进入")}
+					</Button>
+				</Space.Compact>
+
+				{error ? <Alert type="error" showIcon title={error} className="ui-page__alert" /> : null}
+
+				<Text type="secondary" className="gate-note">
 					{t("需要先构建工具镜像（")}
-					<code>docker build -t sentinel:latest docker/</code>
+					<Text code>docker build -t sentinel:latest docker/</Text>
 					{t("），否则创建会失败。")}
-				</div>
+				</Text>
 
 				{projects.length > 0 ? (
-					<div className="project-gate-list">
-						<div className="project-gate-list-title">{t("或进入已有项目")}</div>
-						{projects.map((project) => (
-							<button
-								key={project.id}
-								type="button"
-								className="project-gate-item"
-								title={project.cwd}
-								disabled={busy}
-								onClick={() => onSwitch(project.id)}
-							>
-								<span className="project-badge sm">P</span>
-								<span className="project-name">{project.name}</span>
-								<span className="file-meta">{project.cwd}</span>
-							</button>
-						))}
+					<div className="gate-projects">
+						<Text strong>{t("或进入已有项目")}</Text>
+						<List
+							size="small"
+							dataSource={projects}
+							renderItem={(project) => (
+								<List.Item
+									actions={[
+										<Button
+											key="open"
+											size="small"
+											type="link"
+											icon={<FolderOpenOutlined />}
+											disabled={busy}
+											onClick={() => onSwitch(project.id)}
+										>
+											{t("进入")}
+										</Button>,
+									]}
+								>
+									<List.Item.Meta
+										title={project.name}
+										description={<Text code>{project.cwd}</Text>}
+									/>
+								</List.Item>
+							)}
+						/>
 					</div>
 				) : null}
 
-				<button type="button" className="ghost small" onClick={onOpenSettings}>
+				<Button type="link" icon={<SettingOutlined />} onClick={onOpenSettings} className="gate-settings">
 					{t("先去配置模型端点")}
-				</button>
-			</div>
+				</Button>
+			</Card>
 		</div>
 	);
 }

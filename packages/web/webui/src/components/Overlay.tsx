@@ -6,8 +6,10 @@
  * shell is the same panel pattern the pages use, only floating.
  */
 
+import { Button, Card, ConfigProvider, Space, Typography } from "antd";
 import { t } from "../i18n.ts";
-import { CloseIcon } from "./icons.tsx";
+
+const { Text } = Typography;
 
 export function Overlay({
 	title,
@@ -26,25 +28,30 @@ export function Overlay({
 	children: React.ReactNode;
 }) {
 	return (
-		<div className="modal-backdrop" onClick={onClose}>
-			<div
-				className={className ? `modal modal--wide ${className}` : "modal modal--wide"}
-				onClick={(event) => event.stopPropagation()}
-			>
-				<div className="ws-panel__head">
-					<div className="ws-panel__title">
-						{title}
-						{subtitle ? <span className="ws-panel__sub">{subtitle}</span> : null}
-					</div>
-					<div className="ws-panel__actions">
-						{actions}
-						<button type="button" className="ghost small" title={t("关闭")} onClick={onClose}>
-							<CloseIcon />
-						</button>
-					</div>
-				</div>
-				<div className="modal__body">{children}</div>
+		<ConfigProvider button={{ autoInsertSpace: false }}>
+			<div className="overlay-layer" role="dialog" aria-modal="true">
+				<div className="overlay-layer__scrim" onClick={onClose} />
+				<Card
+					size="small"
+					className={className ? `overlay ${className}` : "overlay"}
+					title={
+						<Space size={8} wrap>
+							<Text strong>{title}</Text>
+							{subtitle ? <Text type="secondary">{subtitle}</Text> : null}
+						</Space>
+					}
+					extra={
+						<Space size={6}>
+							{actions}
+							<Button size="small" onClick={onClose} title={t("关闭")}>
+								{t("关闭")}
+							</Button>
+						</Space>
+					}
+				>
+					<div className="overlay__body">{children}</div>
+				</Card>
 			</div>
-		</div>
+		</ConfigProvider>
 	);
 }

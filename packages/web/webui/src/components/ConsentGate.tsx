@@ -10,12 +10,14 @@
  * checkbox is ticked, and declining leaves the console closed. Acceptance is
  * recorded server-side, so this is a gate rather than a reminder.
  */
-import { type ReactNode, useEffect, useState } from "react";
-
+import { Alert, Button, Card, Checkbox, Result, Space, Spin, Tag, Typography } from "antd";
+import { useEffect, useState, type ReactNode } from "react";
 import { PROJECT_LICENSE, PROJECT_LICENSE_URL, PROJECT_REPOSITORY } from "../branding.ts";
 import { t } from "../i18n.ts";
-import { ExternalLinkIcon, SentinelMark } from "./icons.tsx";
+import { SentinelMark } from "./icons.tsx";
 import { LanguageSwitch } from "./LanguageSwitch.tsx";
+
+const { Title, Text, Link } = Typography;
 
 interface ConsentClause {
 	title: string;
@@ -98,15 +100,18 @@ export function ConsentGate({ onAccepted }: { onAccepted: () => void }) {
 	return (
 		<div className="consent">
 			<LanguageSwitch className="consent-language" />
-			<div className="consent-card">
+			<Card className="consent-card" variant="borderless">
 				{rejected ? (
-					<div className="consent-dead">
-						<h3>{t("已拒绝，无法进入平台")}</h3>
-						<p>{t("未勾选承诺时平台不提供任何功能。关闭页面即可；如果改变主意，可以重新阅读并接受。")}</p>
-						<button type="button" className="consent-reject" onClick={() => setRejected(false)}>
-							{t("重新阅读并接受")}
-						</button>
-					</div>
+					<Result
+						status="warning"
+						title={t("已拒绝，无法进入平台")}
+						subTitle={t("未勾选承诺时平台不提供任何功能。关闭页面即可；如果改变主意，可以重新阅读并接受。")}
+						extra={
+							<Button type="primary" onClick={() => setRejected(false)}>
+								{t("重新阅读并接受")}
+							</Button>
+						}
+					/>
 				) : (
 					<>
 						<div className="consent-head">
@@ -114,92 +119,109 @@ export function ConsentGate({ onAccepted }: { onAccepted: () => void }) {
 								<SentinelMark size={24} />
 							</span>
 							<div>
-								<h2>{text?.title ?? t("授权与风险承诺")}</h2>
-								<p>{text?.subtitle ?? t("首次使用前必须阅读并勾选承诺，否则无法进入平台")}</p>
+								<Title level={3} className="consent-title">
+									{text?.title ?? t("授权与风险承诺")}
+								</Title>
+								<Text type="secondary">
+									{text?.subtitle ?? t("首次使用前必须阅读并勾选承诺，否则无法进入平台")}
+								</Text>
 							</div>
 						</div>
+
 						<div className="consent-body">
 							{text ? (
 								<>
-									<p className="consent-lead">{emphasized(text.intro)}</p>
-									<div className="consent-terms">
-										<ol>
-											{text.clauses.map((clause, index) => (
-												<li key={clause.title}>
-													<div className="consent-clause-title">
-														<em>{String(index + 1).padStart(2, "0")}</em>
-														{clause.title}
-													</div>
-													<p>{emphasized(clause.body)}</p>
-												</li>
-											))}
-										</ol>
-									</div>
-									<div className="consent-illegal">
-										<span className="consent-bang">!</span>
-										<p>{emphasized(text.illegal)}</p>
-									</div>
-									<div className="consent-ai">
-										<div className="consent-ai-head">
-											<span className="consent-ai-tag">AI</span>
-											{text.aiTitle}
-										</div>
+									<Text className="consent-lead">{emphasized(text.intro)}</Text>
+									<ol className="consent-terms">
+										{text.clauses.map((clause, index) => (
+											<li key={clause.title}>
+												<Text strong className="consent-clause-title">
+													<Tag variant="filled">{String(index + 1).padStart(2, "0")}</Tag>
+													{clause.title}
+												</Text>
+												<Text>{emphasized(clause.body)}</Text>
+											</li>
+										))}
+									</ol>
+
+									<Alert type="warning" showIcon className="ui-page__alert" title={emphasized(text.illegal)} />
+
+									<Card
+										size="small"
+										className="consent-ai"
+										title={
+											<Space size={8}>
+												<Tag color="purple" variant="filled">
+													AI
+												</Tag>
+												{text.aiTitle}
+											</Space>
+										}
+									>
 										<ul>
 											{text.ai.map((line) => (
 												<li key={line}>{emphasized(line)}</li>
 											))}
 										</ul>
-									</div>
-									<p className="consent-note">{text.footnote}</p>
+									</Card>
+
+									<Text type="secondary" className="consent-note">
+										{text.footnote}
+									</Text>
 									{/* Presentation, not part of the hashed promise: adding this line must not
 									    invalidate an acceptance the operator already made. */}
-									<p className="consent-source">
+									<Text type="secondary" className="consent-source">
 										{t("本项目以 {license} 许可开源", { license: PROJECT_LICENSE })}
-										<span className="consent-source__sep">·</span>
-										<a href={PROJECT_REPOSITORY} target="_blank" rel="noreferrer">
+										{" · "}
+										<Link href={PROJECT_REPOSITORY} target="_blank" rel="noreferrer">
 											{t("查看源码与许可证")}
-											<ExternalLinkIcon size={10} />
-										</a>
-									</p>
+										</Link>
+										{" · "}
+										<Link href={PROJECT_LICENSE_URL} target="_blank" rel="noreferrer">
+											{PROJECT_LICENSE}
+										</Link>
+									</Text>
 								</>
 							) : (
-								<p className="consent-note">{error || t("正在读取承诺条款…")}</p>
+								<Space>
+									<Spin />
+									<Text type="secondary">{error || t("正在读取承诺条款…")}</Text>
+								</Space>
 							)}
-							{error && text ? <div className="consent-error">{error}</div> : null}
+							{error && text ? <Alert type="error" showIcon title={error} className="ui-page__alert" /> : null}
 						</div>
+
 						<div className="consent-foot">
-							<label className="consent-check">
-								<input type="checkbox" checked={checked} onChange={(event) => setChecked(event.target.checked)} />
-								<span className="consent-box">
-									<svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round">
-										<path d="M20 6 9 17l-5-5" />
-									</svg>
-								</span>
-								<span className="consent-label">
-									<b>{text?.promise ?? t("我承诺只用于授权合法的渗透测试")}</b>
-									<span className="consent-ack">{text?.ack ?? ""}</span>
-								</span>
-							</label>
-							<div className="consent-actions">
-								<button
-									type="button"
-									className="consent-enter"
+							<Checkbox checked={checked} onChange={(event) => setChecked(event.target.checked)}>
+								<Text strong>{text?.promise ?? t("我承诺只用于授权合法的渗透测试")}</Text>
+								{text?.ack ? (
+									<>
+										<br />
+										<Text type="secondary">{text.ack}</Text>
+									</>
+								) : null}
+							</Checkbox>
+							<Space className="consent-actions" size={8}>
+								<Button
+									type="primary"
+									size="large"
 									disabled={!checked || busy || !text}
+									loading={busy}
 									onClick={() => void accept()}
 								>
-									{busy ? t("正在记录…") : t("进入平台")}
-								</button>
-								<button type="button" className="consent-reject" onClick={() => setRejected(true)}>
+									{t("进入平台")}
+								</Button>
+								<Button size="large" onClick={() => setRejected(true)}>
 									{t("不同意，退出")}
-								</button>
-								<span className={checked ? "consent-hint ok" : "consent-hint"}>
-									{checked ? t("已确认，可以进入平台") : t("请先勾选承诺，否则无法进入平台")}
-								</span>
-							</div>
+								</Button>
+							</Space>
+							<Text type={checked ? "success" : "secondary"} className="consent-hint">
+								{checked ? t("已确认，可以进入平台") : t("请先勾选承诺，否则无法进入平台")}
+							</Text>
 						</div>
 					</>
 				)}
-			</div>
+			</Card>
 		</div>
 	);
 }

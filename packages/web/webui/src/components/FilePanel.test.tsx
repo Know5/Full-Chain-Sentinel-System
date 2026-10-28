@@ -46,7 +46,7 @@ test("both the current folder and each directory row offer a download", () => {
 	const html = renderToStaticMarkup(<FilePanel {...base} archive={null} />);
 	expect(html).toContain("下载当前文件夹");
 	// One row action for the directory, none for the file.
-	expect((html.match(/>下载<\/button>/g) ?? []).length).toBe(1);
+	expect((html.match(/>下载<\/span>/g) ?? []).length).toBe(1);
 });
 
 test("a running archive shows bytes and a cancel control", () => {

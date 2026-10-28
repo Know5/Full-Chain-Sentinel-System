@@ -11,11 +11,15 @@
  * dropdown would clip.
  */
 
-import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { Button, Checkbox, Space, Tag, Typography } from "antd";
+import { useState } from "react";
 import { t } from "../i18n.ts";
 import type { SentinelApiModelSummary, SentinelModelingState } from "../types.ts";
-import type { PresetMenuAnchor } from "./PresetMenu.tsx";
+import { PickerShell, type PickerAnchor } from "../ui/PickerShell.tsx";
+
+const { Text } = Typography;
+
+type PresetMenuAnchor = PickerAnchor;
 
 export function ModelingMenu(props: {
 	anchor: PresetMenuAnchor;
@@ -37,47 +41,21 @@ export function ModelingMenu(props: {
 	onClose(): void;
 }) {
 	const [view, setView] = useState<"actions" | "attach">("actions");
-	// Same dismiss contract as the preset picker: outside click or Escape. Toggling
-	// a checkbox keeps the menu open — the checklist is multi-select, and actions
-	// close the menu themselves.
-	const onClose = useRef(props.onClose);
-	useEffect(() => {
-		onClose.current = props.onClose;
-	});
-	const mountedAt = useRef(performance.now());
-	useEffect(() => {
-		const close = (event: MouseEvent) => {
-			if (event.timeStamp <= mountedAt.current) return;
-			onClose.current();
-		};
-		const onKeyDown = (event: KeyboardEvent) => {
-			if (event.key === "Escape") onClose.current();
-		};
-		window.addEventListener("click", close);
-		window.addEventListener("keydown", onKeyDown);
-		return () => {
-			window.removeEventListener("click", close);
-			window.removeEventListener("keydown", onKeyDown);
-		};
-	}, []);
-	return createPortal(
-		<div
-			className="preset-menu modeling-menu"
-			style={{
-				top: props.anchor.top,
-				bottom: props.anchor.bottom,
-				left: props.anchor.left,
-				maxHeight: props.anchor.maxHeight,
-			}}
-			onClick={(event) => event.stopPropagation()}
+	return (
+		<PickerShell
+			anchor={props.anchor}
+			title={t("业务建模")}
+			width={320}
+			className="modeling-menu"
+			onClose={props.onClose}
 		>
 			{view === "actions" ? (
 				<>
-					<div className="preset-menu-title">{t("业务建模")}</div>
 					{props.modeling ? (
-						<button
-							type="button"
-							className="preset-menu-item"
+						<Button
+							type="text"
+							block
+							className="pickmenu__action"
 							disabled={!props.canToggleRun}
 							title={
 								props.canToggleRun
@@ -89,18 +67,22 @@ export function ModelingMenu(props: {
 								props.onClose();
 							}}
 						>
-							<span className="preset-menu-name">{t("结束建模")}</span>
-							<span className="preset-menu-desc">
-								{props.modeling.title} · {t("{pathCount} 路径 / {operationCount} 操作", {
-									pathCount: props.modeling.pathCount,
-									operationCount: props.modeling.operationCount,
-								})}
+							<span className="pickmenu__item-text">
+								<Text strong>{t("结束建模")}</Text>
+								<Text type="secondary">
+									{props.modeling.title} ·{" "}
+									{t("{pathCount} 路径 / {operationCount} 操作", {
+										pathCount: props.modeling.pathCount,
+										operationCount: props.modeling.operationCount,
+									})}
+								</Text>
 							</span>
-						</button>
+						</Button>
 					) : (
-						<button
-							type="button"
-							className="preset-menu-item"
+						<Button
+							type="text"
+							block
+							className="pickmenu__action"
 							disabled={!props.canToggleRun}
 							title={
 								props.canToggleRun
@@ -112,13 +94,18 @@ export function ModelingMenu(props: {
 								props.onClose();
 							}}
 						>
-							<span className="preset-menu-name">{t("开始建模")}</span>
-							<span className="preset-menu-desc">{t("在本会话里还原接口与业务实体；在对话里直接要求也可以")}</span>
-						</button>
+							<span className="pickmenu__item-text">
+								<Text strong>{t("开始建模")}</Text>
+								<Text type="secondary">
+									{t("在本会话里还原接口与业务实体；在对话里直接要求也可以")}
+								</Text>
+							</span>
+						</Button>
 					)}
-					<button
-						type="button"
-						className="preset-menu-item"
+					<Button
+						type="text"
+						block
+						className="pickmenu__action"
 						disabled={!props.canAttach && props.attached.length === 0}
 						title={
 							props.attached.length > 0
@@ -129,79 +116,83 @@ export function ModelingMenu(props: {
 						}
 						onClick={() => setView("attach")}
 					>
-						<span className="preset-menu-name">
-							{t("关联建模数据")}
+						<Space size={6}>
+							<Text strong>{t("关联建模数据")}</Text>
 							{props.attached.length > 0 ? (
-								<span className="modeling-menu-count">
+								<Tag color="blue" variant="filled">
 									{t("{count} 份", { count: props.attached.length })}
-								</span>
+								</Tag>
 							) : null}
-						</span>
-						<span className="preset-menu-desc">
+						</Space>
+						<Text type="secondary" className="pickmenu__item-desc">
 							{props.attached.length > 0
 								? t("目录已注入，api_model_read 可读全文")
 								: props.canAttach
 									? t("把已有记录的接口目录带进这条新对话")
 									: t("仅新对话可用")}
-						</span>
-					</button>
+						</Text>
+					</Button>
 				</>
 			) : (
 				<>
-					<div className="modeling-menu-back">
-						<button type="button" className="modeling-menu-back__button" onClick={() => setView("actions")}>
+					<Space size={8} align="center">
+						<Button size="small" type="link" onClick={() => setView("actions")}>
 							‹ {t("返回")}
-						</button>
-						<span className="modeling-menu-back__title">{t("关联建模数据")}</span>
-					</div>
+						</Button>
+						<Text strong>{t("关联建模数据")}</Text>
+					</Space>
 					{props.attached.length > 0 ? (
 						<>
 							{props.attached.map((record) => (
-								<div key={record.id} className="preset-menu-item modeling-menu-static">
-									<span className="preset-menu-name">{record.title}</span>
-									<span className="preset-menu-desc">{t("目录已注入，api_model_read 可读全文")}</span>
+								<div key={record.id} className="pickmenu__item">
+									<div className="pickmenu__item-text">
+										<Text strong>{record.title}</Text>
+										<Text type="secondary">{t("目录已注入，api_model_read 可读全文")}</Text>
+									</div>
 								</div>
 							))}
-							<button type="button" className="modeling-menu-remove" onClick={props.onDetach}>
+							<Button danger size="small" block onClick={props.onDetach}>
 								{t("全部移除（摘除 api_model_read）")}
-							</button>
+							</Button>
 						</>
 					) : (
 						<>
 							{props.records.map((record) => (
-								<button
+								<div
 									key={record.id}
-									type="button"
-									className="preset-menu-item"
+									className="pickmenu__item pickmenu__item--row"
 									onClick={() => props.onToggle(record.id)}
 									title={t("{pathCount} 路径 / {operationCount} 操作", {
 										pathCount: record.pathCount,
 										operationCount: record.operationCount,
 									})}
 								>
-									<span className={`attach-check ${props.selected.includes(record.id) ? "on" : ""}`} />
-									<span className="preset-menu-name">{record.title}</span>
-									<span className="preset-menu-desc">
-										{t("{pathCount} 路径 · {operationCount} 操作 · {entityCount} 实体", {
-											pathCount: record.pathCount,
-											operationCount: record.operationCount,
-											entityCount: record.entityCount,
-										})}
-									</span>
-								</button>
+									<Checkbox checked={props.selected.includes(record.id)} />
+									<div className="pickmenu__item-text">
+										<Text strong>{record.title}</Text>
+										<Text type="secondary">
+											{t("{pathCount} 路径 · {operationCount} 操作 · {entityCount} 实体", {
+												pathCount: record.pathCount,
+												operationCount: record.operationCount,
+												entityCount: record.entityCount,
+											})}
+										</Text>
+									</div>
+								</div>
 							))}
 							{props.records.length === 0 ? (
-								<div className="preset-menu-hint">{t("这个项目还没有业务建模记录。先开始一次建模。")}</div>
+								<Text type="secondary" className="pickmenu__hint">
+									{t("这个项目还没有业务建模记录。先开始一次建模。")}
+								</Text>
 							) : (
-								<div className="preset-menu-hint">
+								<Text type="secondary" className="pickmenu__hint">
 									{t("勾选后随第一条消息把接口目录交给 Agent（细节它可用 api_model_read 自己查）；一条都不勾，就什么都不插入。发送后勾选自动清空。")}
-								</div>
+								</Text>
 							)}
 						</>
 					)}
 				</>
 			)}
-		</div>,
-		document.body,
+		</PickerShell>
 	);
 }

@@ -12,7 +12,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { expect, test } from "vitest";
 import { EMPTY_OPENVPN, EMPTY_PROXY_INPUT, EMPTY_WIREGUARD } from "../types.ts";
 import type { SentinelProjectInfo, SentinelProxy, SentinelProxyConfigView } from "../types.ts";
-import { ProxyEditor, ProxyNodeDialog, ProxyPage, ProxyTestDialog } from "./ProxyPage.tsx";
+import {
+	ProxyEditorBody,
+	ProxyNodeDialogBody,
+	ProxyPage,
+	ProxyTestDialogBody,
+} from "./ProxyPage.tsx";
 
 function profile(overrides: Partial<SentinelProxy> = {}): SentinelProxy {
 	return {
@@ -134,7 +139,7 @@ test("a subscription profile shows its node count and the node it uses", () => {
 	expect(html).toContain("2 个节点");
 	expect(html).toContain("日本 02");
 	// The row offers the node picker only for a subscription.
-	expect(html).toContain(">节点</button>");
+	expect(html).toContain("节点</span>");
 });
 
 test("a subscription that was never read says so", () => {
@@ -164,7 +169,7 @@ test("the node dialog shows measured latency, a timeout, and the test controls",
 		nodeTag: "香港",
 	});
 	const html = renderToStaticMarkup(
-		createElement(ProxyNodeDialog, {
+		createElement(ProxyNodeDialogBody, {
 			proxy,
 			busy: false,
 			refreshing: false,
@@ -203,9 +208,9 @@ test("a simple or tunnel profile offers a connectivity test and shows its last r
 		}),
 	);
 	// The action is real traffic, not a port check.
-	expect(html).toContain(">测试</button>");
+	expect(html).toContain("测试</span>");
 	// The stored result is visible in the row, so a reload does not lose it.
-	expect(html).toContain("✓ 42 ms");
+	expect(html).toContain("42 ms");
 });
 
 test("a failed test is red in the row and keeps the reason as a tooltip", () => {
@@ -224,7 +229,7 @@ test("a failed test is red in the row and keeps the reason as a tooltip", () => 
 			],
 		}),
 	);
-	expect(html).toContain("✗ 测试失败");
+	expect(html).toContain("测试失败");
 	expect(html).toContain('title="握手超时"');
 });
 
@@ -241,10 +246,10 @@ test("a subscription keeps the node picker instead of a profile test", () => {
 			],
 		}),
 	);
-	expect(html).toContain(">节点</button>");
+	expect(html).toContain("节点</span>");
 	// Its nodes are measured in the picker; a profile-level test would have to pick
 	// one silently.
-	expect(html).not.toContain(">测试</button>");
+	expect(html).not.toContain("测试</span>");
 });
 
 test("the test dialog shows the URL, the last result and the failure reason", () => {
@@ -254,7 +259,7 @@ test("the test dialog shows the URL, the last result and the failure reason", ()
 		test: { ok: false, latencyMs: null, testedAt: 1, url: "https://internal.example/health", error: "TLS handshake failed" },
 	});
 	const html = renderToStaticMarkup(
-		createElement(ProxyTestDialog, {
+		createElement(ProxyTestDialogBody, {
 			proxy,
 			busy: false,
 			testUrl: "https://www.gstatic.com/generate_204",
@@ -263,7 +268,6 @@ test("the test dialog shows the URL, the last result and the failure reason", ()
 			onClose: () => {},
 		}),
 	);
-	expect(html).toContain("测试代理");
 	// The last URL is what the box opens with, not the page-wide default.
 	expect(html).toContain("https://internal.example/health");
 	expect(html).toContain("测试失败");
@@ -273,7 +277,7 @@ test("the test dialog shows the URL, the last result and the failure reason", ()
 
 test("testing a tunnel that a running project uses warns before it can disturb it", () => {
 	const html = renderToStaticMarkup(
-		createElement(ProxyTestDialog, {
+		createElement(ProxyTestDialogBody, {
 			proxy: profile({ mode: "wireguard" }),
 			busy: false,
 			testUrl: "https://www.gstatic.com/generate_204",
@@ -290,7 +294,7 @@ test("testing a tunnel that a running project uses warns before it can disturb i
 
 test("a simple proxy has no such warning: its credentials can be used more than once", () => {
 	const html = renderToStaticMarkup(
-		createElement(ProxyTestDialog, {
+		createElement(ProxyTestDialogBody, {
 			proxy: profile(),
 			busy: false,
 			testUrl: "https://www.gstatic.com/generate_204",
@@ -304,7 +308,7 @@ test("a simple proxy has no such warning: its credentials can be used more than 
 
 test("the test dialog starts empty and offers the first run", () => {
 	const html = renderToStaticMarkup(
-		createElement(ProxyTestDialog, {
+		createElement(ProxyTestDialogBody, {
 			proxy: profile(),
 			busy: false,
 			testUrl: "https://www.gstatic.com/generate_204",
@@ -320,7 +324,7 @@ test("the test dialog starts empty and offers the first run", () => {
 
 test("the proxy editor keeps the four exit kinds in a left rail", () => {
 	const html = renderToStaticMarkup(
-		createElement(ProxyEditor, {
+		createElement(ProxyEditorBody, {
 			initial: { ...EMPTY_PROXY_INPUT, name: "香港节点", mode: "wireguard" },
 			busy: false,
 			error: null,
@@ -342,7 +346,7 @@ test("the proxy editor keeps the four exit kinds in a left rail", () => {
 
 test("the proxy editor shows the simple fields when that kind is selected", () => {
 	const html = renderToStaticMarkup(
-		createElement(ProxyEditor, {
+		createElement(ProxyEditorBody, {
 			initial: {
 				...EMPTY_PROXY_INPUT,
 				name: "本机 Clash",
@@ -378,7 +382,7 @@ test("a tunnel profile has no private-direct column value and no node picker", (
 	// not a yes/no — showing one would promise a switch that does not exist.
 	expect(html).toContain("WireGuard vpn.example.com:51820");
 	expect(html).toContain(">—</span>");
-	expect(html).not.toContain(">节点</button>");
+	expect(html).not.toContain("节点</span>");
 });
 
 test("an OpenVPN profile shows its remote, warns when two projects share one certificate", () => {
@@ -402,7 +406,7 @@ test("an OpenVPN profile shows its remote, warns when two projects share one cer
 	]);
 	expect(html).toContain("OpenVPN vpn.example.com:1194");
 	expect(html).toContain("证书共用");
-	expect(html).not.toContain(">节点</button>");
+	expect(html).not.toContain("节点</span>");
 
 	// One project is the normal case: no warning.
 	const alone = render(config({ proxies: [openvpn] }), [

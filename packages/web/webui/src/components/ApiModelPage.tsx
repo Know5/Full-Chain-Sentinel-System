@@ -15,12 +15,32 @@
  * Swagger UI has no notion of.
  */
 
+import { ReloadOutlined, SearchOutlined } from "@ant-design/icons";
+import { ProTable } from "@ant-design/pro-components";
+import type { ProColumns } from "@ant-design/pro-components";
+import { Alert, Button, Card, Empty, Input, Select, Space, Table, Tabs, Tag, Timeline, Typography } from "antd";
 import { useEffect, useMemo, useState } from "react";
 import swaggerUiCss from "swagger-ui-dist/swagger-ui.css?url";
 import swaggerUiBundle from "swagger-ui-dist/swagger-ui-bundle.js?url";
-import type { SentinelApiModel, SentinelApiModelEntity, SentinelApiModelEvent, SentinelApiModelStatus, SentinelApiModelSummary } from "../types.ts";
-import { SENTINEL_API_MODEL_STATUS_LABELS } from "../types.ts";
 import { t } from "../i18n.ts";
+import type {
+	SentinelApiModel,
+	SentinelApiModelEntity,
+	SentinelApiModelEvent,
+	SentinelApiModelStatus,
+	SentinelApiModelSummary,
+} from "../types.ts";
+import { SENTINEL_API_MODEL_STATUS_LABELS } from "../types.ts";
+import { Page } from "../ui/Page.tsx";
+
+const { Text } = Typography;
+
+const STATUS_COLORS: Record<SentinelApiModelStatus, string> = {
+	modeling: "blue",
+	done: "green",
+	manual: "default",
+	failed: "red",
+};
 
 const STATUS_FILTERS: { value: SentinelApiModelStatus | ""; label: string }[] = [
 	{ value: "", label: t("全部") },
@@ -88,48 +108,46 @@ function eventLabel(event: SentinelApiModelEvent): string {
 }
 
 function StatusChip({ status }: { status: SentinelApiModelStatus }) {
-	return <span className={`api-model-chip api-model-chip--${status}`}>{SENTINEL_API_MODEL_STATUS_LABELS[status]}</span>;
+	return (
+		<Tag color={STATUS_COLORS[status]} variant="filled">
+			{SENTINEL_API_MODEL_STATUS_LABELS[status]}
+		</Tag>
+	);
 }
 
 function EntityCard({ entity }: { entity: SentinelApiModelEntity }) {
 	return (
-		<div className="api-model-entity">
-			<div className="api-model-entity__head">
-				<strong>{entity.name}</strong>
-				{entity.description ? <span className="api-model-entity__desc">{entity.description}</span> : null}
-			</div>
+		<Card size="small" className="apimodel-entity" title={<Text strong>{entity.name}</Text>}>
+			{entity.description ? (
+				<Text type="secondary" className="apimodel-entity__desc">
+					{entity.description}
+				</Text>
+			) : null}
 			{entity.fields && entity.fields.length > 0 ? (
-				<table className="api-model-fields">
-					<thead>
-						<tr>
-							<th>{t("字段")}</th>
-							<th>{t("类型")}</th>
-							<th>{t("说明")}</th>
-						</tr>
-					</thead>
-					<tbody>
-						{entity.fields.map((field) => (
-							<tr key={field.name}>
-								<td>{field.name}</td>
-								<td>{field.type ?? "—"}</td>
-								<td>{field.description ?? ""}</td>
-							</tr>
-						))}
-					</tbody>
-				</table>
+				<Table
+					size="small"
+					rowKey="name"
+					pagination={false}
+					dataSource={entity.fields}
+					columns={[
+						{ title: t("字段"), dataIndex: "name", key: "name" },
+						{ title: t("类型"), dataIndex: "type", key: "type", render: (value: string | undefined) => value ?? "—" },
+						{ title: t("说明"), dataIndex: "description", key: "description", render: (value: string | undefined) => value ?? "" },
+					]}
+				/>
 			) : null}
 			{entity.relations && entity.relations.length > 0 ? (
-				<div className="api-model-relations">
+				<Space size={4} wrap className="apimodel-relations">
 					{entity.relations.map((relation) => (
-						<span key={`${relation.target}-${relation.kind ?? ""}`} className="api-model-relation">
+						<Tag key={`${relation.target}-${relation.kind ?? ""}`} variant="filled">
 							{relation.kind ? `${relation.kind} ` : ""}
 							{relation.target}
 							{relation.description ? `（${relation.description}）` : ""}
-						</span>
+						</Tag>
 					))}
-				</div>
+				</Space>
 			) : null}
-		</div>
+		</Card>
 	);
 }
 
@@ -181,14 +199,12 @@ export function ApiModelPage({
 
 	if (!hasProject) {
 		return (
-			<div className="page-card">
-				<div className="ws-panel__head">
-					<div className="ws-panel__title">{t("业务建模")}</div>
-				</div>
-				<div className="ws-panel__body">
-					<div className="ws-empty">{t("请先在侧栏顶部创建或选择一个项目：业务建模的成果按项目归档。")}</div>
-				</div>
-			</div>
+			<Page title={t("业务建模")} description={t("业务建模的成果按项目归档")}>
+				<Empty
+					image={Empty.PRESENTED_IMAGE_SIMPLE}
+					description={t("请先在侧栏顶部创建或选择一个项目")}
+				/>
+			</Page>
 		);
 	}
 
@@ -196,109 +212,105 @@ export function ApiModelPage({
 		// The drill-down does not scroll as a page: the pane the operator is on owns
 		// the scroll, so the document reads like any full-height API doc.
 		return (
-			<div className="page-card api-model-detail">
-				<div className="ws-panel__head">
-					<div className="ws-panel__title">
-						{t("业务建模")}
-						<span className="ws-panel__sub">{detail.title}</span>
-					</div>
-					<div className="ws-panel__actions">
-						<button type="button" className="ghost small" onClick={onClose}>
+			<Page
+				className="apimodel-detail"
+				title={t("业务建模")}
+				description={detail.title}
+				extra={
+					<Space>
+						<Button size="small" onClick={onClose}>
 							{t("返回列表")}
-						</button>
-						<button type="button" className="ghost small" onClick={() => onExport(detail.id, "json")}>
+						</Button>
+						<Button size="small" onClick={() => onExport(detail.id, "json")}>
 							{t("导出 JSON")}
-						</button>
-						<button type="button" className="ghost small" onClick={() => onExport(detail.id, "yaml")}>
+						</Button>
+						<Button size="small" onClick={() => onExport(detail.id, "yaml")}>
 							{t("导出 YAML")}
-						</button>
+						</Button>
 						{detail.status === "modeling" ? (
-							<button type="button" className="ghost small" onClick={() => onEnd(detail.id)}>
+							<Button size="small" onClick={() => onEnd(detail.id)}>
 								{t("标记已结束")}
-							</button>
+							</Button>
 						) : null}
-						<button
-							type="button"
-							className="ghost small danger"
+						<Button
+							size="small"
+							danger
 							onClick={() => {
 								onDelete(detail.id);
 								onClose();
 							}}
 						>
 							{t("删除")}
-						</button>
-					</div>
-				</div>
-				<div className="api-model-meta">
+						</Button>
+					</Space>
+				}
+			>
+				<div className="apimodel-meta">
 					<StatusChip status={detail.status} />
-					<span>
-						{t("目标")} <b>{detail.target || t("未记录目标")}</b>
-					</span>
-					<span>
-						{t("路径")} <b>{detail.pathCount}</b>
-					</span>
-					<span>
-						{t("操作")} <b>{detail.operationCount}</b>
-					</span>
-					<span>
-						{t("实体")} <b>{detail.entities.length}</b>
-					</span>
-					<span>
-						{t("提交")} <b>{detail.submissions}</b> {t("次")}
-					</span>
-					<span>{t("开始 {time}", { time: formatTime(detail.createdAt) })}</span>
-					<span>{t("更新 {time}", { time: formatTime(detail.updatedAt) })}</span>
+					<Text type="secondary">
+						{t("目标")} <Text strong>{detail.target || t("未记录目标")}</Text>
+					</Text>
+					<Text type="secondary">
+						{t("路径")} <Text strong>{detail.pathCount}</Text>
+					</Text>
+					<Text type="secondary">
+						{t("操作")} <Text strong>{detail.operationCount}</Text>
+					</Text>
+					<Text type="secondary">
+						{t("实体")} <Text strong>{detail.entities.length}</Text>
+					</Text>
+					<Text type="secondary">
+						{t("提交")} <Text strong>{detail.submissions}</Text> {t("次")}
+					</Text>
+					<Text type="secondary">{t("开始 {time}", { time: formatTime(detail.createdAt) })}</Text>
+					<Text type="secondary">{t("更新 {time}", { time: formatTime(detail.updatedAt) })}</Text>
 					{detail.sessionPath ? (
-						<button
-							type="button"
-							className="link-button"
-							onClick={() => onOpenSession(detail.sessionPath as string)}
-						>
+						<Button type="link" size="small" onClick={() => onOpenSession(detail.sessionPath as string)}>
 							{t("打开发起它的会话")}
-						</button>
+						</Button>
 					) : null}
-					{detail.error ? <span className="api-model-error">{detail.error}</span> : null}
 				</div>
-				<div className="api-model-tabs">
-					{DETAIL_PANES.map((entry) => {
-						const count =
-							entry.value === "entities"
-								? detail.entities.length
-								: entry.value === "timeline"
-									? events.length
-									: undefined;
-						return (
-							<button
-								key={entry.value}
-								type="button"
-								className={pane === entry.value ? "on" : ""}
-								onClick={() => setPane(entry.value)}
-							>
+				{detail.error ? (
+					<Alert type="error" showIcon className="ui-page__alert" title={detail.error} />
+				) : null}
+
+				<Tabs
+					activeKey={pane}
+					onChange={(key) => setPane(key as DetailPane)}
+					items={DETAIL_PANES.map((entry) => ({
+						key: entry.value,
+						label: (
+							<Space size={6}>
 								{entry.label}
-								{count !== undefined ? <span className="n">{count}</span> : null}
-							</button>
-						);
-					})}
-				</div>
-				<div className="api-model-stage">
-					<div className={`api-model-pane ${pane === "doc" ? "on" : ""}`}>
+								{entry.value === "entities" ? <Tag variant="filled">{detail.entities.length}</Tag> : null}
+								{entry.value === "timeline" ? <Tag variant="filled">{events.length}</Tag> : null}
+							</Space>
+						),
+					}))}
+				/>
+
+				<div className="apimodel-stage">
+					<div className={pane === "doc" ? "apimodel-pane is-active" : "apimodel-pane"}>
 						{detail.pathCount === 0 ? (
-							<div className="ws-empty">{t("文档里还没有接口：Agent 提交后这里就是 Swagger UI。")}</div>
+							<Empty
+								image={Empty.PRESENTED_IMAGE_SIMPLE}
+								description={t("文档里还没有接口：Agent 提交后这里就是 Swagger UI。")}
+							/>
 						) : (
 							<iframe
-								className="api-model-doc"
+								className="apimodel-doc"
 								title={`Swagger UI · ${detail.title}`}
 								sandbox="allow-scripts"
 								srcDoc={swaggerDocumentHtml(detail.openapi)}
 							/>
 						)}
 					</div>
-					<div className={`api-model-pane ${pane === "entities" ? "on" : ""}`}>
-						<div className="api-model-pane__pad">
+					<div className={pane === "entities" ? "apimodel-pane is-active" : "apimodel-pane"}>
+						<div className="apimodel-pane__pad">
 							{detail.entities.length === 0 ? (
-								<div className="ws-empty">{t("这次建模没有整理业务实体。")}</div>
+								<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t("这次建模没有整理业务实体。")} />
 							) : (
-								<div className="api-model-entities">
+								<div className="apimodel-entities">
 									{detail.entities.map((entity) => (
 										<EntityCard key={entity.name} entity={entity} />
 									))}
@@ -306,112 +318,161 @@ export function ApiModelPage({
 							)}
 						</div>
 					</div>
-					<div className={`api-model-pane ${pane === "timeline" ? "on" : ""}`}>
-						<div className="api-model-pane__pad">
-							<div className="api-model-timeline">
-								{events.map((event, index) => (
-									<div key={`${event.at}-${index}`} className="api-model-event">
-										<span className="api-model-event__time">{formatTime(event.at)}</span>
-										<span className="api-model-event__kind">{eventLabel(event)}</span>
-										<span className="api-model-event__note">{event.note ?? ""}</span>
-									</div>
-								))}
-							</div>
+					<div className={pane === "timeline" ? "apimodel-pane is-active" : "apimodel-pane"}>
+						<div className="apimodel-pane__pad">
+							<Timeline
+								items={events.map((event, index) => ({
+									key: `${event.at}-${index}`,
+									children: (
+										<div className="apimodel-event">
+											<Text type="secondary" className="apimodel-event__time">
+												{formatTime(event.at)}
+											</Text>
+											<Text strong>{eventLabel(event)}</Text>
+											{event.note ? <Text type="secondary">{event.note}</Text> : null}
+										</div>
+									),
+								}))}
+							/>
 						</div>
 					</div>
 				</div>
-			</div>
+			</Page>
 		);
 	}
 
+	const columns: ProColumns<SentinelApiModelSummary>[] = [
+		{
+			title: t("名称"),
+			dataIndex: "title",
+			key: "title",
+			ellipsis: { showTitle: true },
+		},
+		{
+			title: t("状态"),
+			dataIndex: "status",
+			key: "status",
+			width: 100,
+			render: (_, item) => <StatusChip status={item.status} />,
+		},
+		{
+			title: t("目标"),
+			dataIndex: "target",
+			key: "target",
+			width: 200,
+			ellipsis: { showTitle: true },
+			render: (_, item) => <Text code>{item.target || "—"}</Text>,
+		},
+		{
+			title: t("接口"),
+			key: "paths",
+			width: 170,
+			render: (_, item) => (
+				<Text type="secondary">
+					{t("{paths} 路径 / {ops} 操作", { paths: item.pathCount, ops: item.operationCount })}
+				</Text>
+			),
+		},
+		{
+			title: t("实体"),
+			dataIndex: "entityCount",
+			key: "entities",
+			width: 80,
+			align: "right",
+		},
+		{
+			title: t("时间"),
+			dataIndex: "createdAt",
+			key: "createdAt",
+			width: 170,
+			render: (_, item) => <Text type="secondary">{formatTime(item.createdAt)}</Text>,
+		},
+		{
+			title: t("操作"),
+			key: "actions",
+			width: 80,
+			render: (_, item) => (
+				<Button type="link" size="small" onClick={() => onOpen(item.id)}>
+					{t("查看")}
+				</Button>
+			),
+		},
+	];
+
 	return (
-		<div className="page-card business-model-page">
-			<div className="ws-panel__head">
-				<div className="ws-panel__title">
-					{t("业务建模")}
-					<span className="ws-panel__sub">
-						{projectName
-							? `${projectName} · ${t("共 {n} 份", { n: items.length })}`
-							: t("共 {n} 份", { n: items.length })}
-					</span>
-				</div>
-				<div className="ws-panel__actions">
-					<input
-						className="inline-input"
-						placeholder={t("搜索名称或目标")}
-						value={search}
-						onChange={(event) => setSearch(event.target.value)}
-					/>
-					<select
-						className="inline-input"
-						value={status}
-						onChange={(event) => setStatus(event.target.value as SentinelApiModelStatus | "")}
-					>
-						{STATUS_FILTERS.map((entry) => (
-							<option key={entry.value} value={entry.value}>
-								{entry.label}
-							</option>
-						))}
-					</select>
-					<button type="button" className="ghost small" onClick={onRefresh}>
-						{t("刷新")}
-					</button>
-				</div>
-			</div>
-			<div className="ws-panel__body">
-				<p className="ws-panel__hint">
-					{t(
-						"在对话页输入框上方点「业务建模」即可开始：Agent 会在当前会话里临时拿到两个建模工具，把还原出来的接口与业务实体提交到这里。平时它看不到这两个工具。",
-					)}
-				</p>
-				{visible.length === 0 ? (
-					<div className="ws-empty">
-						{items.length === 0
-							? t("还没有业务建模记录。")
-							: search.trim()
-								? t("没有符合当前筛选的记录（共 {n} 份，当前有关键字）。", { n: items.length })
-								: t("没有符合当前筛选的记录（共 {n} 份）。", { n: items.length })}
-					</div>
-				) : (
-					<table className="api-model-table api-model-list">
-						<thead>
-							<tr>
-								<th>{t("名称")}</th>
-								<th>{t("状态")}</th>
-								<th>{t("目标")}</th>
-								<th>{t("接口")}</th>
-								<th>{t("实体")}</th>
-								<th>{t("时间")}</th>
-								<th />
-							</tr>
-						</thead>
-						<tbody>
-							{visible.map((item) => (
-								<tr key={item.id}>
-									<td className="api-model-name">{item.title}</td>
-									<td>
-										<StatusChip status={item.status} />
-									</td>
-									<td className="api-model-target">{item.target || "—"}</td>
-									<td>
-										{t("{paths} 路径 / {ops} 操作", {
-											paths: item.pathCount,
-											ops: item.operationCount,
-										})}
-									</td>
-									<td>{item.entityCount}</td>
-									<td>{formatTime(item.createdAt)}</td>
-									<td>
-										<button type="button" className="ghost small" onClick={() => onOpen(item.id)}>
-											{t("查看")}
-										</button>
-									</td>
-								</tr>
-							))}
-						</tbody>
-					</table>
+		<Page
+			title={t("业务建模")}
+			description={
+				projectName
+					? `${projectName} · ${t("共 {n} 份", { n: items.length })}`
+					: t("共 {n} 份", { n: items.length })
+			}
+			extra={
+				<Button icon={<ReloadOutlined />} onClick={onRefresh}>
+					{t("刷新")}
+				</Button>
+			}
+		>
+			<Alert
+				type="info"
+				showIcon
+				className="ui-page__alert"
+				title={t(
+					"在对话页输入框上方点「业务建模」即可开始：Agent 会在当前会话里临时拿到两个建模工具，把还原出来的接口与业务实体提交到这里。平时它看不到这两个工具。",
 				)}
-			</div>
-		</div>
+			/>
+
+			<ProTable<SentinelApiModelSummary>
+				rowKey="id"
+				size="middle"
+				columns={columns}
+				dataSource={visible}
+				search={false}
+				pagination={false}
+				scroll={{ x: 900 }}
+				toolbar={{
+					title: (
+						<div className="apimodel-toolbar">
+							<Input
+								allowClear
+								className="apimodel-search"
+								prefix={<SearchOutlined />}
+								placeholder={t("搜索名称或目标")}
+								value={search}
+								onChange={(event) => setSearch(event.target.value)}
+							/>
+							<Select
+								value={status}
+								style={{ width: 120 }}
+								onChange={(value) => setStatus(value as SentinelApiModelStatus | "")}
+								options={STATUS_FILTERS.map((entry) => ({ value: entry.value, label: entry.label }))}
+							/>
+						</div>
+					),
+				}}
+				onRow={(record) => ({
+					onClick: (event) => {
+						const target = event.target as HTMLElement;
+						if (target.closest("button, a, .ant-checkbox-wrapper")) return;
+						onOpen(record.id);
+					},
+					style: { cursor: "pointer" },
+				})}
+				locale={{
+					emptyText: (
+						<Empty
+							image={Empty.PRESENTED_IMAGE_SIMPLE}
+							description={
+								items.length === 0
+									? t("还没有业务建模记录。")
+									: search.trim()
+										? t("没有符合当前筛选的记录（共 {n} 份，当前有关键字）。", { n: items.length })
+										: t("没有符合当前筛选的记录（共 {n} 份）。", { n: items.length })
+							}
+						/>
+					),
+				}}
+			/>
+		</Page>
 	);
 }

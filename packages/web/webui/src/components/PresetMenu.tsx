@@ -7,21 +7,15 @@
  * document.body with fixed coordinates like the session hover card.
  */
 
-import { useEffect, useRef } from "react";
-import { createPortal } from "react-dom";
+import { List, Space, Tag, Typography } from "antd";
 import { t } from "../i18n.ts";
 import type { SentinelPresetView } from "../types.ts";
+import { PickerShell, type PickerAnchor } from "../ui/PickerShell.tsx";
+
+const { Text } = Typography;
 
 /** Where the menu hangs: below the button, or above it when there is no room. */
-export interface PresetMenuAnchor {
-	left: number;
-	/** Distance from the viewport top; set when the menu hangs below its button. */
-	top?: number;
-	/** Distance from the viewport bottom; set instead of `top` when it opens upward. */
-	bottom?: number;
-	/** Room left on the chosen side, so a long list scrolls instead of overflowing. */
-	maxHeight: number;
-}
+export type PresetMenuAnchor = PickerAnchor;
 
 /**
  * Anchor the menu to its button, nudged left like the sider's caret and kept
@@ -55,81 +49,55 @@ export function PresetMenu(props: {
 	onPick: (presetId?: string) => void;
 	onClose: () => void;
 }) {
-	// Outside click or Escape dismisses; picking an entry closes through onPick.
-	// Callers pass an inline arrow, so the listener reads it through a ref instead
-	// of re-subscribing on every render.
-	const onClose = useRef(props.onClose);
-	useEffect(() => {
-		onClose.current = props.onClose;
-	});
-	// The click that opened the menu is still bubbling when this mounts — React
-	// flushes the update inside the click handler, before the event reaches window
-	// — so a plain listener would dismiss the menu in the same gesture and a real
-	// click would look like it did nothing. Ignore anything from before this mount.
-	const mountedAt = useRef(performance.now());
-	useEffect(() => {
-		const close = (event: MouseEvent) => {
-			if (event.timeStamp <= mountedAt.current) return;
-			onClose.current();
-		};
-		const onKeyDown = (event: KeyboardEvent) => {
-			if (event.key === "Escape") onClose.current();
-		};
-		window.addEventListener("click", close);
-		window.addEventListener("keydown", onKeyDown);
-		return () => {
-			window.removeEventListener("click", close);
-			window.removeEventListener("keydown", onKeyDown);
-		};
-	}, []);
-
 	const enabled = props.presets.filter((preset) => preset.enabled);
 
-	return createPortal(
-		<div
-			className="preset-menu"
-			style={{
-				top: props.anchor.top,
-				bottom: props.anchor.bottom,
-				left: props.anchor.left,
-				maxHeight: props.anchor.maxHeight,
-			}}
-			onClick={(event) => event.stopPropagation()}
+	return (
+		<PickerShell
+			anchor={props.anchor}
+			title={t("以哪个身份新建会话")}
+			width={260}
+			onClose={props.onClose}
 		>
-			<div className="preset-menu-title">{t("以哪个身份新建会话")}</div>
-			<button
-				type="button"
-				className="preset-menu-item"
-				title={t("不追加任何系统提示，使用默认 Agent")}
-				onClick={() => props.onPick()}
-			>
-				<span className="preset-menu-name">
-					{t("默认 Agent")}
-					{props.currentId === null ? <span className="preset-menu-current">{t("当前")}</span> : null}
-				</span>
-				<span className="preset-menu-desc">{t("不追加任何身份设定")}</span>
-			</button>
-			{enabled.map((preset) => (
-				<button
-					key={preset.id}
-					type="button"
-					className="preset-menu-item"
-					title={preset.description || undefined}
-					onClick={() => props.onPick(preset.id)}
-				>
-					<span className="preset-menu-name">
-						{preset.name}
-						{props.currentId === preset.id ? <span className="preset-menu-current">{t("当前")}</span> : null}
-					</span>
-					{preset.description ? <span className="preset-menu-desc">{preset.description}</span> : null}
-				</button>
-			))}
+			<List
+				size="small"
+				dataSource={[
+					{
+						id: "__default__",
+						name: t("默认 Agent"),
+						description: t("不追加任何身份设定"),
+						current: props.currentId === null,
+					},
+					...enabled.map((preset) => ({
+						id: preset.id,
+						name: preset.name,
+						description: preset.description,
+						current: props.currentId === preset.id,
+					})),
+				]}
+				renderItem={(item) => (
+					<List.Item
+						className="pickmenu__item"
+						onClick={() => props.onPick(item.id === "__default__" ? undefined : item.id)}
+					>
+						<div className="pickmenu__item-text">
+							<Space size={6}>
+								<Text>{item.name}</Text>
+								{item.current ? (
+									<Tag color="blue" variant="filled">
+										{t("当前")}
+									</Tag>
+								) : null}
+							</Space>
+							{item.description ? <Text type="secondary">{item.description}</Text> : null}
+						</div>
+					</List.Item>
+				)}
+			/>
 			{enabled.length === 0 ? (
-				<div className="preset-menu-hint">
+				<Text type="secondary" className="pickmenu__hint">
 					{t("还没有启用的预设 Agent。到「设置 → 预设 Agent」新建一个，回到这里就能选它开会话。")}
-				</div>
+				</Text>
 			) : null}
-		</div>,
-		document.body,
+		</PickerShell>
 	);
 }

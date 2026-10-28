@@ -149,7 +149,7 @@ test("lists one row per server under the MCP switch", () => {
 		server({ name: "remote", transport: "http", url: "https://example.com/mcp", target: "https://example.com/mcp" }),
 		server({ name: "legacy", transport: "sse", url: "https://example.com/sse", target: "https://example.com/sse" }),
 	]);
-	expect(html).toContain("perm-mcp");
+	expect(html).toContain("permhub-mcp");
 	expect(html).toContain("filesystem");
 	expect(html).toContain("remote");
 	expect(html).toContain("legacy");
@@ -201,7 +201,7 @@ test("lists one row per installed plugin with a switch for each agent", () => {
 	const html = render([], {
 		plugins: pluginView([plugin(), plugin({ hostId: "vps", hostName: "VPS", manifest: { ...plugin().manifest, id: "com.example.scan", name: "扫描器" } })]),
 	});
-	expect(html).toContain("perm-plugin-list");
+	expect(html).toContain("ant-table");
 	expect(html).toContain("CMD5 哈希查询");
 	expect(html).toContain("扫描器");
 	// One switch per agent, addressable by name so the two are not confused.

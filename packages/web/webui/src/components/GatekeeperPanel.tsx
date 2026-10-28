@@ -7,6 +7,7 @@
  * prove the resolved endpoint actually answers.
  */
 
+import { Alert, Button, Card, Checkbox, Col, InputNumber, Row, Segmented, Space, Tag, Typography } from "antd";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { t } from "../i18n.ts";
 import type {
@@ -17,6 +18,8 @@ import type {
 	SentinelTestResult,
 } from "../types.ts";
 import { SENTINEL_MODE_LABELS, SENTINEL_MODES } from "../types.ts";
+
+const { Text } = Typography;
 
 /**
  * What an unread config means. A console that predates the switches (or a reply
@@ -84,137 +87,143 @@ export function GatekeeperPanel({
 	};
 
 	return (
-		<div className="settings settings--wide cockpit gatekeeper">
-			<div className="cockpit-sec">
-				<h3>{t("守门设置（AI 审批）")}</h3>
-				<span className="cockpit-sec__meta">{t("全局默认 · 判定端点取「守门模型」")}</span>
-			</div>
-			<p className="gate-prose">
-				{t("AI 审批模式下每条命令都先交给「守门模型」判定：返回")} <code>ALLOW</code>{" "}
-				{t("才执行，返回")} <code>{t("BLOCK: 理由")}</code>{" "}
+		<Card
+			size="small"
+			className="gatekeeper"
+			title={t("守门设置（AI 审批）")}
+			extra={<Text type="secondary">{t("全局默认 · 判定端点取「守门模型」")}</Text>}
+		>
+			<Text type="secondary">
+				{t("AI 审批模式下每条命令都先交给「守门模型」判定：返回")} <Text code>ALLOW</Text>{" "}
+				{t("才执行，返回")} <Text code>{t("BLOCK: 理由")}</Text>{" "}
 				{t("则拒绝并把理由回给 Agent。判定失败（超时、报错、返回无法解析）一律放行，并在审计页记为「请求失败」。")}{" "}
 				{t("端点在上面「角色 → 守门模型」里选。")}
-			</p>
+			</Text>
 
-			<div className="gate-card">
-				<div className="gate-row gate-endpoint">
-					<span className="gate-row__label">{t("当前生效端点")}</span>
-					{judgeResolved ? (
-						<span className="gate-endpoint__value">
-							{judgeResolved.entryName} · <strong>{judgeResolved.modelId}</strong>
-							{judgeResolved.followedMain ? <span className="gate-row__tag">{t("跟随主模型")}</span> : null}
-						</span>
-					) : (
-						<span className="gate-endpoint__value is-missing">{t("无（切到 AI 审批会被拒绝）")}</span>
-					)}
-					<button
-						type="button"
-						className="cockpit-mini-btn"
-						disabled={judgeResolved === null || testing}
-						onClick={runTest}
-					>
-						{testing ? t("判定中…") : t("测试判定")}
-					</button>
-				</div>
-				<div className="gate-row gate-mode">
-					<span className="gate-row__label">{t("全局默认模式")}</span>
-					<div className="mode-switch gate-mode-switch">
-						{SENTINEL_MODES.map((item) => (
-							<button
-								key={item}
-								type="button"
-								className={globalMode === item ? "on" : ""}
-								onClick={() => setGlobalMode(item)}
-							>
-								{SENTINEL_MODE_LABELS[item]}
-							</button>
-						))}
-					</div>
-					<span className="gate-row__hint">
-						{t("新建会话跟随它；已有会话可在对话工具栏单独设定或点「跟随全局」回到默认。")}
-					</span>
-				</div>
-				<label className="gate-row">
-					<span className="gate-row__label">{t("判定超时（毫秒）")}</span>
-					<input
-						className="gate-input"
-						value={timeoutMs}
-						inputMode="numeric"
-						onChange={(event) => setTimeoutMs(event.target.value.replace(/[^\d]/g, ""))}
-						placeholder="15000"
-						spellCheck={false}
-					/>
-					<span className="gate-row__hint">{t("超时即放行并记为「请求失败」。范围 1000–120000。")}</span>
-				</label>
-				<label className="gate-row">
-					<span className="gate-row__label">{t("并发上限")}</span>
-					<input
-						className="gate-input"
-						value={concurrency}
-						inputMode="numeric"
-						onChange={(event) => setConcurrency(event.target.value.replace(/[^\d]/g, ""))}
-						placeholder="0"
-						spellCheck={false}
-					/>
-					<span className="gate-row__hint">
-						{t("同时进行中的判定数量，0 = 不限制（子代理并行侦察时用得上）。上限 64。")}
-					</span>
-				</label>
-			</div>
+			<Card size="small" className="gatekeeper__card" title={t("当前生效端点")}>
+				<Row gutter={[12, 12]} align="middle">
+					<Col xs={24} md={16}>
+						{judgeResolved ? (
+							<Space size={6} wrap>
+								<Text>{judgeResolved.entryName}</Text>
+								<Text strong>{judgeResolved.modelId}</Text>
+								{judgeResolved.followedMain ? (
+									<Tag color="blue" variant="filled">
+										{t("跟随主模型")}
+									</Tag>
+								) : null}
+							</Space>
+						) : (
+							<Text type="danger">{t("无（切到 AI 审批会被拒绝）")}</Text>
+						)}
+					</Col>
+					<Col xs={24} md={8}>
+						<Button
+							block
+							loading={testing}
+							disabled={judgeResolved === null || testing}
+							onClick={() => void runTest()}
+						>
+							{testing ? t("判定中…") : t("测试判定")}
+						</Button>
+					</Col>
+				</Row>
+			</Card>
+
+			<Card size="small" className="gatekeeper__card" title={t("全局默认模式")}>
+				<Segmented
+					value={globalMode}
+					onChange={(value) => setGlobalMode(value as SentinelMode)}
+					options={SENTINEL_MODES.map((item) => ({ value: item, label: SENTINEL_MODE_LABELS[item] }))}
+				/>
+				<Text type="secondary" className="gatekeeper__hint">
+					{t("新建会话跟随它；已有会话可在对话工具栏单独设定或点「跟随全局」回到默认。")}
+				</Text>
+			</Card>
+
+			<Row gutter={[12, 12]}>
+				<Col xs={24} md={12}>
+					<Card size="small" className="gatekeeper__card" title={t("判定超时（毫秒）")}>
+						<InputNumber
+							min={1000}
+							max={120000}
+							step={1000}
+							style={{ width: "100%" }}
+							value={timeoutMs.trim() === "" ? null : Number(timeoutMs)}
+							onChange={(value) => setTimeoutMs(value === null || value === undefined ? "" : String(value))}
+							placeholder="15000"
+						/>
+						<Text type="secondary" className="gatekeeper__hint">
+							{t("超时即放行并记为「请求失败」。范围 1000–120000。")}
+						</Text>
+					</Card>
+				</Col>
+				<Col xs={24} md={12}>
+					<Card size="small" className="gatekeeper__card" title={t("并发上限")}>
+						<InputNumber
+							min={0}
+							max={64}
+							style={{ width: "100%" }}
+							value={concurrency.trim() === "" ? null : Number(concurrency)}
+							onChange={(value) => setConcurrency(value === null || value === undefined ? "" : String(value))}
+							placeholder="0"
+						/>
+						<Text type="secondary" className="gatekeeper__hint">
+							{t("同时进行中的判定数量，0 = 不限制（子代理并行侦察时用得上）。上限 64。")}
+						</Text>
+					</Card>
+				</Col>
+			</Row>
 
 			{result ? (
-				<div className={`test-result gate-test-result ${result.ok ? "ok" : "bad"}`}>
-					<div>{result.message}</div>
-					{result.detail ? <pre>{result.detail}</pre> : null}
-					{raw ? <pre>{raw}</pre> : null}
-				</div>
+				<Alert
+					type={result.ok ? "success" : "error"}
+					showIcon
+					className="ui-page__alert"
+					title={result.message}
+					description={
+						<>
+							{result.detail ? <pre className="gatekeeper__pre">{result.detail}</pre> : null}
+							{raw ? <pre className="gatekeeper__pre">{raw}</pre> : null}
+						</>
+					}
+				/>
 			) : null}
 
-			<div className="cockpit-sec">
-				<h3>{t("MCP 工具判定")}</h3>
-			</div>
-			<p className="gate-prose">
-				{t("bash 命令在任何模式下都由上面的模式决定；这一段管的是另外一类调用：MCP 与插件工具。")}{" "}
-				{t("打开后，AI 审批模式下每一次这类调用也会先交给守门模型，被拦时把理由回给 Agent。")}
-				<b>{t("每次调用都要多花一次模型往返")}</b>
-				{t("，高频只读工具（列目录、查资产）会明显变慢。")}
-			</p>
-			<div className="gate-card">
-				<label className="gate-option">
-					<input
-						type="checkbox"
+			<Card size="small" className="gatekeeper__card" title={t("MCP 工具判定")}>
+				<Text type="secondary">
+					{t("bash 命令在任何模式下都由上面的模式决定；这一段管的是另外一类调用：MCP 与插件工具。")}{" "}
+					{t("打开后，AI 审批模式下每一次这类调用也会先交给守门模型，被拦时把理由回给 Agent。")}
+					<Text strong>{t("每次调用都要多花一次模型往返")}</Text>
+					{t("，高频只读工具（列目录、查资产）会明显变慢。")}
+				</Text>
+				<div className="gatekeeper__options">
+					<Checkbox
 						checked={mcpTools.enabled}
 						onChange={(event) => setMcpTools((prev) => ({ ...prev, enabled: event.target.checked }))}
-					/>
-					<span className="gate-option__text">
-						<span className="gate-option__title">{t("同时判定 MCP 工具")}</span>
-						<span className="gate-option__hint">
+					>
+						<Text strong>{t("同时判定 MCP 工具")}</Text>
+						<Text type="secondary" className="gatekeeper__hint">
 							{t("关闭后守门模型只看 bash 命令，插件与 MCP 工具不再经过判定")}
-						</span>
-					</span>
-				</label>
-				<label className={`gate-option${mcpTools.enabled ? "" : " is-off"}`}>
-					<input
-						type="checkbox"
+						</Text>
+					</Checkbox>
+					<Checkbox
 						checked={mcpTools.includePlugins}
 						disabled={!mcpTools.enabled}
 						onChange={(event) => setMcpTools((prev) => ({ ...prev, includePlugins: event.target.checked }))}
-					/>
-					<span className="gate-option__text">
-						<span className="gate-option__title">{t("包含插件工具")}</span>
-						<span className="gate-option__hint">
-							{t("插件工具（server 名以")} <code>plugin-</code>{" "}
+					>
+						<Text strong>{t("包含插件工具")}</Text>
+						<Text type="secondary" className="gatekeeper__hint">
+							{t("插件工具（server 名以")} <Text code>plugin-</Text>{" "}
 							{t("开头）能操作受管主机，最值得判；一个插件常有几十个工具， 也最吵。默认不纳入")}
-						</span>
-					</span>
-				</label>
-			</div>
+						</Text>
+					</Checkbox>
+				</div>
+			</Card>
 
-			<div className="gate-actions">
-				<button type="button" className="primary" onClick={() => onSave(settingsDraft)}>
-					{t("保存守门配置")}
-				</button>
-			</div>
-		</div>
+			<Button type="primary" onClick={() => onSave(settingsDraft)}>
+				{t("保存守门配置")}
+			</Button>
+		</Card>
 	);
 }

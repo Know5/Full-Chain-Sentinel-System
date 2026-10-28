@@ -77,11 +77,15 @@ test("the network mode and the proxy defaults live in one card with one save", (
 	expect(html).toContain("容器网络与代理");
 	// Everything the two old cards held is inside this one: the mode radios, the
 	// default proxy and the image, and a single 保存 for the lot.
-	const card = html.slice(html.indexOf("容器网络与代理"), html.indexOf("env-build"));
+	const start = html.indexOf("容器网络与代理");
+	const end = html.indexOf("envhub-buildlog");
+	const card = html.slice(start, end === -1 ? undefined : end);
 	expect(card).toContain("默认代理");
 	expect(card).toContain("sidecar 镜像");
 	expect(card).toContain("香港节点");
-	expect(card.match(/>保存<\/button>/g) ?? []).toHaveLength(1);
+	// One primary button: the single 保存 that commits the whole card.
+	expect(card.match(/ant-btn-primary/g) ?? []).toHaveLength(1);
+	expect(card).toMatch(/保\s*存/);
 	// The old heading is gone.
 	expect(html).not.toContain(">代理默认与镜像<");
 });

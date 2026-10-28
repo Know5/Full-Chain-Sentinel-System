@@ -1,3 +1,5 @@
+import { ArrowUpOutlined, BellOutlined, CloseOutlined, PaperClipOutlined, PictureOutlined, StopOutlined } from "@ant-design/icons";
+import { Alert, Button, Input, Progress, Segmented, Space, Typography } from "antd";
 import { useEffect, useRef, useState } from "react";
 import { t } from "../i18n.ts";
 import { formatSize, formatTokens } from "../transcript.ts";
@@ -14,21 +16,13 @@ import type {
 	SentinelSupervisorView,
 } from "../types.ts";
 import { attachmentManifest, planAttachments, staleUploads, type UploadedFile, uploadFile } from "../uploads.ts";
-import {
-	ApiModelIcon,
-	BellIcon,
-	DroidIcon,
-	IosIcon,
-	FilesIcon,
-	ImageIcon,
-	SubagentIcon,
-	SupervisorIcon,
-	TargetIcon,
-} from "./icons.tsx";
+import { ApiModelIcon, DroidIcon, IosIcon, SubagentIcon, SupervisorIcon, TargetIcon } from "./icons.tsx";
 import { ModelingMenu } from "./ModelingMenu.tsx";
 import { PresetMenu, type PresetMenuAnchor, presetMenuPosition } from "./PresetMenu.tsx";
 import { SupervisorStartMenu, type SupervisorLaunchMode } from "./SupervisorStartMenu.tsx";
 import { supervisorStrategyKey } from "../supervisor-strategy.ts";
+
+const { Text } = Typography;
 
 /** Read a pasted/selected image into the base64 payload pi expects. */
 async function readImage(file: File): Promise<SentinelImageAttachment | null> {
@@ -321,11 +315,11 @@ export function Composer({
 	const canSend = !blocked && !uploading && (text.trim().length > 0 || images.length > 0 || readyCount > 0);
 
 	return (
-		<div className="composer-zone">
+		<div className="composerbox">
 			{/* Files can be dropped anywhere on the box; the class is the only feedback
 			    that the drop will be taken. */}
 			<div
-				className={`composer${dragging ? " composer-dragging" : ""}`}
+				className={dragging ? "composerbox__box is-dragging" : "composerbox__box"}
 				onDragOver={(event) => {
 					if (!event.dataTransfer.types.includes("Files")) return;
 					event.preventDefault();
@@ -343,12 +337,13 @@ export function Composer({
 				{/* Goal mode and the preset agent both sit above the input because they
 				    change what the input means: one makes it an objective the agent
 				    keeps working on, the other re-briefs who is reading it. */}
-				<div className="composer-goal-row">
+				<Space size={6} wrap className="composerbox__tools">
 					{supervisorEnabled ? (
 						<>
-							<button
-								type="button"
-								className={`composer-tool supervisor-trigger ${supervisor ? "on" : ""}`}
+							<Button
+								size="small"
+								type={supervisor ? "primary" : "default"}
+								icon={<SupervisorIcon />}
 								onClick={(event) => {
 									if (supervisor) {
 										onShowSupervisorWindow();
@@ -368,22 +363,16 @@ export function Composer({
 											: t("开启监督：观察，或介入并选择自动发送 / 确认后发送")
 								}
 							>
-								<SupervisorIcon />
 								{supervisor
 									? supervisor.status === "stopped"
 										? t("监督已停止")
 										: t("监督中")
 									: t("监督")}
-							</button>
+							</Button>
 							{supervisor && !supervisorWindowOpen ? (
-								<button
-									type="button"
-									className="composer-tool supervisor-show"
-									onClick={onShowSupervisorWindow}
-									title={t("重新显示监督悬浮窗；监督仍在继续")}
-								>
+								<Button size="small" onClick={onShowSupervisorWindow} title={t("重新显示监督悬浮窗；监督仍在继续")}>
 									{t("显示悬浮窗")}
-								</button>
+								</Button>
 							) : null}
 							{supervisorMenu ? (
 								<SupervisorStartMenu
@@ -421,9 +410,10 @@ export function Composer({
 							) : null}
 						</>
 					) : null}
-					<button
-						type="button"
-						className={`composer-tool preset-trigger ${preset ? "on" : ""}`}
+					<Button
+						size="small"
+						type={preset ? "primary" : "default"}
+						icon={<SubagentIcon />}
 						onClick={(event) => {
 							setPresetMenu(presetMenuPosition(event.currentTarget.getBoundingClientRect()));
 						}}
@@ -439,27 +429,26 @@ export function Composer({
 									: t("给这个会话挂一个预设 Agent：换掉身份与背景，不影响可用工具和权限")
 						}
 					>
-						<SubagentIcon />
 						{t("预设 Agent")}
-						{preset ? <span className="preset-trigger__name">{preset.name}</span> : null}
-					</button>
-					<button
-						type="button"
-						className="composer-tool goal-trigger"
+						{preset ? <Text>{preset.name}</Text> : null}
+					</Button>
+					<Button
+						size="small"
+						icon={<TargetIcon />}
 						onClick={onOpenGoal}
 						disabled={goalDisabledReason !== null}
 						title={goalDisabledReason ?? t("启动持续目标：一轮结束后自动继续，直到达成目标或达到轮数上限")}
 					>
-						<TargetIcon />
 						{t("持续目标")}
-					</button>
+					</Button>
 					{/* Business modeling: one entry, two actions. 开始建模 runs the two-tool
 					    cycle here (or ends the run in force); 关联建模数据 rides existing
 					    records into a fresh conversation. Unchecked attach means nothing is
 					    inserted — no message, no tool. */}
-					<button
-						type="button"
-						className={`composer-tool modeling-trigger ${modeling || modelingAttached.length > 0 ? "on" : ""}`}
+					<Button
+						size="small"
+						type={modeling || modelingAttached.length > 0 ? "primary" : "default"}
+						icon={<ApiModelIcon />}
 						onClick={(event) =>
 							setModelingMenu(presetMenuPosition(event.currentTarget.getBoundingClientRect(), 300))
 						}
@@ -479,19 +468,19 @@ export function Composer({
 										: t("业务建模：开始一次建模，或把已有建模数据关联给这条对话")
 						}
 					>
-						<ApiModelIcon />
 						{t("业务建模")}
 						{modeling ? (
-							<span className="modeling-trigger__count">{modeling.pathCount}</span>
+							<Text>{modeling.pathCount}</Text>
 						) : modelingAttached.length > 0 ? (
-							<span className="modeling-trigger__count">{modelingAttached.length}</span>
+							<Text>{modelingAttached.length}</Text>
 						) : null}
-					</button>
+					</Button>
 					{/* Android tools: an explicit opt-in for THIS conversation. Off is
 					    the clean state — no device tools in the prompt, nothing in context. */}
-					<button
-						type="button"
-						className={`composer-tool modeling-trigger ${droidEnabled ? "on" : ""}`}
+					<Button
+						size="small"
+						type={droidEnabled ? "primary" : "default"}
+						icon={<DroidIcon />}
 						disabled={!hasProject}
 						onClick={() => onToggleDroid(!droidEnabled)}
 						title={
@@ -502,14 +491,14 @@ export function Composer({
 									: t("为当前对话挂载安卓工具（droid_* / apk_*）：需要先在「安卓设备」页配置反连与 token，并有一台设备在线")
 						}
 					>
-						<DroidIcon />
 						{t("安卓")}
-						{droidEnabled ? <span className="modeling-trigger__count on">✓</span> : null}
-					</button>
+						{droidEnabled ? <Text>✓</Text> : null}
+					</Button>
 					{/* iOS tools: the same per-conversation opt-in, independent of Android. */}
-					<button
-						type="button"
-						className={`composer-tool modeling-trigger ${iosEnabled ? "on" : ""}`}
+					<Button
+						size="small"
+						type={iosEnabled ? "primary" : "default"}
+						icon={<IosIcon />}
 						disabled={!hasProject}
 						onClick={() => onToggleIos(!iosEnabled)}
 						title={
@@ -520,12 +509,11 @@ export function Composer({
 									: t("为当前对话挂载 iOS 工具（ios_*）：需要先在「iOS 设备」页创建 token，并有一台越狱设备在线")
 						}
 					>
-						<IosIcon />
 						{t("iOS")}
-						{iosEnabled ? <span className="modeling-trigger__count on">✓</span> : null}
-					</button>
-					{goalDisabledReason ? <span className="composer-goal-hint">{goalDisabledReason}</span> : null}
-				</div>
+						{iosEnabled ? <Text>✓</Text> : null}
+					</Button>
+					{goalDisabledReason ? <Text type="secondary">{goalDisabledReason}</Text> : null}
+				</Space>
 				{presetMenu ? (
 					<PresetMenu
 						anchor={presetMenu}
@@ -562,68 +550,71 @@ export function Composer({
 					/>
 				) : null}
 				{images.length > 0 ? (
-					<div className="attachment-strip">
+					<div className="composerbox__files">
 						{images.map((image, index) => (
-							<div key={index} className="attachment">
+							<div key={index} className="composerbox__image">
 								<img
 									src={`data:${image.mimeType};base64,${image.data}`}
 									alt={t("附件 {index}", { index: index + 1 })}
 								/>
-								<button
-									type="button"
-									className="attachment-remove"
+								<Button
+									type="text"
+									size="small"
+									shape="circle"
+									icon={<CloseOutlined />}
 									title={t("移除该图片")}
 									onClick={() => setImages((prev) => prev.filter((_, itemIndex) => itemIndex !== index))}
-								>
-									×
-								</button>
+								/>
 							</div>
 						))}
-						<span className="attachment-count">
+						<span className="composerbox__count">
 							{t("{count} 张图片待发送", { count: images.length })}
 						</span>
 					</div>
 				) : null}
 				{attachments.length > 0 ? (
-					<div className="attachment-strip">
+					<div className="composerbox__files">
 						{attachments.map((item) => (
 							<div
 								key={item.id}
-								className={`attachment-file ${item.error ? "bad" : ""}`}
+								className={item.error ? "composerbox__file is-bad" : "composerbox__file"}
 								title={item.uploaded?.path ?? item.name}
 							>
-								<span className="attachment-file__name">{item.name}</span>
-								<span className="attachment-file__meta">
+								<span className="composerbox__fname">{item.name}</span>
+								<span className="composerbox__fmeta">
 									{item.error ??
 										(item.uploaded
 											? formatSize(item.uploaded.size)
 											: t("上传中 {percent}%", { percent: Math.round(item.ratio * 100) }))}
 								</span>
-								<span className="attachment-file__bar">
+								<span className="composerbox__fbar">
 									<span style={{ width: `${Math.round((item.uploaded ? 1 : item.ratio) * 100)}%` }} />
 								</span>
-								<button
-									type="button"
-									className="attachment-remove"
+								<Button
+									type="text"
+									size="small"
+									shape="circle"
+									icon={<CloseOutlined />}
 									title={
 										item.uploaded
 											? t("从待发送列表移除（文件仍在 uploads/ 里）")
 											: t("移除")
 									}
 									onClick={() => setAttachments((prev) => prev.filter((entry) => entry.id !== item.id))}
-								>
-									×
-								</button>
+								/>
 							</div>
 						))}
-						<span className="attachment-count">
+						<span className="composerbox__count">
 							{uploading ? t("上传中…") : t("{count} 个文件待发送", { count: readyCount })}
 						</span>
 					</div>
 				) : null}
-				{sendNotice ? <div className="attachment-notice">{sendNotice}</div> : null}
-				<textarea
+				{sendNotice ? <Alert type="warning" showIcon className="composerbox__notice" title={sendNotice} /> : null}
+				<Input.TextArea
+					className="composerbox__input"
+					variant="borderless"
 					value={text}
+					autoSize={{ minRows: 3, maxRows: 8 }}
 					placeholder={
 						blocked
 							? blockedReason
@@ -653,32 +644,32 @@ export function Composer({
 							submit();
 						}
 					}}
-					rows={Math.min(8, Math.max(3, text.split("\n").length + 1))}
 				/>
-				<div className="composer-actions">
-					<button
-						type="button"
-						className="composer-tool"
+				<div className="composerbox__actions">
+					<Button
+						type="text"
+						size="small"
+						icon={<PictureOutlined />}
 						onClick={() => imageInputRef.current?.click()}
 						disabled={!hasProject || blocked}
 						title={t("附加图片（也可直接粘贴截图）")}
 					>
-						<ImageIcon />
 						{t("图片")}
-					</button>
-					<button
-						type="button"
-						className="composer-tool"
+					</Button>
+					<Button
+						type="text"
+						size="small"
+						icon={<PaperClipOutlined />}
 						onClick={() => fileInputRef.current?.click()}
 						disabled={!hasProject || blocked}
 						title={t("附加文件（任意类型；上传到项目工作目录，随消息把路径交给 Agent；也可直接拖入或粘贴）")}
 					>
-						<FilesIcon />
 						{t("附件")}
-					</button>
-					<button
-						type="button"
-						className={`composer-tool ${notifyRun ? "on" : ""}`}
+					</Button>
+					<Button
+						type={notifyRun ? "primary" : "text"}
+						size="small"
+						icon={<BellOutlined />}
 						onClick={onToggleNotifyRun}
 						title={
 							notifyRun
@@ -686,9 +677,8 @@ export function Composer({
 								: t("本次运行完成后不通知（点击开启）")
 						}
 					>
-						<BellIcon />
 						{t("通知")}
-					</button>
+					</Button>
 					<input
 						ref={imageInputRef}
 						type="file"
@@ -712,48 +702,49 @@ export function Composer({
 							event.target.value = "";
 						}}
 					/>
-					<span className="composer-spacer" />
+					<span className="composerbox__spacer" />
 					{streaming ? (
 						<>
-							<label className="behavior">
-								<input
-									type="radio"
-									name="behavior"
-									checked={behavior === "steer"}
-									onChange={() => setBehavior("steer")}
-								/>
-								{t("插话")}
-							</label>
-							<label className="behavior">
-								<input
-									type="radio"
-									name="behavior"
-									checked={behavior === "followUp"}
-									onChange={() => setBehavior("followUp")}
-								/>
-								{t("排队")}
-							</label>
-							<button type="button" className="primary" onClick={() => submit()} disabled={!canSend}>
+							<Segmented
+								size="small"
+								value={behavior}
+								onChange={(value) => setBehavior(value as "steer" | "followUp")}
+								options={[
+									{ value: "steer", label: t("插话") },
+									{ value: "followUp", label: t("排队") },
+								]}
+							/>
+							<Button
+								type="primary"
+								size="small"
+								icon={<ArrowUpOutlined />}
+								onClick={() => submit()}
+								disabled={!canSend}
+							>
 								{t("发送")}
-							</button>
-							<button type="button" className="danger" onClick={onAbort}>
+							</Button>
+							<Button danger size="small" icon={<StopOutlined />} onClick={onAbort}>
 								{t("中止")}
-							</button>
+							</Button>
 						</>
 					) : (
-						<button
-							type="button"
-							className="primary"
+						<Button
+							type="primary"
+							size="small"
+							icon={<ArrowUpOutlined />}
 							onClick={() => submit()}
 							disabled={!canSend || !hasProject || blocked}
 						>
-							{t("发送 ⏎")}
-						</button>
+							{t("发送")}
+						</Button>
 					)}
 				</div>
 			</div>
-			<div className="status-line status-line--centered">
-				<span title={t("按本轮每个 assistant 消息的 output tokens 与该消息耗时计算，不含工具执行时间")}>
+			<Text
+				type="secondary"
+				className="composerbox__status"
+				title={t("按本轮每个 assistant 消息的 output tokens 与该消息耗时计算，不含工具执行时间")}
+			>
 					{blocked ? t("已锁定") : streaming ? t("运行中…") : t("空闲")}
 					{stats
 						? `${t(" · Token 输入 {input} / 输出 {output}", {
@@ -771,8 +762,7 @@ export function Composer({
 						: streaming
 							? t("本轮生成中…")
 							: t("本轮 tok/s —")}
-				</span>
-			</div>
+			</Text>
 		</div>
 	);
 }

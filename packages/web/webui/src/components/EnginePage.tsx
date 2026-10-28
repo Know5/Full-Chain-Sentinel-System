@@ -9,8 +9,35 @@
  * a vulnerability-style modal, and the create form is a full page.
  */
 
+import { PlusOutlined, ReadOutlined } from "@ant-design/icons";
+import { ProTable } from "@ant-design/pro-components";
+import type { ProColumns } from "@ant-design/pro-components";
+import {
+	Alert,
+	Button,
+	Card,
+	Checkbox,
+	Col,
+	Collapse,
+	Descriptions,
+	Empty,
+	Form,
+	Input,
+	InputNumber,
+	Modal,
+	Popconfirm,
+	Radio,
+	Row,
+	Segmented,
+	Space,
+	Steps,
+	Table,
+	Tag,
+	Typography,
+} from "antd";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { t } from "../i18n.ts";
+import { Page } from "../ui/Page.tsx";
 import type {
 	SentinelDoctrineView,
 	SentinelEngine,
@@ -24,6 +51,8 @@ import type {
 	SentinelPresetView,
 	SentinelSubagentEvent,
 } from "../types.ts";
+
+const { Text, Title } = Typography;
 
 const TASK_STATUS_LABELS: Record<SentinelEngineTaskStatus, string> = {
 	queued: t("排队中"),
@@ -59,6 +88,15 @@ const ENGINE_STATUS_CLASS: Record<SentinelEngine["status"], string> = {
 	paused: "tag-paused",
 	completed: "tag-done",
 	stopped: "tag-stopped",
+};
+
+/** antd Tag colours for the same states, used by the antd list view. */
+const ENGINE_STATUS_COLORS: Record<SentinelEngine["status"], string> = {
+	scheduled: "blue",
+	running: "processing",
+	paused: "orange",
+	completed: "green",
+	stopped: "default",
 };
 
 function formatDuration(ms: number): string {
@@ -292,8 +330,7 @@ export function EnginePage(props: EnginePageProps) {
 
 	if (view === "create") {
 		return (
-			<div className="page-card engine-page">
-				<CreateEngineForm
+			<CreateEngineForm
 					doctrines={props.doctrines}
 					presets={props.presets}
 					hasProject={props.hasProject}
@@ -304,58 +341,57 @@ export function EnginePage(props: EnginePageProps) {
 						setView("list");
 					}}
 				/>
-			</div>
 		);
 	}
 
 	if (view === "doctrines") {
 		return (
-			<div className="page-card engine-page">
-				<DoctrineManager
-					doctrines={props.doctrines}
-					onClose={() => setView("list")}
-					onSave={(input) => send({ type: "save_doctrine", input })}
-					onDelete={(id) => send({ type: "delete_doctrine", id })}
-				/>
-			</div>
+			<DoctrineManager
+				doctrines={props.doctrines}
+				onClose={() => setView("list")}
+				onSave={(input) => send({ type: "save_doctrine", input })}
+				onDelete={(id) => send({ type: "delete_doctrine", id })}
+			/>
 		);
 	}
 
 	if (view === "board" && board) {
+		const scheduled = board.status === "scheduled";
+		const running = board.status === "running";
+		const paused = board.status === "paused";
+		const active = running || paused;
+		const elapsedText = board.startedAt !== null
+			? board.endedAt
+				? t(" · 历时 {duration}", { duration: formatDuration(board.endedAt - board.startedAt) })
+				: running
+					? t(" · 已运行 {duration}", { duration: formatDuration(Date.now() - board.startedAt) })
+					: ""
+			: t(" · 尚未启动");
+
 		return (
-			<div className="page-card">
-				<div className="ws-panel__head">
-					<div className="ws-panel__title engine-subline">
-						<button type="button" onClick={() => setView("list")}>
+			<Page
+				title={
+					<Space size={8} wrap>
+						<Button size="small" onClick={() => setView("list")}>
 							{t("← 返回")}
-						</button>
+						</Button>
 						{board.name}
-						<span className={`tag ${ENGINE_STATUS_CLASS[board.status]}`}>
+						<Tag color={ENGINE_STATUS_COLORS[board.status]} variant="filled">
 							{ENGINE_STATUS_LABELS[board.status]}
-						</span>
-						<span className="ws-panel__sub">
-							{board.projectName}
-							{t(" · 创建于 {time}", {
-								time: new Date(board.createdAt).toLocaleString("zh-CN", { hour12: false }),
-							})}
-							{board.startedAt !== null
-								? board.endedAt
-									? t(" · 历时 {duration}", { duration: formatDuration(board.endedAt - board.startedAt) })
-									: board.status === "running"
-										? t(" · 已运行 {duration}", {
-												duration: formatDuration(Date.now() - board.startedAt),
-											})
-										: ""
-								: t(" · 尚未启动")}
-						</span>
-					</div>
-					<div className="ws-panel__actions">
-						<button type="button" onClick={() => send({ type: "engine_report_snapshot", id: board.id })}>
+						</Tag>
+					</Space>
+				}
+				description={`${board.projectName}${t(" · 创建于 {time}", {
+					time: new Date(board.createdAt).toLocaleString("zh-CN", { hour12: false }),
+				})}${elapsedText}`}
+				extra={
+					<Space size={6} wrap>
+						<Button size="small" onClick={() => send({ type: "engine_report_snapshot", id: board.id })}>
 							{t("进度快照")}
-						</button>
+						</Button>
 						{board.report ? (
-							<button
-								type="button"
+							<Button
+								size="small"
 								onClick={() =>
 									setReport({
 										markdown: board.report ?? "",
@@ -364,85 +400,94 @@ export function EnginePage(props: EnginePageProps) {
 								}
 							>
 								{t("查看总报告")}
-							</button>
+							</Button>
 						) : null}
-						{board.status === "scheduled" ? (
-							<button type="button" onClick={() => setEditingSchedule(true)}>
+						{scheduled ? (
+							<Button size="small" onClick={() => setEditingSchedule(true)}>
 								{t("修改计划")}
-							</button>
+							</Button>
 						) : null}
-						{board.status === "scheduled" ? (
-							<button
-								type="button"
-								onClick={() => {
-									if (window.confirm(t("取消后计划不再执行，工程会标记为已终止。确定取消？"))) {
-										send({ type: "engine_cancel_schedule", id: board.id });
-									}
-								}}
+						{scheduled ? (
+							<Popconfirm
+								title={t("取消计划")}
+								description={t("取消后计划不再执行，工程会标记为已终止。确定取消？")}
+								okText={t("取消计划")}
+								okButtonProps={{ danger: true }}
+								cancelText={t("返回")}
+								onConfirm={() => send({ type: "engine_cancel_schedule", id: board.id })}
 							>
-								{t("取消计划")}
-							</button>
+								<Button size="small" danger>
+									{t("取消计划")}
+								</Button>
+							</Popconfirm>
 						) : null}
-						{scheduleActive && board.status !== "scheduled" ? (
-							<button
-								type="button"
-								onClick={() => {
-									if (window.confirm(t("停用后续定时计划？当前运行不会停止。"))) {
-										send({ type: "engine_cancel_schedule", id: board.id });
-									}
-								}}
+						{scheduleActive && !scheduled ? (
+							<Popconfirm
+								title={t("停用计划")}
+								description={t("停用后续定时计划？当前运行不会停止。")}
+								okText={t("停用")}
+								cancelText={t("返回")}
+								onConfirm={() => send({ type: "engine_cancel_schedule", id: board.id })}
 							>
-								{t("停用计划")}
-							</button>
+								<Button size="small">{t("停用计划")}</Button>
+							</Popconfirm>
 						) : null}
-						{board.status === "running" ? (
-							<button
-								type="button"
+						{running ? (
+							<Button
+								size="small"
 								onClick={() => {
 									if (scheduleActive && !window.confirm(t("手动暂停会停用后续定时计划，确定？"))) return;
 									send({ type: "engine_pause", id: board.id });
 								}}
 							>
 								{t("暂停")}
-							</button>
+							</Button>
 						) : null}
-						{board.status === "paused" ? (
-							<button
-								type="button"
-								className="primary"
+						{paused ? (
+							<Button
+								size="small"
+								type="primary"
 								onClick={() => {
 									if (scheduleActive && !window.confirm(t("手动继续会停用后续定时计划，确定？"))) return;
 									send({ type: "engine_resume", id: board.id });
 								}}
 							>
 								{t("继续")}
-							</button>
+							</Button>
 						) : null}
-						{board.status === "running" || board.status === "paused" ? (
-							<button
-								type="button"
-								onClick={() => {
-									if (scheduleActive && !window.confirm(t("终止会同时停用后续定时计划，确定？"))) return;
-									send({ type: "engine_abort", id: board.id });
-								}}
+						{active ? (
+							<Popconfirm
+								title={t("终止工程")}
+								description={scheduleActive ? t("终止会同时停用后续定时计划，确定？") : t("终止后当前任务会停止。确定？")}
+								okText={t("终止")}
+								okButtonProps={{ danger: true }}
+								cancelText={t("返回")}
+								onConfirm={() => send({ type: "engine_abort", id: board.id })}
 							>
-								{t("终止")}
-							</button>
+								<Button size="small" danger>
+									{t("终止")}
+								</Button>
+							</Popconfirm>
 						) : (
-							<button
-								type="button"
-								onClick={() => {
-									if (window.confirm(t("删除工程「{name}」？任务记录将一并删除。", { name: board.name }))) {
-										send({ type: "engine_delete", id: board.id });
-										setView("list");
-									}
+							<Popconfirm
+								title={t("删除工程")}
+								description={t("删除工程「{name}」？任务记录将一并删除。", { name: board.name })}
+								okText={t("删除")}
+								okButtonProps={{ danger: true }}
+								cancelText={t("返回")}
+								onConfirm={() => {
+									send({ type: "engine_delete", id: board.id });
+									setView("list");
 								}}
 							>
-								{t("删除")}
-							</button>
+								<Button size="small" danger>
+									{t("删除")}
+								</Button>
+							</Popconfirm>
 						)}
-					</div>
-				</div>
+					</Space>
+				}
+			>
 				<div className="ws-panel__body">
 					{board.schedule ? <ScheduleStrip schedule={board.schedule} /> : null}
 					<EngineStats
@@ -499,120 +544,135 @@ export function EnginePage(props: EnginePageProps) {
 						}}
 					/>
 				) : null}
-				{report ? (
-					<div className="modal-backdrop" onClick={() => setReport(null)}>
-						<div className="modal modal--wide" onClick={(event) => event.stopPropagation()}>
-							<div className="vuln-detail__head">
-								<div className="vuln-detail__title">{report.filename}</div>
-								<div className="ws-panel__actions">
-									<button type="button" onClick={() => void navigator.clipboard.writeText(report.markdown)}>
-										{t("复制")}
-									</button>
-									<button type="button" className="primary" onClick={() => setReport(null)}>
-										{t("关闭")}
-									</button>
-								</div>
-							</div>
-							<pre className="report-preview">{report.markdown}</pre>
-						</div>
-					</div>
-				) : null}
-			</div>
+				<Modal
+					open={report !== null}
+					title={report?.filename}
+					width={880}
+					onCancel={() => setReport(null)}
+					footer={
+						<Space size={8}>
+							<Button onClick={() => void navigator.clipboard.writeText(report?.markdown ?? "")}>
+								{t("复制")}
+							</Button>
+							<Button type="primary" onClick={() => setReport(null)}>
+								{t("关闭")}
+							</Button>
+						</Space>
+					}
+				>
+					<pre className="report-preview">{report?.markdown ?? ""}</pre>
+				</Modal>
+			</Page>
 		);
 	}
 
 	// list view
+	const columns: ProColumns<SentinelEngine>[] = [
+		{
+			title: t("工程"),
+			dataIndex: "name",
+			key: "name",
+			render: (_, engine) => <Text strong>{engine.name}</Text>,
+		},
+		{
+			title: t("状态"),
+			key: "status",
+			width: 120,
+			render: (_, engine) => (
+				<Tag color={ENGINE_STATUS_COLORS[engine.status]} variant="filled">
+					{ENGINE_STATUS_LABELS[engine.status]}
+				</Tag>
+			),
+		},
+		{
+			title: t("进度"),
+			key: "progress",
+			render: (_, engine) => {
+				const running = engine.tasks.filter((task) => task.status === "running").length;
+				const queued = engine.tasks.filter((task) => task.status === "queued").length;
+				const done = engine.tasks.filter((task) => task.status === "done").length;
+				const failed = engine.tasks.filter((task) => ["failed", "blocked"].includes(task.status)).length;
+				const parts = [
+					t("{count} 完成", { count: done }),
+					running > 0 ? t("{count} 运行", { count: running }) : "",
+					queued > 0 ? t("{count} 排队", { count: queued }) : "",
+					failed > 0 ? t("{count} 失败", { count: failed }) : "",
+				].filter(Boolean);
+				return <Text type="secondary">{parts.join(" · ") || "—"}</Text>;
+			},
+		},
+		{
+			title: t("中枢提交"),
+			key: "vulns",
+			width: 110,
+			render: (_, engine) => (
+				<Text>{t("{count} 条", { count: engine.tasks.reduce((sum, task) => sum + task.vulns, 0) })}</Text>
+			),
+		},
+		{
+			title: t("耗时"),
+			key: "elapsed",
+			width: 110,
+			render: (_, engine) => {
+				const startedAt = engine.startedAt ?? engine.createdAt;
+				const elapsed =
+					engine.startedAt === null
+						? null
+						: (engine.endedAt ?? (engine.status === "running" ? Date.now() : startedAt)) - startedAt;
+				return <Text type="secondary">{elapsed === null ? "—" : formatDuration(elapsed)}</Text>;
+			},
+		},
+		{
+			title: t("创建时间"),
+			key: "createdAt",
+			width: 170,
+			render: (_, engine) => (
+				<Text type="secondary">{new Date(engine.createdAt).toLocaleString("zh-CN", { hour12: false })}</Text>
+			),
+		},
+	];
+
 	return (
-		<div className="page-card engine-page">
-			<div className="ws-panel__head">
-				<div className="ws-panel__title">
-					{t("工程")}
-					<span className="ws-panel__sub">
-						{props.hasProject
-							? t("{project} · {count} 个工程", {
-									project: props.engines[0]?.projectName ?? "",
-									count: props.engines.length,
-								})
-							: t("请先选择项目")}
-					</span>
-				</div>
-				<div className="ws-panel__actions">
-					<button type="button" onClick={() => setView("doctrines")}>
+		<Page
+			title={t("工程")}
+			description={
+				props.hasProject
+					? t("{project} · {count} 个工程", {
+							project: props.engines[0]?.projectName ?? "",
+							count: props.engines.length,
+						})
+					: t("请先选择项目")
+			}
+			extra={
+				<Space size={8}>
+					<Button icon={<ReadOutlined />} onClick={() => setView("doctrines")}>
 						{t("指挥思路")}
-					</button>
-					<button type="button" className="primary" disabled={!props.hasProject} onClick={() => setView("create")}>
+					</Button>
+					<Button type="primary" icon={<PlusOutlined />} disabled={!props.hasProject} onClick={() => setView("create")}>
 						{t("新建工程")}
-					</button>
-				</div>
-			</div>
-			<div className="ws-panel__body">
-				{props.engines.length === 0 ? (
-					<div className="ws-empty">
-						{props.hasProject
-							? t("还没有工程。点「新建工程」，贴入目标清单并选择指挥思路即可开始。")
-							: t("工程属于项目：请先在侧栏顶部选择或创建一个项目。")}
-					</div>
-				) : (
-					<div className="data-table engines-table">
-						<div className="data-row data-head">
-							<span>{t("工程")}</span>
-							<span>{t("状态")}</span>
-							<span>{t("进度")}</span>
-							<span>{t("中枢提交")}</span>
-							<span>{t("耗时")}</span>
-							<span>{t("创建时间")}</span>
-						</div>
-						{props.engines.map((engine) => {
-							const running = engine.tasks.filter((task) => task.status === "running").length;
-							const queued = engine.tasks.filter((task) => task.status === "queued").length;
-							const done = engine.tasks.filter((task) => task.status === "done").length;
-							const failed = engine.tasks.filter((task) => ["failed", "blocked"].includes(task.status)).length;
-							const parts = [
-								t("{count} 完成", { count: done }),
-								running > 0 ? t("{count} 运行", { count: running }) : "",
-								queued > 0 ? t("{count} 排队", { count: queued }) : "",
-								failed > 0 ? t("{count} 失败", { count: failed }) : "",
-							].filter(Boolean);
-							const startedAt = engine.startedAt ?? engine.createdAt;
-							const elapsed =
-								engine.startedAt === null
-									? null
-									: (engine.endedAt ?? (engine.status === "running" ? Date.now() : startedAt)) -
-										startedAt;
-							return (
-								<div
-									key={engine.id}
-									className="data-row"
-									onClick={() => openBoard(engine.id)}
-									role="button"
-									tabIndex={0}
-									onKeyDown={(event) => {
-										if (event.key === "Enter") openBoard(engine.id);
-									}}
-								>
-									<span className="data-name">{engine.name}</span>
-									<span>
-										<span className={`tag ${ENGINE_STATUS_CLASS[engine.status]}`}>
-											{ENGINE_STATUS_LABELS[engine.status]}
-										</span>
-									</span>
-									<span>{parts.join(" · ") || "—"}</span>
-									<span>
-										{t("{count} 条", {
-											count: engine.tasks.reduce((sum, task) => sum + task.vulns, 0),
-										})}
-									</span>
-									<span>{elapsed === null ? "—" : formatDuration(elapsed)}</span>
-									<span className="data-mono">
-										{new Date(engine.createdAt).toLocaleString("zh-CN", { hour12: false })}
-									</span>
-								</div>
-							);
-						})}
-					</div>
-				)}
-			</div>
-		</div>
+					</Button>
+				</Space>
+			}
+		>
+			<ProTable<SentinelEngine>
+				rowKey="id"
+				size="middle"
+				columns={columns}
+				dataSource={props.engines}
+				search={false}
+				options={false}
+				pagination={false}
+				onRow={(engine) => ({
+					onClick: () => openBoard(engine.id),
+					style: { cursor: "pointer" },
+				})}
+				locale={{
+					emptyText: props.hasProject
+						? t("还没有工程。点「新建工程」，贴入目标清单并选择指挥思路即可开始。")
+						: t("工程属于项目：请先在侧栏顶部选择或创建一个项目。"),
+				}}
+			/>
+		</Page>
 	);
 }
 
@@ -632,58 +692,60 @@ function EngineStats({
 	const busy = engine.tasks.some((task) => task.status === "running" || task.status === "queued");
 	const gateLockedReason = busy ? t("有任务正在运行或排队，等它们结束再改") : undefined;
 	return (
-		<div className="engine-stats">
-			<span className="tag tag-running">{t("运行 {count}", { count: count("running") })}</span>
-			<span className="tag tag-queued">{t("排队 {count}", { count: count("queued") })}</span>
-			<span className="tag tag-done">{t("完成 {count}", { count: count("done") })}</span>
-			<span className="tag tag-failed">{t("失败 {count}", { count: count("failed") })}</span>
-			<span className="tag tag-blocked">{t("阻塞 {count}", { count: count("blocked") })}</span>
-			<span>
-				{t("· 中枢提交")} <span className="stat-num">{vulns}</span> {t("条")}
-			</span>
-			<span>
-				{t("· 并发")} <span className="stat-num">{engine.limits.concurrency}</span>
-			</span>
-			<span>
-				{t("轮数")} <span className="stat-num">{engine.limits.roundLimit}</span>
-			</span>
-			<span>
-				{t("重试")} <span className="stat-num">{engine.limits.maxRetries}</span>
-			</span>
-			{engine.limits.tokenLimit ? (
-				<span>
-					{t("token 上限")} <span className="stat-num">{formatUsage(engine.limits.tokenLimit)}</span>
-				</span>
-			) : null}
-			{engine.limits.timeLimitMin ? (
-				<span>
-					{t("时间上限")}{" "}
-					<span className="stat-num">
-						{engine.limits.timeLimitMin} {t("分")}
-					</span>
-				</span>
-			) : null}
-			<span className="mode-switch engine-gate-switch" title={gateLockedReason ?? t("worker 命令的守门方式")}>
-				<button
-					type="button"
-					className={engine.gateMode === "auto" ? "on" : ""}
+		<Card size="small" className="enginehub-stats">
+			<Space size={8} wrap>
+				<Tag color="processing" variant="filled">
+					{t("运行 {count}", { count: count("running") })}
+				</Tag>
+				<Tag variant="filled">{t("排队 {count}", { count: count("queued") })}</Tag>
+				<Tag color="success" variant="filled">
+					{t("完成 {count}", { count: count("done") })}
+				</Tag>
+				<Tag color="error" variant="filled">
+					{t("失败 {count}", { count: count("failed") })}
+				</Tag>
+				<Tag color="warning" variant="filled">
+					{t("阻塞 {count}", { count: count("blocked") })}
+				</Tag>
+				<Text type="secondary">
+					{t("· 中枢提交")} <Text strong>{vulns}</Text> {t("条")}
+				</Text>
+				<Text type="secondary">
+					{t("· 并发")} <Text strong>{engine.limits.concurrency}</Text>
+				</Text>
+				<Text type="secondary">
+					{t("轮数")} <Text strong>{engine.limits.roundLimit}</Text>
+				</Text>
+				<Text type="secondary">
+					{t("重试")} <Text strong>{engine.limits.maxRetries}</Text>
+				</Text>
+				{engine.limits.tokenLimit ? (
+					<Text type="secondary">
+						{t("token 上限")} <Text strong>{formatUsage(engine.limits.tokenLimit)}</Text>
+					</Text>
+				) : null}
+				{engine.limits.timeLimitMin ? (
+					<Text type="secondary">
+						{t("时间上限")}{" "}
+						<Text strong>
+							{engine.limits.timeLimitMin} {t("分")}
+						</Text>
+					</Text>
+				) : null}
+				<Segmented
+					size="small"
+					value={engine.gateMode}
 					disabled={busy}
-					onClick={() => onSetGateMode("auto")}
-				>
-					{t("自动执行")}
-				</button>
-				<button
-					type="button"
-					className={engine.gateMode === "ai" ? "on" : ""}
-					disabled={busy || !judgeAvailable}
-					title={judgeAvailable ? undefined : t("未配置守门模型端点")}
-					onClick={() => onSetGateMode("ai")}
-				>
-					{t("AI 裁判")}
-				</button>
-			</span>
-			{engine.pauseNote ? <span className="ws-panel__sub">{engine.pauseNote}</span> : null}
-		</div>
+					title={gateLockedReason ?? t("worker 命令的守门方式")}
+					onChange={(value) => onSetGateMode(value as SentinelEngineGateMode)}
+					options={[
+						{ value: "auto", label: t("自动执行") },
+						{ value: "ai", label: t("AI 裁判"), disabled: !judgeAvailable },
+					]}
+				/>
+				{engine.pauseNote ? <Text type="secondary">{engine.pauseNote}</Text> : null}
+			</Space>
+		</Card>
 	);
 }
 
@@ -711,85 +773,97 @@ function EnginePresetWhitelist({
 	// commander would be refused on every attempt.
 	const stuck = !engine.presetOptional && allowed === 0;
 	return (
-		<div className="engine-presets">
-			<div className="engine-presets__head">
-				<span className="engine-presets__title">{t("预设 Agent 白名单")}</span>
-				<span className={selected.length === 0 ? "engine-presets__state is-open" : "engine-presets__state"}>
+		<Card
+			size="small"
+			title={t("预设 Agent 白名单")}
+			extra={
+				<Tag color={selected.length === 0 ? "green" : undefined} variant="filled">
 					{selected.length === 0
 						? t("未限制：指挥官可使用全部已启用的预设")
 						: t("已限制为 {count} 个预设", { count: selected.length })}
-				</span>
-			</div>
-			<p className="form-hint">
+				</Tag>
+			}
+		>
+			<Text type="secondary">
 				{t("勾选指挥官可以使用的预设；未勾选任何一项 = 不限制（指挥官可用全部已启用的预设）。")}{" "}
 				{t("运行中也能修改，只影响之后派发的任务；已停用或已删除的预设不会出现在上面，也不会再被派发。")}
-			</p>
-			<div className="engine-presets__list">
-				{enabled.length === 0 ? (
-					<span className="engine-presets__empty">
-						{t("还没有启用的预设 Agent，可到 设置 → 预设 Agent 创建。")}
-					</span>
-				) : (
-					enabled.map((preset) => (
-						<label className="engine-preset-item" key={preset.id} title={preset.description || undefined}>
-							<input
-								type="checkbox"
-								checked={selected.includes(preset.id)}
-								onChange={(event) =>
-									onChange(
-										event.target.checked
-											? [...selected, preset.id]
-											: selected.filter((id) => id !== preset.id),
-									)
-								}
-							/>
-							<span className="engine-preset-name">{preset.name}</span>
-							<span className="engine-preset-tokens">{t("粗估 {count} tokens", { count: preset.tokens })}</span>
-						</label>
-					))
-				)}
-			</div>
-			<label className="engine-preset-optional">
-				<input
-					type="checkbox"
-					checked={engine.presetOptional}
-					onChange={(event) => onChangeOptional(event.target.checked)}
+			</Text>
+			{enabled.length === 0 ? (
+				<Alert
+					type="info"
+					showIcon
+					className="ui-page__alert"
+					title={t("还没有启用的预设 Agent，可到 设置 → 预设 Agent 创建。")}
 				/>
-				<span>{t("允许任务不指定预设（没有合适预设时，指挥官可以省略 preset，让任务用默认 Agent 执行）")}</span>
-			</label>
-			<p className={`form-hint${stuck ? " is-warn" : ""}`}>
-				{engine.presetOptional
-					? t("关掉它，指挥官就必须为每个任务指定一个预设；没有合适的时候也不能退回默认 Agent，派发会被拒绝。")
-					: stuck
-						? t("已要求每个任务都必须指定预设，但当前没有可用预设：指挥官无法派发任何任务，请勾选上面的预设，或重新允许使用默认 Agent。")
-						: t("已要求每个任务都必须指定预设（当前可选 {count} 个）；省略 preset 的派发会被拒绝，不会产生任务。", {
-								count: allowed,
-							})}
-			</p>
-		</div>
+			) : (
+				<Space orientation="vertical" size={6} className="enginehub-presets">
+					{enabled.map((preset) => (
+						<Checkbox
+							key={preset.id}
+							checked={selected.includes(preset.id)}
+							title={preset.description || undefined}
+							onChange={(event) =>
+								onChange(
+									event.target.checked
+										? [...selected, preset.id]
+										: selected.filter((id) => id !== preset.id),
+								)
+							}
+						>
+							<Space size={8} wrap>
+								<Text>{preset.name}</Text>
+								<Text type="secondary">{t("粗估 {count} tokens", { count: preset.tokens })}</Text>
+							</Space>
+						</Checkbox>
+					))}
+				</Space>
+			)}
+			<Checkbox
+				checked={engine.presetOptional}
+				className="enginehub-optional"
+				onChange={(event) => onChangeOptional(event.target.checked)}
+			>
+				{t("允许任务不指定预设（没有合适预设时，指挥官可以省略 preset，让任务用默认 Agent 执行）")}
+			</Checkbox>
+			<Alert
+				type={stuck ? "warning" : "info"}
+				showIcon
+				className="ui-page__alert"
+				title={
+					engine.presetOptional
+						? t("关掉它，指挥官就必须为每个任务指定一个预设；没有合适的时候也不能退回默认 Agent，派发会被拒绝。")
+						: stuck
+							? t("已要求每个任务都必须指定预设，但当前没有可用预设：指挥官无法派发任何任务，请勾选上面的预设，或重新允许使用默认 Agent。")
+							: t("已要求每个任务都必须指定预设（当前可选 {count} 个）；省略 preset 的派发会被拒绝，不会产生任务。", {
+									count: allowed,
+								})
+				}
+			/>
+		</Card>
 	);
 }
 
 function TargetsBox({ engineId, onSend }: { engineId: string; onSend: (message: unknown) => void }) {
 	const [appendText, setAppendText] = useState("");
 	return (
-		<div className="steer-box">
-			<input
-				type="text"
-				placeholder={t("追加目标（一行一个，可带备注）…")}
-				value={appendText}
-				onChange={(event) => setAppendText(event.target.value)}
-			/>
-			<button
-				type="button"
-				disabled={!appendText.trim()}
-				onClick={() => {
-					onSend({ type: "engine_add_targets", id: engineId, targets: appendText });
-					setAppendText("");
-				}}
-			>
-				{t("追加")}
-			</button>
+		<div className="enginehub-targets">
+			<Space.Compact style={{ width: "100%" }}>
+				<Input
+					placeholder={t("追加目标（一行一个，可带备注）…")}
+					value={appendText}
+					onChange={(event) => setAppendText(event.target.value)}
+				/>
+				<Button
+					type="primary"
+					disabled={!appendText.trim()}
+					onClick={() => {
+						onSend({ type: "engine_add_targets", id: engineId, targets: appendText });
+						setAppendText("");
+					}}
+				>
+					{t("追加")}
+				</Button>
+			</Space.Compact>
 		</div>
 	);
 }
@@ -797,82 +871,121 @@ function TargetsBox({ engineId, onSend }: { engineId: string; onSend: (message: 
 function TaskBoard(props: { engine: SentinelEngine; onOpenTask(taskId: string): void; onAbortTask(taskId: string): void }) {
 	const tasks = props.engine.tasks;
 	return (
-		<div className="board-col">
-			<div className="board-col__head">
-				<span className="board-col__title">{t("任务看板")}</span>
-				<span className="ws-panel__sub">{t("{count} 个任务 · 点行看详情", { count: tasks.length })}</span>
-			</div>
-			<div className="board-col__body">
-				{tasks.length === 0 ? (
-					<div className="ws-empty">
-						{props.engine.status === "scheduled"
-							? t("计划等待开始。到点后先检查运行环境，再启动指挥官并派发任务。")
-							: t("还没有任务。指挥官启动后会在这里派发。")}
-					</div>
-				) : (
-					<div className="data-table tasks-table">
-						<div className="data-row data-head">
-							<span>{t("状态")}</span>
-							<span>{t("任务")}</span>
-							<span>{t("目标")}</span>
-							<span>{t("次数")}</span>
-							<span>{t("用量")}</span>
-							<span>{t("结论")}</span>
-							<span />
-						</div>
-						{tasks.map((task) => (
-							<div
-								key={task.id}
-								className="data-row"
-								role="button"
-								tabIndex={0}
-								onClick={() => props.onOpenTask(task.id)}
-								onKeyDown={(event) => {
-									if (event.key === "Enter") props.onOpenTask(task.id);
-								}}
+		<Card
+			size="small"
+			className="enginehub-board"
+			title={t("任务看板")}
+			extra={<Text type="secondary">{t("{count} 个任务 · 点行看详情", { count: tasks.length })}</Text>}
+		>
+			<Table<SentinelEngineTask>
+				rowKey="id"
+				size="small"
+				dataSource={tasks}
+				pagination={false}
+				scroll={{ x: 820 }}
+				onRow={(task) => ({
+					onClick: () => props.onOpenTask(task.id),
+					style: { cursor: "pointer" },
+				})}
+				columns={[
+					{
+						title: t("状态"),
+						key: "status",
+						width: 100,
+						render: (_, task) => (
+							<Tag
+								color={
+									task.status === "done"
+										? "green"
+										: task.status === "failed" || task.status === "blocked"
+											? "red"
+											: task.status === "running"
+												? "processing"
+												: "default"
+								}
+								variant="filled"
 							>
-								<span>
-									<span className={`tag ${TASK_STATUS_CLASS[task.status]}`}>
-										{TASK_STATUS_LABELS[task.status]}
-									</span>
-								</span>
-								<span className="data-name">
-									<span className="task-name-text">{task.title}</span>
-									<span
-										className={`tag tag-preset ${task.presetName ? "" : "is-default"}`}
-										title={
-											task.presetName
-												? t("预设 Agent：{name}", { name: task.presetName })
-												: t("默认 Agent：未指定预设")
-										}
-									>
-										{task.presetName ?? t("默认")}
-									</span>
-								</span>
-								<span className="data-mono">{task.target ?? "—"}</span>
-								<span>{t("第 {count} 次", { count: task.attempt })}</span>
-								<span className="data-mono">{formatUsage(task.usage?.total)}</span>
-								<span className="task-summary">{task.summary ?? task.error ?? ""}</span>
-								<span>
-									{task.status === "running" || task.status === "queued" ? (
-										<button
-											type="button"
-											className="mini-btn"
-											onClick={(event) => {
-												event.stopPropagation();
-												props.onAbortTask(task.id);
-											}}
-										>
-											{t("中止")}
-										</button>
-									) : null}
-								</span>
+								{TASK_STATUS_LABELS[task.status]}
+							</Tag>
+						),
+					},
+					{
+						title: t("任务"),
+						key: "title",
+						render: (_, task) => (
+							<div className="enginehub-task">
+								<Text strong>{task.title}</Text>
+								<Tag
+									variant="filled"
+									title={
+										task.presetName
+											? t("预设 Agent：{name}", { name: task.presetName })
+											: t("默认 Agent：未指定预设")
+									}
+								>
+									{task.presetName ?? t("默认")}
+								</Tag>
 							</div>
-						))}
-					</div>
-				)}
-			</div>
-		</div>
+						),
+					},
+					{
+						title: t("目标"),
+						key: "target",
+						width: 160,
+						render: (_, task) => <Text code>{task.target ?? "—"}</Text>,
+					},
+					{
+						title: t("次数"),
+						key: "attempt",
+						width: 80,
+						render: (_, task) => t("第 {count} 次", { count: task.attempt }),
+					},
+					{
+						title: t("用量"),
+						key: "usage",
+						width: 90,
+						render: (_, task) => <Text type="secondary">{formatUsage(task.usage?.total)}</Text>,
+					},
+					{
+						title: t("结论"),
+						key: "summary",
+						ellipsis: true,
+						render: (_, task) => <Text type="secondary">{task.summary ?? task.error ?? ""}</Text>,
+					},
+					{
+						title: "",
+						key: "ops",
+						width: 90,
+						render: (_, task) =>
+							task.status === "running" || task.status === "queued" ? (
+								<Button
+									size="small"
+									type="link"
+									danger
+									onClick={(event) => {
+										event.stopPropagation();
+										props.onAbortTask(task.id);
+									}}
+								>
+									{t("中止")}
+								</Button>
+							) : null,
+					},
+				]}
+				locale={{
+					emptyText: (
+						<Empty
+							image={Empty.PRESENTED_IMAGE_SIMPLE}
+							description={
+								props.engine.status === "scheduled"
+									? t("计划等待开始。到点后先检查运行环境，再启动指挥官并派发任务。")
+									: t("还没有任务。指挥官启动后会在这里派发。")
+							}
+						/>
+					),
+				}}
+			/>
+		</Card>
 	);
 }
 
@@ -901,12 +1014,7 @@ function CommanderFeed({
 	onSend: (message: unknown) => void;
 }) {
 	const canChat = running || completed;
-	const [openThinking, setOpenThinking] = useState<Set<number>>(new Set());
 	const [draft, setDraft] = useState("");
-	const containerRef = useState<{ current: HTMLDivElement | null }>({ current: null })[0];
-	useEffect(() => {
-		if (containerRef.current) containerRef.current.scrollTop = containerRef.current.scrollHeight;
-	}, [events.length, containerRef]);
 	const sendDraft = (): void => {
 		const text = draft.trim();
 		if (!text || !canChat) return;
@@ -914,94 +1022,97 @@ function CommanderFeed({
 		setDraft("");
 	};
 	return (
-		<div className="board-col">
-			<div className="board-col__head">
-				<span className="board-col__title">{t("指挥官")}</span>
-				<span className="ws-panel__sub">{t("对话 · 决策日志")}</span>
+		<Card
+			size="small"
+			className="enginehub-feed"
+			title={t("指挥官")}
+			extra={<Text type="secondary">{t("对话 · 决策日志")}</Text>}
+		>
+			<div className="enginehub-feed__body">
+				{events.length === 0 ? (
+					<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t("指挥官还没有动作。")} />
+				) : null}
+				{events.map((event) => {
+					if (event.kind === "thinking") {
+						return (
+							<Collapse
+								key={event.seq}
+								ghost
+								size="small"
+								className="enginehub-thinking"
+								items={[
+									{
+										key: String(event.seq),
+										label: (
+											<Text type="secondary">
+												{t("{time} · 思考 · {count} 字", {
+													time: formatClock(event.at),
+													count: (event.text ?? "").length,
+												})}
+											</Text>
+										),
+										children: <pre className="enginehub-pre">{event.text}</pre>,
+									},
+								]}
+							/>
+						);
+					}
+					if (event.kind === "text" && event.from === "operator") {
+						return (
+							<div key={event.seq} className="enginehub-msg is-operator">
+								<Text type="secondary" className="enginehub-msg__meta">
+									{t("你 · {time}", { time: formatClock(event.at) })}
+								</Text>
+								<Text className="enginehub-msg__text">{event.text}</Text>
+							</div>
+						);
+					}
+					if (event.kind === "text") {
+						return (
+							<div key={event.seq} className="enginehub-msg">
+								<Text type="secondary" className="enginehub-msg__meta">
+									{t("{time} · 指挥官", { time: formatClock(event.at) })}
+								</Text>
+								<Text className="enginehub-msg__text">{event.text}</Text>
+							</div>
+						);
+					}
+					if (event.kind === "tool_start") {
+						return (
+							<div key={event.seq} className="enginehub-tool">
+								<Text type="secondary">{formatClock(event.at)}</Text>
+								<Text code>{event.toolName}</Text>
+								<Text type="secondary" ellipsis>
+									{toolArgSummary(event)}
+								</Text>
+							</div>
+						);
+					}
+					if (event.kind === "tool_end") {
+						return (
+							<div key={event.seq} className="enginehub-tool">
+								<Text type="secondary">{formatClock(event.at)}</Text>
+								<Tag color={event.isError ? "red" : "green"} variant="filled">
+									{event.toolName}
+								</Tag>
+								<Text type="secondary" ellipsis>
+									{(event.output ?? "").trim().slice(0, 200)}
+								</Text>
+							</div>
+						);
+					}
+					if (event.kind === "status") {
+						return (
+							<Text key={event.seq} type="secondary" className="enginehub-status">
+								{event.note ?? event.status ?? ""}
+							</Text>
+						);
+					}
+					return null;
+				})}
 			</div>
-			<div className="board-col__body" ref={containerRef}>
-				<div className="commander-feed">
-					{events.length === 0 ? <div className="ws-empty">{t("指挥官还没有动作。")}</div> : null}
-					{events.map((event) => {
-						if (event.kind === "thinking") {
-							const isOpen = openThinking.has(event.seq);
-							return (
-								<div key={event.seq} className="commander-item">
-									<div className="commander-item__meta">{t("{time} · 思考", { time: formatClock(event.at) })}</div>
-									<button
-										type="button"
-										className="commander-item__thinking"
-										onClick={() =>
-											setOpenThinking((prev) => {
-												const next = new Set(prev);
-												if (next.has(event.seq)) next.delete(event.seq);
-												else next.add(event.seq);
-												return next;
-											})
-										}
-									>
-										{isOpen
-											? t("思考 · {count} 字（点起）", { count: (event.text ?? "").length })
-											: t("思考 · {count} 字（点开）", { count: (event.text ?? "").length })}
-									</button>
-									{isOpen ? <div className="commander-thinking-open">{event.text}</div> : null}
-								</div>
-							);
-						}
-						if (event.kind === "text" && event.from === "operator") {
-							return (
-								<div key={event.seq} className="commander-msg commander-msg--operator">
-									<div className="commander-msg__meta">{t("你 · {time}", { time: formatClock(event.at) })}</div>
-									<div className="commander-msg__bubble">{event.text}</div>
-								</div>
-							);
-						}
-						if (event.kind === "text") {
-							return (
-								<div key={event.seq} className="commander-item">
-									<div className="commander-item__meta">
-										{t("{time} · 指挥官", { time: formatClock(event.at) })}
-									</div>
-									<div className="commander-item__text">{event.text}</div>
-								</div>
-							);
-						}
-						if (event.kind === "tool_start") {
-							return (
-								<div key={event.seq} className="commander-item">
-									<div className="commander-item__meta">{formatClock(event.at)}</div>
-									<div className="commander-tool-row">
-										<span className="tname">{event.toolName}</span>
-										<span className="targ">{toolArgSummary(event)}</span>
-									</div>
-								</div>
-							);
-						}
-						if (event.kind === "tool_end") {
-							return (
-								<div key={event.seq} className="commander-item">
-									<div className="commander-item__meta">{formatClock(event.at)}</div>
-									<div className={`commander-tool-row${event.isError ? " is-error" : ""}`}>
-										<span className="tname">{event.toolName}</span>
-										<span className="targ">{(event.output ?? "").trim().slice(0, 200)}</span>
-										<span className={event.isError ? "terr" : "tok"}>{event.isError ? "✕" : "✓"}</span>
-									</div>
-								</div>
-							);
-						}
-						if (event.kind === "status") {
-							return (
-								<div key={event.seq} className="commander-sep">
-									{event.note ?? event.status ?? ""}
-								</div>
-							);
-						}
-						return null;
-					})}
-				</div>
-			</div>
-			<div className="commander-composer">
-				<textarea
+			<div className="enginehub-composer">
+				<Input.TextArea
 					rows={2}
 					value={draft}
 					disabled={!canChat}
@@ -1020,11 +1131,11 @@ function CommanderFeed({
 						}
 					}}
 				/>
-				<button type="button" disabled={!canChat || !draft.trim()} onClick={sendDraft}>
+				<Button type="primary" disabled={!canChat || !draft.trim()} onClick={sendDraft}>
 					{t("发送")}
-				</button>
+				</Button>
 			</div>
-		</div>
+		</Card>
 	);
 }
 
@@ -1038,91 +1149,93 @@ function TaskModal(props: {
 	const task = props.task;
 	if (!task) return null;
 	return (
-		<div className="modal-backdrop" onClick={props.onClose}>
-			<div className="modal engine-task-modal" onClick={(event) => event.stopPropagation()}>
-				<div className="vuln-detail__head">
-					<div>
-						<div className="vuln-detail__title">
-							{task.title}
-							<span className={`tag ${TASK_STATUS_CLASS[task.status]}`} style={{ marginLeft: 8 }}>
-								{TASK_STATUS_LABELS[task.status]}
-							</span>
-						</div>
-						<div className="vuln-detail__meta">
-							<span>{t("目标：{target}", { target: task.target ?? "—" })}</span>
-							<span>{t("预设 Agent：{name}", { name: task.presetName ?? t("默认 Agent") })}</span>
-							<span>{t("第 {count} 次派发", { count: task.attempt })}</span>
-							<span>{t("轮数上限 {count}", { count: task.roundLimit })}</span>
-							<span>{t("工作目录 /work/tasks/{workspace}", { workspace: task.workspace })}</span>
-						</div>
-					</div>
-					<div className="ws-panel__actions">
-						{task.sessionId ? (
-							<button type="button" onClick={() => props.onOpenInChat(task.id)}>
-								{t("在对话中打开")}
-							</button>
+		<Modal
+			open
+			width={880}
+			onCancel={props.onClose}
+			footer={null}
+			destroyOnHidden
+			className="engine-task-modal"
+			title={
+				<Space size={8} wrap>
+					<Text strong>{task.title}</Text>
+					<Tag color={task.status === "done" ? "green" : task.status === "failed" ? "red" : "processing"} variant="filled">
+						{TASK_STATUS_LABELS[task.status]}
+					</Tag>
+				</Space>
+			}
+		>
+			<Space size={8} wrap className="enginehub-taskops">
+				{task.sessionId ? (
+					<Button size="small" onClick={() => props.onOpenInChat(task.id)}>
+						{t("在对话中打开")}
+					</Button>
+				) : null}
+				{task.status === "running" || task.status === "queued" ? (
+					<Button size="small" danger onClick={() => props.onAbort(task.id)}>
+						{t("中止任务")}
+					</Button>
+				) : null}
+				<Button size="small" type="primary" onClick={props.onClose}>
+					{t("关闭")}
+				</Button>
+			</Space>
+
+			<Descriptions
+				size="small"
+				column={2}
+				bordered
+				className="enginehub-taskdesc"
+				items={[
+					{ key: "target", label: t("目标"), children: task.target ?? "—" },
+					{ key: "preset", label: t("预设 Agent"), children: task.presetName ?? t("默认 Agent") },
+					{ key: "attempt", label: t("派发次数"), children: t("第 {count} 次", { count: task.attempt }) },
+					{ key: "workspace", label: t("工作目录"), children: <Text code>/work/tasks/{task.workspace}</Text> },
+					{ key: "rounds", label: t("轮数上限"), children: task.roundLimit },
+					{ key: "tokens", label: t("用量"), children: `${formatUsage(task.usage?.total)} tokens` },
+					{
+						key: "elapsed",
+						label: t("耗时"),
+						children: task.startedAt ? formatDuration((task.endedAt ?? Date.now()) - task.startedAt) : "—",
+					},
+					{ key: "vulns", label: t("中枢提交"), children: t("{count} 条", { count: task.vulns }) },
+				]}
+			/>
+
+			<Text strong>{task.status === "running" ? t("当前结论") : t("结论")}</Text>
+			{task.error ? <Alert type="error" showIcon className="ui-page__alert" title={task.error} /> : null}
+			<pre className="enginehub-pre">{task.summary ?? t("（暂无）")}</pre>
+
+			<Text strong>{t("任务指令（指挥官原文）")}</Text>
+			<pre className="enginehub-pre">{task.objective}</pre>
+
+			<Text strong>{t("执行过程 · {count} 步", { count: props.events.length })}</Text>
+			<div className="enginehub-events">
+				{props.events.slice(-30).map((event) => (
+					<div key={event.seq} className="enginehub-event">
+						<Space size={8} wrap>
+							<Text type="secondary">{formatClock(event.at)}</Text>
+							{event.kind === "text" ? (
+								<Text>{(event.text ?? "").slice(0, 160)}</Text>
+							) : event.kind === "thinking" ? (
+								<Text type="secondary">{t("思考 · {count} 字", { count: (event.text ?? "").length })}</Text>
+							) : event.kind === "tool_start" ? (
+								<Text code>{event.toolName}</Text>
+							) : event.kind === "tool_end" ? (
+								<Tag color={event.isError ? "red" : "green"} variant="filled">
+									{event.toolName}
+								</Tag>
+							) : (
+								<Text type="secondary">{event.note ?? event.status ?? ""}</Text>
+							)}
+						</Space>
+						{event.kind === "tool_end" && (event.output ?? "").trim() ? (
+							<pre className="enginehub-pre">{event.output}</pre>
 						) : null}
-						{task.status === "running" || task.status === "queued" ? (
-							<button type="button" onClick={() => props.onAbort(task.id)}>
-								{t("中止任务")}
-							</button>
-						) : null}
-						<button type="button" className="primary" onClick={props.onClose}>
-							{t("关闭")}
-						</button>
 					</div>
-				</div>
-				<div className="vuln-meta-grid">
-					<div>
-						<span>{t("耗时")}</span>
-						<span>{task.startedAt ? formatDuration((task.endedAt ?? Date.now()) - task.startedAt) : "—"}</span>
-					</div>
-					<div>
-						<span>{t("用量")}</span>
-						<span>{formatUsage(task.usage?.total)} tokens</span>
-					</div>
-					<div>
-						<span>{t("中枢提交")}</span>
-						<span>{t("{count} 条", { count: task.vulns })}</span>
-					</div>
-					<div>
-						<span>{t("任务 ID")}</span>
-						<span>{task.id}</span>
-					</div>
-				</div>
-				<h3>{task.status === "running" ? t("当前结论") : t("结论")}</h3>
-				{task.error ? <div className="engine-task-error">{task.error}</div> : null}
-				<div className="engine-task-summary">{task.summary ?? t("（暂无）")}</div>
-				<h3>{t("任务指令（指挥官原文）")}</h3>
-				<pre className="ws-console__body">{task.objective}</pre>
-				<h3>{t("执行过程 · {count} 步", { count: props.events.length })}</h3>
-				<div className="engine-task-events">
-					{props.events.slice(-30).map((event) => (
-						<div key={event.seq} className="engine-task-event">
-							<div className="engine-task-event__head">
-								<span>{formatClock(event.at)}</span>
-								{event.kind === "text" ? (
-									<span>✎ {(event.text ?? "").slice(0, 160)}</span>
-								) : event.kind === "thinking" ? (
-									<span>{t("思考 · {count} 字", { count: (event.text ?? "").length })}</span>
-								) : event.kind === "tool_start" ? (
-									<span className="tname">▸ {event.toolName}</span>
-								) : event.kind === "tool_end" ? (
-									<span className={`tname${event.isError ? " is-error" : ""}`}>
-										{event.isError ? "✕" : "✓"} {event.toolName}
-									</span>
-								) : (
-									<span>— {event.note ?? event.status ?? ""} —</span>
-								)}
-							</div>
-							{event.kind === "tool_end" && (event.output ?? "").trim() ? (
-								<pre className="ws-console__body">{event.output}</pre>
-							) : null}
-						</div>
-					))}
-				</div>
+				))}
 			</div>
-		</div>
+		</Modal>
 	);
 }
 
@@ -1140,51 +1253,57 @@ function ScheduleStrip({ schedule }: { schedule: SentinelEngineSchedule }) {
 	if (schedule.pauseAt !== null) steps.push({ action: "pause", at: schedule.pauseAt });
 	if (schedule.resumeAt !== null) steps.push({ action: "resume", at: schedule.resumeAt });
 	if (schedule.deadlineAt !== null) steps.push({ action: "deadline", at: schedule.deadlineAt });
-	const phaseClass =
+	const phaseColor =
 		schedule.phase === "running"
-			? "tag-running"
+			? "processing"
 			: schedule.phase === "paused"
-				? "tag-paused"
+				? "warning"
 				: schedule.phase === "finished"
-					? "tag-stopped"
-					: "tag-scheduled";
+					? "default"
+					: "blue";
 	return (
-		<div className="schedule-strip">
-			<div className="schedule-strip__head">
-				<span className="schedule-strip__title">{t("定时计划")}</span>
-				<span className={`tag ${phaseClass}`}>{SCHEDULE_PHASE_LABELS[schedule.phase]}</span>
-				<span className="schedule-strip__zone">{schedule.timezone}</span>
-				{next ? (
-					<span className="schedule-strip__next">
-						{t("下次{action} {time}（{remaining}）", {
+		<Card
+			size="small"
+			className="enginehub-schedule"
+			title={
+				<Space size={8} wrap>
+					<Text strong>{t("定时计划")}</Text>
+					<Tag color={phaseColor} variant="filled">
+						{SCHEDULE_PHASE_LABELS[schedule.phase]}
+					</Tag>
+					<Text type="secondary">{schedule.timezone}</Text>
+				</Space>
+			}
+		>
+			<Text type="secondary">
+				{next
+					? t("下次{action} {time}（{remaining}）", {
 							action: SCHEDULE_ACTION_LABELS[next.action],
 							time: formatZonedDateTime(next.at, schedule.timezone),
 							remaining: formatRemaining(next.at, now),
-						})}
-					</span>
-				) : schedule.phase === "running" ? (
-					<span className="schedule-strip__next">{t("无后续计划动作，运行至工程完成")}</span>
-				) : schedule.phase === "finished" ? (
-					<span className="schedule-strip__next">{SCHEDULE_FINISH_LABELS[schedule.finishedReason ?? "manual"]}</span>
-				) : null}
-			</div>
-			<div className="schedule-strip__timeline">
+						})
+					: schedule.phase === "running"
+						? t("无后续计划动作，运行至工程完成")
+						: schedule.phase === "finished"
+							? SCHEDULE_FINISH_LABELS[schedule.finishedReason ?? "manual"]
+							: ""}
+			</Text>
+			<Space size={16} wrap className="enginehub-schedule__steps">
 				{steps.map((step) => {
 					const done = schedule.applied.includes(step.action);
 					const current = next?.action === step.action;
 					return (
-						<span
-							key={step.action}
-							className={`schedule-step${done ? " is-done" : ""}${current ? " is-next" : ""}`}
-						>
-							<span className="schedule-step__mark">{done ? "✓" : current ? "→" : "·"}</span>
-							<span className="schedule-step__label">{SCHEDULE_ACTION_LABELS[step.action]}</span>
-							<span className="schedule-step__time">{formatZonedDateTime(step.at, schedule.timezone)}</span>
-						</span>
+						<Space key={step.action} size={6}>
+							<Tag color={done ? "green" : current ? "processing" : "default"} variant="filled">
+								{done ? "✓" : current ? "→" : "·"}
+							</Tag>
+							<Text>{SCHEDULE_ACTION_LABELS[step.action]}</Text>
+							<Text type="secondary">{formatZonedDateTime(step.at, schedule.timezone)}</Text>
+						</Space>
 					);
 				})}
-			</div>
-		</div>
+			</Space>
+		</Card>
 	);
 }
 
@@ -1201,75 +1320,68 @@ function ScheduleFields({
 		onChange({ ...draft, [key]: value });
 	const lastStep = draft.resumeAt || draft.pauseAt || draft.startAt;
 	return (
-		<div className="schedule-fields">
-			<div className="schedule-grid">
-				<div className="form-field">
-					<label>{t("开始时间")}</label>
-					<input
-						type="datetime-local"
-						value={draft.startAt}
-						min={toLocalInputValue(Date.now())}
-						onChange={(event) => set("startAt", event.target.value)}
-					/>
-				</div>
-				<div className="form-field schedule-timezone">
-					<label>{t("时区")}</label>
-					<span>{t("{timezone}（浏览器时区）", { timezone })}</span>
-				</div>
-			</div>
-			<label className="schedule-check">
-				<input
-					type="checkbox"
-					checked={draft.pauseEnabled}
-					onChange={(event) => set("pauseEnabled", event.target.checked)}
-				/>
-				<span>{t("中途暂停，并在指定时间自动恢复")}</span>
-			</label>
+		<Form layout="vertical" requiredMark={false} className="enginehub-scheduleform">
+			<Row gutter={12}>
+				<Col xs={24} md={12}>
+					<Form.Item label={t("开始时间")}>
+						<Input
+							type="datetime-local"
+							value={draft.startAt}
+							min={toLocalInputValue(Date.now())}
+							onChange={(event) => set("startAt", event.target.value)}
+						/>
+					</Form.Item>
+				</Col>
+				<Col xs={24} md={12}>
+					<Form.Item label={t("时区")}>
+						<Text type="secondary">{t("{timezone}（浏览器时区）", { timezone })}</Text>
+					</Form.Item>
+				</Col>
+			</Row>
+			<Checkbox checked={draft.pauseEnabled} onChange={(event) => set("pauseEnabled", event.target.checked)}>
+				{t("中途暂停，并在指定时间自动恢复")}
+			</Checkbox>
 			{draft.pauseEnabled ? (
-				<div className="schedule-grid">
-					<div className="form-field">
-						<label>{t("暂停时间")}</label>
-						<input
-							type="datetime-local"
-							value={draft.pauseAt}
-							min={draft.startAt}
-							onChange={(event) => set("pauseAt", event.target.value)}
-						/>
-					</div>
-					<div className="form-field">
-						<label>{t("恢复时间")}</label>
-						<input
-							type="datetime-local"
-							value={draft.resumeAt}
-							min={draft.pauseAt || draft.startAt}
-							onChange={(event) => set("resumeAt", event.target.value)}
-						/>
-					</div>
-				</div>
+				<Row gutter={12} className="enginehub-scheduleform__row">
+					<Col xs={24} md={12}>
+						<Form.Item label={t("暂停时间")}>
+							<Input
+								type="datetime-local"
+								value={draft.pauseAt}
+								min={draft.startAt}
+								onChange={(event) => set("pauseAt", event.target.value)}
+							/>
+						</Form.Item>
+					</Col>
+					<Col xs={24} md={12}>
+						<Form.Item label={t("恢复时间")}>
+							<Input
+								type="datetime-local"
+								value={draft.resumeAt}
+								min={draft.pauseAt || draft.startAt}
+								onChange={(event) => set("resumeAt", event.target.value)}
+							/>
+						</Form.Item>
+					</Col>
+				</Row>
 			) : null}
-			<label className="schedule-check">
-				<input
-					type="checkbox"
-					checked={draft.deadlineEnabled}
-					onChange={(event) => set("deadlineEnabled", event.target.checked)}
-				/>
-				<span>{t("设置最晚停止时间；到点未完成则暂停，等待操作员决定")}</span>
-			</label>
+			<Checkbox checked={draft.deadlineEnabled} onChange={(event) => set("deadlineEnabled", event.target.checked)}>
+				{t("设置最晚停止时间；到点未完成则暂停，等待操作员决定")}
+			</Checkbox>
 			{draft.deadlineEnabled ? (
-				<div className="form-field">
-					<label>{t("最晚停止时间")}</label>
-					<input
+				<Form.Item label={t("最晚停止时间")} className="enginehub-scheduleform__row">
+					<Input
 						type="datetime-local"
 						value={draft.deadlineAt}
 						min={lastStep}
 						onChange={(event) => set("deadlineAt", event.target.value)}
 					/>
-				</div>
+				</Form.Item>
 			) : null}
-			<p className="form-hint">
+			<Text type="secondary">
 				{t("到点暂停会立即中断正在运行的 Agent，保留会话，恢复时自动续跑。服务重启会暂停工程并停用计划，需要操作员手动继续。")}
-			</p>
-		</div>
+			</Text>
+		</Form>
 	);
 }
 
@@ -1285,43 +1397,33 @@ function ScheduleModal({
 	const [draft, setDraft] = useState(() => draftFromSchedule(schedule));
 	const [error, setError] = useState<string | null>(null);
 	return (
-		<div className="modal-backdrop" onClick={onClose}>
-			<div className="modal modal--wide" onClick={(event) => event.stopPropagation()}>
-				<div className="vuln-detail__head">
-					<div className="vuln-detail__title">{t("修改定时计划")}</div>
-					<div className="ws-panel__actions">
-						<button type="button" onClick={onClose}>
-							{t("取消")}
-						</button>
-						<button
-							type="button"
-							className="primary"
-							onClick={() => {
-								const parsed = parseScheduleDraft(draft);
-								if (!parsed.schedule) {
-									setError(parsed.error ?? t("计划无效"));
-									return;
-								}
-								onSave(parsed.schedule);
-							}}
-						>
-							{t("保存计划")}
-						</button>
-					</div>
-				</div>
-				<div className="modal__body">
-					{error ? <p className="form-error">{error}</p> : null}
-					<ScheduleFields
-						draft={draft}
-						onChange={(next) => {
-							setDraft(next);
-							setError(null);
-						}}
-						timezone={browserTimezone()}
-					/>
-				</div>
-			</div>
-		</div>
+		<Modal
+			open
+			width={720}
+			title={t("修改定时计划")}
+			okText={t("保存计划")}
+			cancelText={t("取消")}
+			onCancel={onClose}
+			destroyOnHidden
+			onOk={() => {
+				const parsed = parseScheduleDraft(draft);
+				if (!parsed.schedule) {
+					setError(parsed.error ?? t("计划无效"));
+					return;
+				}
+				onSave(parsed.schedule);
+			}}
+		>
+			{error ? <Alert type="error" showIcon className="ui-page__alert" title={error} /> : null}
+			<ScheduleFields
+				draft={draft}
+				onChange={(next) => {
+					setDraft(next);
+					setError(null);
+				}}
+				timezone={browserTimezone()}
+			/>
+		</Modal>
 	);
 }
 
@@ -1463,79 +1565,35 @@ function CreateEngineForm(props: {
 					: t("启动工程 →");
 
 	return (
-		<>
-			<div className="engine-wizard-head">
+		<div className="enginewiz">
+			<div className="enginewiz-head">
 				<div>
-					<div className="engine-wizard-crumb">
-						<b>{t("工程")}</b>
-						<span>/</span>
-						<span>{t("新建工程")}</span>
-					</div>
-					<div className="engine-wizard-titleline">
-						<h1>{t("新建工程")}</h1>
-						<span className="tag tag-running">{t("步骤 {step} / 3", { step })}</span>
-					</div>
-					<p className="engine-wizard-sub">{t("把目标、指挥和执行拆开，完成一步再走下一步。")}</p>
+					<Text type="secondary">
+						{t("工程")} / {t("新建工程")}
+					</Text>
+					<Title level={3} className="enginewiz-title">
+						{t("新建工程")}
+					</Title>
+					<Text type="secondary">{t("把目标、指挥和执行拆开，完成一步再走一步。")}</Text>
 				</div>
-				<div className="ws-panel__actions">
-					<button type="button" onClick={props.onCancel}>
-						{t("取消")}
-					</button>
-				</div>
+				<Button onClick={props.onCancel}>{t("取消")}</Button>
 			</div>
 
-			<div className="engine-wizard-body">
-				<div className="engine-wizard">
-					<aside className="engine-wizard-rail">
-						{stepMeta.map((item) => {
-							const current = step === item.step;
-							const done = step > item.step;
-							return (
-								<button
-									key={item.step}
-									type="button"
-									className={`engine-wizard-step${current ? " on" : ""}${done ? " done" : ""}`}
-									aria-current={current ? "step" : undefined}
-									onClick={() => goToStep(item.step)}
-								>
-									<span className="engine-wizard-step-index">{done ? "✓" : item.step}</span>
-									<span className="engine-wizard-step-copy">
-										<b>{item.title}</b>
-										<span>{item.hint}</span>
-									</span>
-								</button>
-							);
-						})}
-						<div className="engine-wizard-rail-summary">
-							<span className="engine-wizard-rail-kicker">DRAFT / 0{step}</span>
-							<b>{name.trim() || t("未命名工程")}</b>
-							<p>
-								{t("{doctrines} 条思路", { doctrines: selected.length })}
-								<br />
-								{selectedPresetLabel}
-							</p>
-						</div>
-					</aside>
+			<Steps
+				current={step - 1}
+				className="enginewiz-steps"
+				items={stepMeta.map((item) => ({ title: item.title, content: item.hint }))}
+			/>
 
-					<div className="engine-wizard-panel">
-						{formError ? (
-							<p className="form-error" role="alert">
-								{formError}
-							</p>
-						) : null}
+			<Row gutter={[16, 16]}>
+				<Col xs={24} lg={16}>
+					<Card size="small">
+						{formError ? <Alert type="error" showIcon className="ui-page__alert" title={formError} /> : null}
 
 						{step === 1 ? (
-							<>
-								<div className="engine-wizard-kicker">STEP 01 / SCOPE</div>
-								<h2>{t("先定义这次评估的边界")}</h2>
-								<p className="engine-wizard-lead">
-									{t("目标越具体，指挥官拆出来的任务越稳。备注只给指挥官看，不会被当作命令。")}
-								</p>
-								<div className="form-field engine-wizard-name">
-									<label htmlFor="engine-wizard-name">{t("工程名称")}</label>
-									<input
-										id="engine-wizard-name"
-										type="text"
+							<Form layout="vertical" requiredMark={false}>
+								<Form.Item label={t("工程名称")} required>
+									<Input
 										value={name}
 										onChange={(event) => {
 											setName(event.target.value);
@@ -1543,176 +1601,142 @@ function CreateEngineForm(props: {
 										}}
 										placeholder={t("如：内网一批 Web 目标")}
 									/>
-								</div>
-								<div className="form-field engine-wizard-target-field">
-									<label htmlFor="engine-wizard-targets">
-										{t("目标清单")} <span className="hint">{t("一行一个：目标 + 可选备注")}</span>
-									</label>
-									<textarea
-										id="engine-wizard-targets"
-										className="engine-wizard-targets"
+								</Form.Item>
+								<Form.Item
+									label={t("目标清单")}
+									required
+									extra={t("一行一个：目标 + 可选备注 · 支持 IP / 域名 / URL")}
+								>
+									<Input.TextArea
 										value={targets}
 										onChange={(event) => {
 											setTargets(event.target.value);
 											setFormError(null);
 										}}
+										autoSize={{ minRows: 8, maxRows: 18 }}
 										placeholder={t(
 											"10.0.0.1 这台是 Web 服务器\n10.0.0.2\nhttp://target.example.com 只测登录功能",
 										)}
 									/>
-									<div className="engine-wizard-target-meta">
-										<span>{t("支持 IP / 域名 / URL")}</span>
-									</div>
-								</div>
-							</>
+								</Form.Item>
+								<Text type="secondary">
+									{t("目标越具体，指挥官拆出来的任务越稳。备注只给指挥官看，不会被当作命令。")}
+								</Text>
+							</Form>
 						) : null}
 
 						{step === 2 ? (
 							<>
-								<div className="engine-wizard-kicker">STEP 02 / COMMAND</div>
-								<h2>{t("谁来做，按什么思路做")}</h2>
-								<p className="engine-wizard-lead">
-									{t("思路会合并成指挥官的作战偏好；Agent 白名单只限制它能派谁。")}
-								</p>
-								<button type="button" className="engine-wizard-done" onClick={() => goToStep(1)}>
-									<span className="engine-wizard-done-mark">✓</span>
-									<span>
-										{t("目标已就绪")}
-									</span>
-									<span className="engine-wizard-done-edit">{t("修改")}</span>
-								</button>
-
-								<h3 className="engine-wizard-section-title">{t("指挥思路")}</h3>
-								<div className="engine-wizard-doc-list">
-									{props.doctrines.length === 0 ? (
-										<p className="form-hint">{t("还没有可用的指挥思路，请先到「指挥思路」页面创建。")}</p>
-									) : (
-										props.doctrines.map((doctrine) => {
+								<Text strong className="enginewiz-section">
+									{t("指挥思路")}
+								</Text>
+								{props.doctrines.length === 0 ? (
+									<Alert
+										type="warning"
+										showIcon
+										className="ui-page__alert"
+										title={t("还没有可用的指挥思路，请先到「指挥思路」页面创建。")}
+									/>
+								) : (
+									<Space orientation="vertical" size={8} className="enginewiz-list">
+										{props.doctrines.map((doctrine) => {
 											const checked = selected.includes(doctrine.id);
 											return (
-												<label key={doctrine.id} className={`engine-wizard-doc${checked ? " on" : ""}`}>
-													<input
-														type="checkbox"
-														checked={checked}
-														onChange={() => {
-															setSelected((prev) =>
-																prev.includes(doctrine.id)
-																	? prev.filter((id) => id !== doctrine.id)
-																	: [...prev, doctrine.id],
-															);
-															setFormError(null);
-														}}
-													/>
-													<span className="engine-wizard-doc-mark" aria-hidden="true">
-														{checked ? "✓" : ""}
-													</span>
-													<span className="engine-wizard-doc-copy">
-														<span className="engine-wizard-doc-title">
-															<b>{doctrine.name}</b>
-															{doctrine.builtin ? (
-																<span className="tag tag-queued">{t("内置")}</span>
-															) : null}
-														</span>
-														<span className="engine-wizard-doc-text">
-															{doctrine.text.split("\n")[0]}
-														</span>
-													</span>
-												</label>
+												<Checkbox
+													key={doctrine.id}
+													checked={checked}
+													className={checked ? "enginewiz-card is-on" : "enginewiz-card"}
+													onChange={() => {
+														setSelected((prev) =>
+															prev.includes(doctrine.id)
+																? prev.filter((id) => id !== doctrine.id)
+																: [...prev, doctrine.id],
+														);
+														setFormError(null);
+													}}
+												>
+													<Space size={6} wrap>
+														<Text strong>{doctrine.name}</Text>
+														{doctrine.builtin ? (
+															<Tag variant="filled">{t("内置")}</Tag>
+														) : null}
+													</Space>
+													<Text type="secondary" className="enginewiz-card__text">
+														{doctrine.text.split("\n")[0]}
+													</Text>
+												</Checkbox>
 											);
-										})
-									)}
-								</div>
+										})}
+									</Space>
+								)}
 
-								<div className="engine-wizard-subhead">
-									<b>{t("Agent 白名单")}</b>
-									<span>{t("不勾选 = 不限制，可使用全部已启用预设")}</span>
-								</div>
+								<Text strong className="enginewiz-section">
+									{t("Agent 白名单")}
+								</Text>
+								<Text type="secondary">{t("不勾选 = 不限制，可使用全部已启用预设")}</Text>
 								{enabledPresets.length === 0 ? (
-									<p className="form-hint">{t("还没有启用的预设 Agent，可到「设置 → 预设 Agent」创建。")}</p>
+									<Alert
+										type="info"
+										showIcon
+										className="ui-page__alert"
+										title={t("还没有启用的预设 Agent，可到「设置 → 预设 Agent」创建。")}
+									/>
 								) : (
-									<div className="engine-wizard-presets">
+									<Space orientation="vertical" size={8} className="enginewiz-list">
 										{enabledPresets.map((preset) => {
 											const checked = selectedPresets.includes(preset.id);
 											return (
-												<label
+												<Checkbox
 													key={preset.id}
-													className={`engine-wizard-preset${checked ? " on" : ""}`}
+													checked={checked}
+													className={checked ? "enginewiz-card is-on" : "enginewiz-card"}
 													title={preset.description || undefined}
+													onChange={() =>
+														setSelectedPresets((prev) =>
+															prev.includes(preset.id)
+																? prev.filter((id) => id !== preset.id)
+																: [...prev, preset.id],
+														)
+													}
 												>
-													<input
-														type="checkbox"
-														checked={checked}
-														onChange={() =>
-															setSelectedPresets((prev) =>
-																prev.includes(preset.id)
-																	? prev.filter((id) => id !== preset.id)
-																	: [...prev, preset.id],
-															)
-														}
-													/>
-													<span className="engine-wizard-preset-copy">
-														<b>{preset.name}</b>
-														<span>{preset.description || `${formatUsage(preset.tokens)} tokens`}</span>
-													</span>
-												</label>
+													<Text strong>{preset.name}</Text>
+													<Text type="secondary" className="enginewiz-card__text">
+														{preset.description || `${formatUsage(preset.tokens)} tokens`}
+													</Text>
+												</Checkbox>
 											);
 										})}
-									</div>
+									</Space>
 								)}
-								<label className="engine-preset-optional">
-									<input
-										type="checkbox"
-										checked={presetOptional}
-										onChange={(event) => setPresetOptional(event.target.checked)}
-									/>
-									<span>{t("允许任务不指定预设，没有合适预设时退回默认 Agent")}</span>
-								</label>
+								<Checkbox
+									checked={presetOptional}
+									className="enginewiz-optional"
+									onChange={(event) => setPresetOptional(event.target.checked)}
+								>
+									{t("允许任务不指定预设，没有合适预设时退回默认 Agent")}
+								</Checkbox>
 							</>
 						) : null}
 
 						{step === 3 ? (
 							<>
-								<div className="engine-wizard-kicker">STEP 03 / LAUNCH</div>
-								<h2>{t("安排时间，然后交给指挥官")}</h2>
-								<p className="engine-wizard-lead">
-									{t("立即启动会先检查环境；定时启动只保存计划，到点再检查并启动。")}
-								</p>
-								<button type="button" className="engine-wizard-done" onClick={() => goToStep(2)}>
-									<span className="engine-wizard-done-mark">✓</span>
-									<span>
-										{t("指挥已就绪")} · <b>{selected.length}</b> {t("条思路")} · {selectedPresetLabel}
-									</span>
-									<span className="engine-wizard-done-edit">{t("修改")}</span>
-								</button>
-
-								<div className="engine-wizard-subhead">
-									<b>{t("启动方式")}</b>
-									<span>{t("时区 {timezone}", { timezone: browserTimezone() })}</span>
-								</div>
-								<div className="mode-switch engine-wizard-mode">
-									<button
-										type="button"
-										className={startMode === "now" ? "on" : ""}
-										onClick={() => {
-											setStartMode("now");
-											setFormError(null);
-										}}
-									>
-										{t("立即启动")}
-									</button>
-									<button
-										type="button"
-										className={startMode === "scheduled" ? "on" : ""}
-										onClick={() => {
-											setStartMode("scheduled");
-											setFormError(null);
-										}}
-									>
-										{t("定时启动")}
-									</button>
-								</div>
+								<Space size={8} className="enginewiz-section">
+									<Text strong>{t("启动方式")}</Text>
+									<Text type="secondary">{t("时区 {timezone}", { timezone: browserTimezone() })}</Text>
+								</Space>
+								<Segmented
+									value={startMode}
+									onChange={(value) => {
+										setStartMode(value as "now" | "scheduled");
+										setFormError(null);
+									}}
+									options={[
+										{ value: "now", label: t("立即启动") },
+										{ value: "scheduled", label: t("定时启动") },
+									]}
+								/>
 								{startMode === "scheduled" ? (
-									<div className="engine-wizard-schedule">
+									<div className="enginewiz-schedule">
 										<ScheduleFields
 											draft={scheduleDraft}
 											onChange={(nextDraft) => {
@@ -1723,135 +1747,166 @@ function CreateEngineForm(props: {
 										/>
 									</div>
 								) : (
-									<p className="engine-wizard-mode-hint">{t("保存后立即检查 Docker 环境并启动指挥官。")}</p>
+									<Text type="secondary">{t("保存后立即检查 Docker 环境并启动指挥官。")}</Text>
 								)}
 
-								<h3 className="engine-wizard-section-title">{t("执行上限")}</h3>
-								<div className="limit-grid engine-wizard-limits">
-									<div className="form-field">
-										<label>{t("最大并发任务")}</label>
-										<input
-											type="number"
+								<Text strong className="enginewiz-section">
+									{t("执行上限")}
+								</Text>
+								<Row gutter={[12, 12]}>
+									<Col xs={12} md={8}>
+										<Text type="secondary">{t("最大并发任务")}</Text>
+										<InputNumber
 											min={1}
+											style={{ width: "100%" }}
 											value={concurrency}
-											onChange={(event) => setConcurrency(Number.parseInt(event.target.value, 10) || 0)}
+											onChange={(value) => setConcurrency(value ?? 1)}
 										/>
-									</div>
-									<div className="form-field">
-										<label>{t("单任务最大轮数")}</label>
-										<input
-											type="number"
+									</Col>
+									<Col xs={12} md={8}>
+										<Text type="secondary">{t("单任务最大轮数")}</Text>
+										<InputNumber
 											min={1}
+											style={{ width: "100%" }}
 											value={roundLimit}
-											onChange={(event) => setRoundLimit(Number.parseInt(event.target.value, 10) || 0)}
+											onChange={(value) => setRoundLimit(value ?? 1)}
 										/>
-									</div>
-									<div className="form-field">
-										<label>{t("每目标重试次数")}</label>
-										<input type="number" min={0} value={maxRetries} onChange={(event) => setMaxRetries(Number.parseInt(event.target.value, 10) || 0)} />
-									</div>
-									<div className="form-field">
-										<label>{t("总 token 上限（可选）")}</label>
-										<input type="number" min={0} value={tokenLimit} onChange={(event) => setTokenLimit(event.target.value)} placeholder={t("不限制")} />
-									</div>
-									<div className="form-field">
-										<label>{t("总时间上限 / 分钟（可选）")}</label>
-										<input type="number" min={0} value={timeLimitMin} onChange={(event) => setTimeLimitMin(event.target.value)} placeholder={t("不限制")} />
-									</div>
-								</div>
+									</Col>
+									<Col xs={12} md={8}>
+										<Text type="secondary">{t("每目标重试次数")}</Text>
+										<InputNumber
+											min={0}
+											style={{ width: "100%" }}
+											value={maxRetries}
+											onChange={(value) => setMaxRetries(value ?? 0)}
+										/>
+									</Col>
+									<Col xs={12} md={8}>
+										<Text type="secondary">{t("总 token 上限（可选）")}</Text>
+										<InputNumber
+											min={0}
+											style={{ width: "100%" }}
+											value={tokenLimit.trim() === "" ? null : Number(tokenLimit)}
+											onChange={(value) => setTokenLimit(value === null || value === undefined ? "" : String(value))}
+											placeholder={t("不限制")}
+										/>
+									</Col>
+									<Col xs={12} md={8}>
+										<Text type="secondary">{t("总时间上限 / 分钟（可选）")}</Text>
+										<InputNumber
+											min={0}
+											style={{ width: "100%" }}
+											value={timeLimitMin.trim() === "" ? null : Number(timeLimitMin)}
+											onChange={(value) => setTimeLimitMin(value === null || value === undefined ? "" : String(value))}
+											placeholder={t("不限制")}
+										/>
+									</Col>
+								</Row>
 
-								<h3 className="engine-wizard-section-title">{t("命令守门")}</h3>
-								<div className="engine-wizard-gates">
-									<label className={`engine-wizard-gate${gateMode === "auto" ? " on" : ""}`}>
-										<input type="radio" checked={gateMode === "auto"} onChange={() => setGateMode("auto")} />
-										<span>
-											<b>{t("自动执行")}</b>
-											<span>{t("worker 的命令直接执行，不做拦截（最快）。")}</span>
-										</span>
-									</label>
-									<label className={`engine-wizard-gate${gateMode === "ai" ? " on" : ""}${!props.judgeAvailable ? " disabled" : ""}`}>
-										<input
-											type="radio"
-											checked={gateMode === "ai"}
+								<Text strong className="enginewiz-section">
+									{t("命令守门")}
+								</Text>
+								<Radio.Group value={gateMode} onChange={(event) => setGateMode(event.target.value as SentinelEngineGateMode)}>
+									<Space orientation="vertical" size={8} className="enginewiz-list">
+										<Radio value="auto" className={gateMode === "auto" ? "enginewiz-card is-on" : "enginewiz-card"}>
+											<Text strong>{t("自动执行")}</Text>
+											<Text type="secondary" className="enginewiz-card__text">
+												{t("worker 的命令直接执行，不做拦截（最快）。")}
+											</Text>
+										</Radio>
+										<Radio
+											value="ai"
 											disabled={!props.judgeAvailable}
-											onChange={() => setGateMode("ai")}
-										/>
-										<span>
-											<b>{t("AI 裁判")}</b>
-											<span>
+											className={gateMode === "ai" ? "enginewiz-card is-on" : "enginewiz-card"}
+										>
+											<Text strong>{t("AI 裁判")}</Text>
+											<Text type="secondary" className="enginewiz-card__text">
 												{props.judgeAvailable
 													? t("每条命令先由守门模型判定，拦截时把理由回给 worker。")
 													: t("未配置守门模型：请先到 设置 → 模型 配置守门模型。")}
-											</span>
-										</span>
-									</label>
-								</div>
+											</Text>
+										</Radio>
+									</Space>
+								</Radio.Group>
 
-								<div className="engine-wizard-review">
-									<div>
-										<span>{t("指挥")}</span>
-										<b>{t("{count} 条思路", { count: selected.length })}</b>
-									</div>
-									<div>
-										<span>{t("Agent")}</span>
-										<b>
-											{selectedPresets.length === 0
-												? t("不限制")
-												: t("{count} 个预设", { count: selectedPresets.length })}
-										</b>
-									</div>
-									<div>
-										<span>{t("启动")}</span>
-										<b>
-											{startMode === "scheduled"
-												? scheduleDraft.startAt
-													? scheduleDraft.startAt.replace("T", " ")
-													: t("待填写")
-												: t("立即")}
-										</b>
-									</div>
-								</div>
-								<p className="form-hint engine-wizard-launch-hint">
+								<Card size="small" className="enginewiz-review" title={t("确认")}>
+									<Space size={24} wrap>
+										<Text type="secondary">
+											{t("指挥")} <Text strong>{t("{count} 条思路", { count: selected.length })}</Text>
+										</Text>
+										<Text type="secondary">
+											{t("Agent")}{" "}
+											<Text strong>
+												{selectedPresets.length === 0
+													? t("不限制")
+													: t("{count} 个预设", { count: selectedPresets.length })}
+											</Text>
+										</Text>
+										<Text type="secondary">
+											{t("启动")}{" "}
+											<Text strong>
+												{startMode === "scheduled"
+													? scheduleDraft.startAt
+														? scheduleDraft.startAt.replace("T", " ")
+														: t("待填写")
+													: t("立即")}
+											</Text>
+										</Text>
+									</Space>
+								</Card>
+								<Text type="secondary">
 									{t("启动后指挥官全权调度；人保留暂停、终止、追加目标与 steer。手动暂停、继续或终止会停用后续定时计划。")}
-								</p>
+								</Text>
 							</>
 						) : null}
 
-						<div className="engine-wizard-footer">
-							<button
-								type="button"
-								className="engine-wizard-back"
-								disabled={step === 1}
-								onClick={() => goToStep((step - 1) as WizardStep)}
-							>
+						<div className="enginewiz-foot">
+							<Button disabled={step === 1} onClick={() => goToStep((step - 1) as WizardStep)}>
 								{t("上一步")}
-							</button>
-							<button type="button" className="primary" onClick={next}>
+							</Button>
+							<Button type="primary" onClick={next}>
 								{nextLabel}
-							</button>
-							<span className="engine-wizard-progress">{step} / 3</span>
+							</Button>
+							<Text type="secondary">{step} / 3</Text>
 						</div>
-					</div>
-				</div>
-
-				<div className="engine-wizard-tips">
-					<div>
-						<b>{t("不会提前启动")}</b>
-						<span>{t("定时工程只保存计划，到点才检查 Docker 环境。")}</span>
-					</div>
-					<div>
-						<b>{t("失败可以继续")}</b>
-						<span>{t("环境或指挥官启动失败会停在暂停态，不会丢配置。")}</span>
-					</div>
-					<div>
-						<b>{t("手动优先")}</b>
-						<span>{t("手动暂停、继续或终止会停用后续计划，避免互相抢状态。")}</span>
-					</div>
-				</div>
-			</div>
-		</>
+					</Card>
+				</Col>
+				<Col xs={24} lg={8}>
+					<Card size="small" title={t("草稿")} className="enginewiz-draft">
+						<Text type="secondary">DRAFT / 0{step}</Text>
+						<Text strong>{name.trim() || t("未命名工程")}</Text>
+						<Text type="secondary">
+							{t("{doctrines} 条思路", { doctrines: selected.length })} · {selectedPresetLabel}
+						</Text>
+					</Card>
+					<Card size="small" title={t("提示")} className="enginewiz-tips">
+						<Space orientation="vertical" size={10}>
+							<div className="enginewiz-tiprow">
+								<Text strong>{t("不会提前启动")}</Text>
+								<Text type="secondary" className="enginewiz-tip">
+									{t("定时工程只保存计划，到点才检查 Docker 环境。")}
+								</Text>
+							</div>
+							<div className="enginewiz-tiprow">
+								<Text strong>{t("失败可以继续")}</Text>
+								<Text type="secondary" className="enginewiz-tip">
+									{t("环境或指挥官启动失败会停在暂停态，不会丢配置。")}
+								</Text>
+							</div>
+							<div className="enginewiz-tiprow">
+								<Text strong>{t("手动优先")}</Text>
+								<Text type="secondary" className="enginewiz-tip">
+									{t("手动暂停、继续或终止会停用后续计划，避免互相抢状态。")}
+								</Text>
+							</div>
+						</Space>
+					</Card>
+				</Col>
+			</Row>
+		</div>
 	);
 }
+
 
 function DoctrineManager(props: {
 	doctrines: SentinelDoctrineView[];
@@ -1861,71 +1916,78 @@ function DoctrineManager(props: {
 }) {
 	const [name, setName] = useState("");
 	const [text, setText] = useState("");
+	const submit = () => {
+		if (!name.trim() || !text.trim()) return;
+		props.onSave({ name: name.trim(), text: text.trim() });
+		setName("");
+		setText("");
+	};
 	return (
-		<>
-			<div className="ws-panel__head">
-				<div className="ws-panel__title">
-					{t("指挥思路")}
-					<span className="ws-panel__sub">{t("命名的文本模板，创建工程时多选叠加注入指挥官")}</span>
+		<div className="doctrinehub">
+			<div className="doctrinehub-head">
+				<div>
+					<Title level={3} className="doctrinehub-title">
+						{t("指挥思路")}
+					</Title>
+					<Text type="secondary">{t("命名的文本模板，创建工程时多选叠加注入指挥官")}</Text>
 				</div>
-				<div className="ws-panel__actions">
-					<button type="button" onClick={props.onClose}>
-						{t("返回")}
-					</button>
-				</div>
+				<Button onClick={props.onClose}>{t("返回")}</Button>
 			</div>
-			<div className="ws-panel__body">
-				{props.doctrines.map((doctrine) => (
-					<div key={doctrine.id} className="doctrine-row" style={{ marginBottom: 10 }}>
-						<div className="doctrine-row__head">
-							<strong>{doctrine.name}</strong>
-							{doctrine.builtin ? <span className="tag tag-queued">{t("内置")}</span> : null}
-							{!doctrine.builtin ? (
-								<button
-									type="button"
-									onClick={() => {
-										if (window.confirm(t("删除思路「{name}」？", { name: doctrine.name }))) {
-											props.onDelete(doctrine.id);
-										}
-									}}
-								>
-									{t("删除")}
-								</button>
-							) : null}
-						</div>
-						<pre>{doctrine.text}</pre>
-					</div>
-				))}
-				<div className="doctrine-new">
-					<div className="form-field">
-						<label>{t("新增思路")}</label>
-						<input
-							type="text"
-							placeholder={t("思路名称")}
-							value={name}
-							onChange={(event) => setName(event.target.value)}
-						/>
-					</div>
-					<div className="form-field">
-						<label>{t("思路内容（纯文本，注入指挥官系统指令）")}</label>
-						<textarea rows={6} value={text} onChange={(event) => setText(event.target.value)} />
-					</div>
-					<div>
-						<button
-							type="button"
-							className="primary"
-							disabled={!name.trim() || !text.trim()}
-							onClick={() => {
-								props.onSave({ name: name.trim(), text: text.trim() });
-								setName("");
-								setText("");
-							}}
+
+			{props.doctrines.length === 0 ? (
+				<Alert type="info" showIcon className="ui-page__alert" title={t("还没有指挥思路。在下方新增一条。")} />
+			) : (
+				<Space orientation="vertical" size={12} className="doctrinehub-list">
+					{props.doctrines.map((doctrine) => (
+						<Card
+							key={doctrine.id}
+							size="small"
+							title={
+								<Space size={8} wrap>
+									<Text strong>{doctrine.name}</Text>
+									{doctrine.builtin ? <Tag variant="filled">{t("内置")}</Tag> : null}
+								</Space>
+							}
+							extra={
+								doctrine.builtin ? null : (
+									<Popconfirm
+										title={t("删除思路")}
+										description={t("删除思路「{name}」？", { name: doctrine.name })}
+										okText={t("删除")}
+										okButtonProps={{ danger: true }}
+										cancelText={t("取消")}
+										onConfirm={() => props.onDelete(doctrine.id)}
+									>
+										<Button size="small" type="link" danger>
+											{t("删除")}
+										</Button>
+									</Popconfirm>
+								)
+							}
 						>
-							{t("保存")}
-						</button>
-					</div>
-				</div>
-			</div>
-		</>
+							<pre className="doctrinehub-pre">{doctrine.text}</pre>
+						</Card>
+					))}
+				</Space>
+			)}
+
+			<Card size="small" title={t("新增思路")}>
+				<Form layout="vertical" requiredMark={false} onFinish={submit}>
+					<Form.Item label={t("思路名称")} required>
+						<Input value={name} onChange={(event) => setName(event.target.value)} placeholder={t("思路名称")} />
+					</Form.Item>
+					<Form.Item label={t("思路内容（纯文本，注入指挥官系统指令）")} required>
+						<Input.TextArea
+							rows={6}
+							value={text}
+							onChange={(event) => setText(event.target.value)}
+						/>
+					</Form.Item>
+					<Button type="primary" htmlType="submit" disabled={!name.trim() || !text.trim()}>
+						{t("保存")}
+					</Button>
+				</Form>
+			</Card>
+		</div>
 	);
 }

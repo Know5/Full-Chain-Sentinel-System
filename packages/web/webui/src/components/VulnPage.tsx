@@ -9,7 +9,37 @@
  * lands in the record's timeline.
  */
 
-import { useEffect, useRef, useState } from "react";
+import {
+	CopyOutlined,
+	DeleteOutlined,
+	DownloadOutlined,
+	FilterOutlined,
+	ReloadOutlined,
+	RightOutlined,
+	SearchOutlined,
+} from "@ant-design/icons";
+import { ProTable } from "@ant-design/pro-components";
+import type { ProColumns } from "@ant-design/pro-components";
+import {
+	Alert,
+	Badge,
+	Button,
+	Card,
+	Descriptions,
+	Drawer,
+	Empty,
+	Input,
+	Modal,
+	Popover,
+	Select,
+	Space,
+	Tag,
+	Timeline,
+	Tooltip,
+	Typography,
+} from "antd";
+import type { DescriptionsProps } from "antd";
+import { useEffect, useState } from "react";
 import { t } from "../i18n.ts";
 import type {
 	SentinelEngine,
@@ -26,8 +56,24 @@ import type {
 	SessionInfoView,
 } from "../types.ts";
 import { SENTINEL_VULN_SEVERITIES, SENTINEL_VULN_SEVERITY_LABELS, SENTINEL_VULN_STATUS_LABELS } from "../types.ts";
-import { CaretDownIcon, CloseIcon, DeleteIcon, DownloadIcon } from "./icons.tsx";
-import { Overlay } from "./Overlay.tsx";
+import { Page, Section } from "../ui/Page.tsx";
+
+const { Text } = Typography;
+
+const SEVERITY_COLORS: Record<SentinelVulnSeverity, string> = {
+	critical: "red",
+	high: "volcano",
+	medium: "gold",
+	low: "blue",
+	info: "default",
+};
+
+const STATUS_COLORS: Record<SentinelVulnStatus, string> = {
+	pending: "gold",
+	confirmed: "green",
+	false_positive: "default",
+	fixed: "blue",
+};
 
 const STATUSES: readonly SentinelVulnStatus[] = ["pending", "confirmed", "false_positive", "fixed"];
 
@@ -46,32 +92,35 @@ function ReviewChip({ review }: { review?: SentinelVulnReview }) {
 	if (!review || review.state === "skipped") return null;
 	if (review.state === "queued") {
 		return (
-			<span className="review-chip review-queued" title={t("评审 LLM 排队中")}>
-				{t("…评")}
-			</span>
+			<Tooltip title={t("评审 LLM 排队中")}>
+				<Tag variant="filled">{t("…评")}</Tag>
+			</Tooltip>
 		);
 	}
 	if (review.state === "failed") {
 		return (
-			<span className="review-chip review-failed" title={t("评审失败：{error}", { error: review.error ?? "" })}>
-				{t("未评")}
-			</span>
+			<Tooltip title={t("评审失败：{error}", { error: review.error ?? "" })}>
+				<Tag color="error" variant="filled">
+					{t("未评")}
+				</Tag>
+			</Tooltip>
 		);
 	}
 	if (review.verdict === "dubious") {
 		return (
-			<span className="review-chip review-dubious" title={t("评审存疑：{reason}", { reason: review.reason ?? "" })}>
-				{t("⚠存疑")}
-			</span>
+			<Tooltip title={t("评审存疑：{reason}", { reason: review.reason ?? "" })}>
+				<Tag color="warning" variant="filled">
+					{t("⚠存疑")}
+				</Tag>
+			</Tooltip>
 		);
 	}
 	return (
-		<span
-			className="review-chip review-done"
-			title={t("已评审（{model}）：{reason}", { model: review.model ?? "", reason: review.reason ?? "" })}
-		>
-			{t("✓评")}
-		</span>
+		<Tooltip title={t("已评审（{model}）：{reason}", { model: review.model ?? "", reason: review.reason ?? "" })}>
+			<Tag color="success" variant="filled">
+				{t("✓评")}
+			</Tag>
+		</Tooltip>
 	);
 }
 
@@ -104,9 +153,10 @@ function severityForScore(score: number): SentinelVulnSeverity {
 function CopyButton({ text, label = t("复制") }: { text: string; label?: string }) {
 	const [copied, setCopied] = useState(false);
 	return (
-		<button
-			type="button"
-			className="console-btn"
+		<Button
+			type="text"
+			size="small"
+			icon={<CopyOutlined />}
 			onClick={() => {
 				void navigator.clipboard
 					.writeText(text)
@@ -118,7 +168,7 @@ function CopyButton({ text, label = t("复制") }: { text: string; label?: strin
 			}}
 		>
 			{copied ? t("已复制") : label}
-		</button>
+		</Button>
 	);
 }
 
@@ -129,6 +179,30 @@ function vulnSource(source: string): string {
 	const task = /^工程任务「(.+)」$/.exec(source);
 	if (task) return t("工程任务「{name}」", { name: task[1] ?? "" });
 	return source;
+}
+
+/** The delete confirmation's content, exported so it can be rendered on its own. */
+export function VulnDeleteBody({
+	pending,
+	preview,
+}: {
+	pending: string[] | null;
+	preview: { count: number; evidence: number; notes: number } | null;
+}) {
+	return (
+		<div className="vulnhub-delete">
+			<Text>{t("将删除 {count} 条漏洞记录。", { count: preview?.count ?? pending?.length ?? 0 })}</Text>
+			{preview ? (
+				<ul>
+					<li>{t("{count} 条证据", { count: preview.evidence })}</li>
+					<li>{t("{count} 条复核备注", { count: preview.notes })}</li>
+				</ul>
+			) : (
+				<Text type="secondary">{t("正在统计影响…")}</Text>
+			)}
+			<Text type="secondary">{t("记录里的证据引用与备注会一并删除；容器里的原文件不受影响。")}</Text>
+		</div>
+	);
 }
 
 export function VulnPage({
@@ -182,7 +256,6 @@ export function VulnPage({
 	const [target, setTarget] = useState(filters.target ?? "");
 	/** The condition panel is closed by default: the chips already say what is on. */
 	const [filterOpen, setFilterOpen] = useState(false);
-	const filterRef = useRef<HTMLDivElement | null>(null);
 	/** Rows ticked for deletion; cleared whenever the list is replaced. */
 	const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
 
@@ -205,34 +278,8 @@ export function VulnPage({
 		});
 	}, [items]);
 
-	// Strictly this project's engines: with no project there is nothing to show, and
-	// another project's engines must never appear in a project-scoped hub.
-	useEffect(() => {
-		if (!filterOpen) return;
-		const onDown = (event: MouseEvent) => {
-			if (filterRef.current && !filterRef.current.contains(event.target as Node)) setFilterOpen(false);
-		};
-		const onKey = (event: KeyboardEvent) => {
-			if (event.key === "Escape") setFilterOpen(false);
-		};
-		document.addEventListener("mousedown", onDown);
-		document.addEventListener("keydown", onKey);
-		return () => {
-			document.removeEventListener("mousedown", onDown);
-			document.removeEventListener("keydown", onKey);
-		};
-	}, [filterOpen]);
-
 	const projectEngines = engines.filter((engine) => engine.projectId === projectId);
 	const activeEngine = projectEngines.find((engine) => engine.id === filters.engineId);
-	const toggle = (id: string): void => {
-		setSelected((prev) => {
-			const next = new Set(prev);
-			if (next.has(id)) next.delete(id);
-			else next.add(id);
-			return next;
-		});
-	};
 	const allSelected = items.length > 0 && items.every((item) => selected.has(item.id));
 	const selectedIds = items.filter((item) => selected.has(item.id)).map((item) => item.id);
 	// Every session of the project is offered, named when it has a name and
@@ -306,37 +353,254 @@ export function VulnPage({
 		onFiltersChange({});
 	};
 
+	const clearSelection = (): void => setSelected(new Set());
+
 	if (!hasProject) {
 		return (
-			<div className="page-card vuln-page">
-				<div className="ws-panel__head">
-					<div className="ws-panel__title">{t("漏洞中枢")}</div>
-				</div>
-				<div className="ws-panel__body">
-					<div className="ws-empty">
-						<span>{t("尚未选择项目")}</span>
-						<span>{t("漏洞记录按项目隔离，请先在侧栏顶部选择或创建一个项目")}</span>
-					</div>
-				</div>
-			</div>
+			<Page title={t("漏洞中枢")} description={t("漏洞记录按项目隔离")}>
+				<Empty
+					image={Empty.PRESENTED_IMAGE_SIMPLE}
+					description={
+						<>
+							<div>{t("尚未选择项目")}</div>
+							<div className="vulnhub-empty-hint">{t("请先在侧栏顶部选择或创建一个项目")}</div>
+						</>
+					}
+				/>
+			</Page>
 		);
 	}
+
+	const filterPanel = (
+		<div className="vulnhub-filters">
+			<label className="vulnhub-filters__field">
+				<span>{t("目标（主机 / URL / IP:port）")}</span>
+				<Input
+					size="small"
+					value={target}
+					placeholder={t("10.0.0.5、https://…")}
+					onChange={(event) => setTarget(event.target.value)}
+					onPressEnter={() => onFiltersChange({ ...filters, target: target.trim() || undefined })}
+				/>
+			</label>
+			<label className="vulnhub-filters__field">
+				<span>{t("会话（只列本项目）")}</span>
+				<Select
+					size="small"
+					value={filters.sessionId ?? ""}
+					onChange={(value) => onFiltersChange({ ...filters, sessionId: value || undefined })}
+					options={[
+						{ value: "", label: t("不限会话") },
+						...(filters.sessionId && !sessionOptions.some((option) => option.id === filters.sessionId)
+							? [{ value: filters.sessionId, label: sessionLabelFor(filters.sessionId) }]
+							: []),
+						...sessionOptions.map((option) => ({ value: option.id, label: option.name })),
+					]}
+				/>
+			</label>
+			<label className="vulnhub-filters__field">
+				<span>{t("工程（只列本项目，含已结束）")}</span>
+				<Select
+					size="small"
+					value={filters.engineId ?? ""}
+					// The task belongs to an engine, so switching engines clears it.
+					onChange={(value) =>
+						onFiltersChange({ ...filters, engineId: value || undefined, taskId: undefined })
+					}
+					options={[
+						{ value: "", label: t("不限工程") },
+						...projectEngines.map((engine) => ({ value: engine.id, label: engine.name })),
+					]}
+				/>
+			</label>
+			<label className="vulnhub-filters__field">
+				<span>{t("任务（先选工程）")}</span>
+				<Select
+					size="small"
+					value={filters.taskId ?? ""}
+					disabled={!filters.engineId}
+					onChange={(value) => onFiltersChange({ ...filters, taskId: value || undefined })}
+					options={[
+						{ value: "", label: filters.engineId ? t("不限任务") : t("先选工程") },
+						...(activeEngine?.tasks ?? []).map((task) => ({ value: task.id, label: task.title })),
+					]}
+				/>
+			</label>
+			<label className="vulnhub-filters__field">
+				<span>{t("等级")}</span>
+				<Select
+					size="small"
+					value={filters.severity ?? ""}
+					onChange={(value) =>
+						onFiltersChange({ ...filters, severity: (value || undefined) as SentinelVulnSeverity | undefined })
+					}
+					options={[
+						{ value: "", label: t("全部等级") },
+						...SENTINEL_VULN_SEVERITIES.map((severity) => ({
+							value: severity,
+							label: SENTINEL_VULN_SEVERITY_LABELS[severity],
+						})),
+					]}
+				/>
+			</label>
+			<label className="vulnhub-filters__field">
+				<span>{t("状态")}</span>
+				<Select
+					size="small"
+					value={filters.status ?? ""}
+					onChange={(value) =>
+						onFiltersChange({ ...filters, status: (value || undefined) as SentinelVulnStatus | undefined })
+					}
+					options={[
+						{ value: "", label: t("全部状态") },
+						...STATUSES.map((status) => ({ value: status, label: SENTINEL_VULN_STATUS_LABELS[status] })),
+					]}
+				/>
+			</label>
+			<div className="vulnhub-filters__foot">
+				<Button size="small" onClick={clearAll}>
+					{t("清空全部")}
+				</Button>
+				<Button size="small" type="primary" onClick={() => setFilterOpen(false)}>
+					{t("完成")}
+				</Button>
+			</div>
+		</div>
+	);
+
+	const columns: ProColumns<SentinelVulnSummary>[] = [
+		{
+			title: t("编号"),
+			dataIndex: "label",
+			key: "label",
+			width: 104,
+			render: (_, item) => <Text code>{item.label}</Text>,
+		},
+		{
+			title: t("等级"),
+			dataIndex: "severity",
+			key: "severity",
+			width: 196,
+			render: (_, item) => (
+				<Space size={6} wrap>
+					<Tag color={SEVERITY_COLORS[item.severity]} variant="filled">
+						{SENTINEL_VULN_SEVERITY_LABELS[item.severity]}
+					</Tag>
+					<Text type="secondary" className="vulnhub-cvss">
+						{isAgentRating(item.review) ? `${t("自评")} ` : ""}
+						{item.cvss.toFixed(1)}
+					</Text>
+					<ReviewChip review={item.review} />
+					{item.severityMismatch ? (
+						<Tooltip title={t("等级与 CVSS 分数不一致")}>
+							<Tag color="warning" variant="filled">
+								!
+							</Tag>
+						</Tooltip>
+					) : null}
+				</Space>
+			),
+		},
+		{
+			title: t("状态"),
+			dataIndex: "status",
+			key: "status",
+			width: 88,
+			render: (_, item) => (
+				<Tag color={STATUS_COLORS[item.status]} variant="filled">
+					{SENTINEL_VULN_STATUS_LABELS[item.status]}
+				</Tag>
+			),
+		},
+		{
+			title: t("目标"),
+			dataIndex: "target",
+			key: "target",
+			width: 168,
+			ellipsis: true,
+			render: (_, item) => (
+				<Space size={6}>
+					<Text code>{item.target}</Text>
+					{item.assetLabel ? <Tag variant="filled">{item.assetLabel}</Tag> : null}
+				</Space>
+			),
+		},
+		{
+			title: t("标题"),
+			dataIndex: "title",
+			key: "title",
+			ellipsis: { showTitle: true },
+		},
+		{
+			title: t("来源"),
+			dataIndex: "source",
+			key: "source",
+			width: 156,
+			ellipsis: { showTitle: true },
+			render: (_, item) => <Text type="secondary">{vulnSource(item.source)}</Text>,
+		},
+		{
+			title: t("提交时间"),
+			dataIndex: "createdAt",
+			key: "createdAt",
+			width: 112,
+			render: (_, item) => <Text type="secondary">{formatWhen(item.createdAt)}</Text>,
+		},
+		{
+			title: t("操作"),
+			key: "actions",
+			width: 88,
+			render: (_, item) => {
+				const hasSession = Boolean(item.sessionId && sessions.some((session) => session.id === item.sessionId));
+				const reason = item.sessionId
+					? hasSession
+						? t("打开对应对话")
+						: t("对应会话已删除")
+					: t("该漏洞没有关联会话");
+				return (
+					<Space size={0}>
+						<Tooltip title={reason}>
+							<Button
+								type="text"
+								size="small"
+								icon={<RightOutlined />}
+								disabled={!hasSession}
+								aria-label={reason}
+								onClick={(event) => {
+									event.stopPropagation();
+									if (item.sessionId) onOpenSession(item.sessionId);
+								}}
+							/>
+						</Tooltip>
+						<Button
+							type="link"
+							size="small"
+							onClick={(event) => {
+								event.stopPropagation();
+								onOpen(item.id);
+							}}
+						>
+							{t("查看")}
+						</Button>
+					</Space>
+				);
+			},
+		},
+	];
+
 	return (
-		<div className="page-card vuln-page">
-			<div className="ws-panel__head">
-				<div className="ws-panel__title">
-					{t("漏洞中枢")}
-					<span className="ws-panel__sub">
-						{projectName ? `${projectName} · ` : ""}
-						{t("{total} 条 · 待确认 {pending}", { total: stats.total, pending: stats.byStatus.pending })}
-					</span>
-				</div>
-				{/* Batch actions act on the selection, not on the filters, so they stay
-				    on the title row where they are always reachable. */}
-				<div className="ws-panel__actions">
-					<button
-						type="button"
-						className="ghost small"
+		<Page
+			title={t("漏洞中枢")}
+			description={
+				<>
+					{projectName ? `${projectName} · ` : ""}
+					{t("{total} 条 · 待确认 {pending}", { total: stats.total, pending: stats.byStatus.pending })}
+				</>
+			}
+			extra={
+				<Space>
+					<Button
+						icon={<ReloadOutlined />}
 						disabled={stats.byStatus.pending === 0}
 						title={t(
 							"把本项目所有「待确认」记录重新交给评审 LLM：按 CVSS 3.1 指标重算等级与分数（会覆盖这些记录现有的等级，时间线里会记录）",
@@ -344,375 +608,172 @@ export function VulnPage({
 						onClick={onReviewAllPending}
 					>
 						{t("重新评审待确认")}
-					</button>
-					<button
-						type="button"
-						disabled={items.length === 0}
-						title={t("选中当前筛选结果里的全部记录")}
-						onClick={() => setSelected(allSelected ? new Set() : new Set(items.map((item) => item.id)))}
-					>
-						{allSelected ? t("取消全选") : t("全选筛选结果")}
-					</button>
-					<button
-						type="button"
-						className="danger"
-						disabled={selectedIds.length === 0}
-						title={t("删除选中的漏洞记录：会一并删掉它们的证据与备注")}
-						onClick={() => onRequestDelete(selectedIds)}
-					>
-						<DeleteIcon />
-						{t("删除选中 ({count})", { count: selectedIds.length })}
-					</button>
-					<button type="button" className="primary" onClick={() => onExport(filters)}>
-						<DownloadIcon />
+					</Button>
+					<Button type="primary" icon={<DownloadOutlined />} onClick={() => onExport(filters)}>
 						{t("导出 Markdown")}
-					</button>
-				</div>
+					</Button>
+				</Space>
+			}
+		>
+			<div className="vulnhub-stats">
+				{SENTINEL_VULN_SEVERITIES.map((severity) => (
+					<Tag key={severity} color={SEVERITY_COLORS[severity]} variant="filled">
+						{SENTINEL_VULN_SEVERITY_LABELS[severity]} {stats.bySeverity[severity]}
+					</Tag>
+				))}
+				<Text type="secondary" className="vulnhub-status-counts">
+					{t("待确认 {count}", { count: stats.byStatus.pending })} ·{" "}
+					{t("已确认 {count}", { count: stats.byStatus.confirmed })} ·{" "}
+					{t("误报 {count}", { count: stats.byStatus.false_positive })} ·{" "}
+					{t("已修复 {count}", { count: stats.byStatus.fixed })}
+				</Text>
 			</div>
-			{/* Filters: one search box and one panel. The conditions in force are shown
-			    as removable chips, so the row does not grow with every control. */}
-			<div className="vuln-filter-row" ref={filterRef}>
-				<input
-					className="inline-input vuln-filter-search"
-					value={search}
-					placeholder={t("搜索编号 / 标题 / 类型 / 描述 / 来源")}
-					spellCheck={false}
-					onChange={(event) => setSearch(event.target.value)}
-					onKeyDown={(event) => {
-						if (event.key === "Enter") onFiltersChange({ ...filters, search: search.trim() || undefined });
-					}}
-				/>
-				<div className="vuln-filter-anchor">
-					<button
-						type="button"
-						className={`ghost small${filterOpen ? " on" : ""}`}
-						title={t("目标、会话、工程、任务、等级与状态都在这里设置")}
-						onClick={() => setFilterOpen((open) => !open)}
-					>
-						{t("筛选")}
-						{chips.length > 0 ? <span className="vuln-filter-count">{chips.length}</span> : null}
-						<CaretDownIcon />
-					</button>
-					<div className={`vuln-filter-panel${filterOpen ? "" : " hidden"}`}>
-						<div className="vuln-filter-grid">
-							<label>
-								<span className="vuln-filter-label">{t("目标（主机 / URL / IP:port）")}</span>
-								<input
-									className="inline-input"
-									value={target}
-									placeholder={t("10.0.0.5、https://…")}
-									spellCheck={false}
-									onChange={(event) => setTarget(event.target.value)}
-									onKeyDown={(event) => {
-										if (event.key === "Enter") onFiltersChange({ ...filters, target: target.trim() || undefined });
-									}}
-								/>
-							</label>
-							<label>
-								<span className="vuln-filter-label">{t("会话（只列本项目）")}</span>
-								<select
-									className="inline-input"
-									value={filters.sessionId ?? ""}
-									onChange={(event) => onFiltersChange({ ...filters, sessionId: event.target.value || undefined })}
-								>
-									<option value="">{t("不限会话")}</option>
-									{/* A record can outlive its session; the snapshot keeps the option
-									    selectable instead of silently resetting the filter. */}
-									{filters.sessionId && !sessionOptions.some((option) => option.id === filters.sessionId) ? (
-										<option value={filters.sessionId}>{sessionLabelFor(filters.sessionId)}</option>
-									) : null}
-									{sessionOptions.map((option) => (
-										<option key={option.id} value={option.id}>
-											{option.name}
-										</option>
-									))}
-								</select>
-							</label>
-							<label>
-								<span className="vuln-filter-label">{t("工程（只列本项目，含已结束）")}</span>
-								<select
-									className="inline-input"
-									value={filters.engineId ?? ""}
-									onChange={(event) =>
-										// The task belongs to an engine, so switching engines clears it.
-										onFiltersChange({ ...filters, engineId: event.target.value || undefined, taskId: undefined })
-									}
-								>
-									<option value="">{t("不限工程")}</option>
-									{projectEngines.map((engine) => (
-										<option key={engine.id} value={engine.id}>
-											{engine.name}
-										</option>
-									))}
-								</select>
-							</label>
-							<label>
-								<span className="vuln-filter-label">{t("任务（先选工程）")}</span>
-								<select
-									className="inline-input"
-									value={filters.taskId ?? ""}
-									disabled={!filters.engineId}
-									onChange={(event) => onFiltersChange({ ...filters, taskId: event.target.value || undefined })}
-								>
-									<option value="">{filters.engineId ? t("不限任务") : t("先选工程")}</option>
-									{(activeEngine?.tasks ?? []).map((task) => (
-										<option key={task.id} value={task.id}>
-											{task.title}
-										</option>
-									))}
-								</select>
-							</label>
-							<label>
-								<span className="vuln-filter-label">{t("等级")}</span>
-								<select
-									className="inline-input"
-									value={filters.severity ?? ""}
-									onChange={(event) =>
-										onFiltersChange({
-											...filters,
-											severity: (event.target.value || undefined) as SentinelVulnSeverity | undefined,
-										})
-									}
-								>
-									<option value="">{t("全部等级")}</option>
-									{SENTINEL_VULN_SEVERITIES.map((severity) => (
-										<option key={severity} value={severity}>
-											{SENTINEL_VULN_SEVERITY_LABELS[severity]}
-										</option>
-									))}
-								</select>
-							</label>
-							<label>
-								<span className="vuln-filter-label">{t("状态")}</span>
-								<select
-									className="inline-input"
-									value={filters.status ?? ""}
-									onChange={(event) =>
-										onFiltersChange({
-											...filters,
-											status: (event.target.value || undefined) as SentinelVulnStatus | undefined,
-										})
-									}
-								>
-									<option value="">{t("全部状态")}</option>
-									{STATUSES.map((status) => (
-										<option key={status} value={status}>
-											{SENTINEL_VULN_STATUS_LABELS[status]}
-										</option>
-									))}
-								</select>
-							</label>
-						</div>
-						<div className="vuln-filter-foot">
-							<button type="button" className="ghost small" onClick={clearAll}>
-								{t("清空全部")}
-							</button>
-							<button type="button" className="primary small" onClick={() => setFilterOpen(false)}>
-								{t("完成")}
-							</button>
-						</div>
-					</div>
-				</div>
-				<button
-					type="button"
-					className={`ghost small${filters.dubious ? " on" : ""}`}
-					title={t("只看评审 LLM 标记为「存疑」的记录：证据不足以支撑结论")}
-					onClick={() => onFiltersChange({ ...filters, dubious: filters.dubious ? undefined : true })}
-				>
-					{t("⚠ 存疑")}
-				</button>
-			</div>
-			{chips.length > 0 ? (
-				<div className="vuln-chip-row">
-					{chips.map((chip) => (
-						<span key={chip.key} className="vuln-chip">
-							<span className="vuln-chip__label">{chip.label}</span>
-							<b>{chip.value}</b>
-							<button type="button" title={t("移除该条件")} onClick={chip.clear}>
-								<CloseIcon />
-							</button>
-						</span>
-					))}
-				</div>
-			) : null}
-			<div className="ws-panel__body">
-				<div className="vuln-stats">
-					{SENTINEL_VULN_SEVERITIES.map((severity) => (
-						<span key={severity} className={severityClass(severity)}>
-							{SENTINEL_VULN_SEVERITY_LABELS[severity]} {stats.bySeverity[severity]}
-						</span>
-					))}
-					<span className="vuln-stat-status">{t("待确认 {count}", { count: stats.byStatus.pending })}</span>
-					<span className="vuln-stat-status">{t("已确认 {count}", { count: stats.byStatus.confirmed })}</span>
-					<span className="vuln-stat-status">{t("误报 {count}", { count: stats.byStatus.false_positive })}</span>
-					<span className="vuln-stat-status">{t("已修复 {count}", { count: stats.byStatus.fixed })}</span>
-				</div>
-				{items.length === 0 ? (
-					<div className="ws-empty">
-						<span>{stats.total === 0 ? t("还没有漏洞记录") : t("没有符合条件的记录")}</span>
-						<span>
-							{stats.total === 0
-								? t("代理用 vuln_submit 提交漏洞后会出现在这里（需要「设置 → 权限」中开启 vuln_submit）")
-								: t("调整搜索或筛选条件")}
-						</span>
-					</div>
-				) : (
-					<div className="data-table vuln-table">
-						<div className="data-row data-head">
-							<span>
-								<input
-									type="checkbox"
-									checked={allSelected}
-									title={t("全选当前筛选结果")}
-									onChange={() => setSelected(allSelected ? new Set() : new Set(items.map((item) => item.id)))}
-								/>
-							</span>
-							<span>{t("编号")}</span>
-							<span>{t("等级")}</span>
-							<span>{t("状态")}</span>
-							<span>{t("目标")}</span>
-							<span>{t("标题")}</span>
-							<span>{t("来源")}</span>
-							<span>{t("提交时间")}</span>
-							<span />
-						</div>
-						{items.map((item) => (
-							<div
-								key={item.id}
-								className={`data-row vuln-row${selected.has(item.id) ? " selected" : ""}`}
-								role="button"
-								tabIndex={0}
-								onClick={() => onOpen(item.id)}
-								onKeyDown={(event) => {
-									if (event.key === "Enter" || event.key === " ") onOpen(item.id);
-								}}
+
+			{selectedIds.length > 0 ? (
+				<Alert
+					type="info"
+					showIcon
+					className="ui-page__alert"
+					title={t("已选择 {count} 条", { count: selectedIds.length })}
+					action={
+						<Space size={8}>
+							<Button size="small" onClick={clearSelection}>
+								{t("取消选择")}
+							</Button>
+							<Button
+								size="small"
+								danger
+								icon={<DeleteOutlined />}
+								onClick={() => onRequestDelete(selectedIds)}
 							>
-								<span
-									className="vuln-select"
-									onClick={(event) => {
-										// Ticking a row must not open the record.
-										event.stopPropagation();
-									}}
-								>
-									<input
-										type="checkbox"
-										checked={selected.has(item.id)}
-										onChange={() => toggle(item.id)}
-										aria-label={t("选择 {label}", { label: item.label })}
-									/>
-								</span>
-								<span className="data-mono">{item.label}</span>
-								<span>
-									<span className={severityClass(item.severity)}>
-										{SENTINEL_VULN_SEVERITY_LABELS[item.severity]}
-									</span>
-									<span className={isAgentRating(item.review) ? "vuln-cvss vuln-cvss-self" : "vuln-cvss"}>
-										{isAgentRating(item.review) ? `${t("自评")} ` : ""}
-										{item.cvss.toFixed(1)}
-									</span>
-									<ReviewChip review={item.review} />
-									{item.severityMismatch ? (
-										<span className="vuln-warn" title={t("等级与 CVSS 分数不一致")}>
-											!
-										</span>
-									) : null}
-								</span>
-								<span>
-									<span className={`vuln-status-tag vuln-status-${item.status}`}>
-										{SENTINEL_VULN_STATUS_LABELS[item.status]}
-									</span>
-								</span>
-								<span className="data-mono" title={item.target}>
-									{item.target}
-									{item.assetLabel ? <span className="vuln-asset-tag">{item.assetLabel}</span> : null}
-								</span>
-								<span className="data-name" title={item.title}>
-									{item.title}
-								</span>
-								<span className="data-mono">{vulnSource(item.source)}</span>
-								<span className="data-mono">{formatWhen(item.createdAt)}</span>
-								<span className="vuln-session-jump">
-									{(() => {
-										const hasSession = Boolean(
-											item.sessionId && sessions.some((session) => session.id === item.sessionId),
-										);
-										const reason = item.sessionId
-											? hasSession
-												? t("打开对应对话")
-												: t("对应会话已删除")
-											: t("该漏洞没有关联会话");
-										return (
-											<button
-												type="button"
-												className="vuln-jump"
-												disabled={!hasSession}
-												title={reason}
-												aria-label={reason}
-												onClick={(event) => {
-													// The row click opens the finding; this only navigates.
-													event.stopPropagation();
-													if (item.sessionId) onOpenSession(item.sessionId);
-												}}
-												onKeyDown={(event) => {
-													// Enter/Space on the button must not also reach the row's
-													// key handler, which would open the detail at the same time.
-													event.stopPropagation();
-												}}
-											>
-												›
-											</button>
-										);
-									})()}
-								</span>
-							</div>
-						))}
-					</div>
-				)}
-				<p className="ws-panel__hint">
-					{t("代理提交的漏洞一律先记为「待确认」；确认、改级、标误报都在详情里完成，改动会记入时间线。")}{" "}
-					{t("导出只包含当前项目的记录与当前筛选条件。")}
-					{t("删除只能通过勾选记录进行：删除后证据与备注一并消失，不可恢复。")}
-				</p>
-			</div>
-			{deletePending ? (
-				<Overlay
-					title={t("删除漏洞记录")}
-					subtitle={t("删除后不可恢复")}
-					className="vuln-delete-modal"
-					onClose={onCancelDelete}
-					actions={
-						<>
-							<button type="button" onClick={onCancelDelete}>
-								{t("取消")}
-							</button>
-							<button
-								type="button"
-								className="danger"
-								disabled={deletePreview === null}
-								onClick={() => onConfirmDelete(deletePending)}
-							>
-								{t("确认删除")}
-							</button>
-						</>
+								{t("删除选中")}
+							</Button>
+						</Space>
 					}
-				>
-					<div className="vuln-delete-body">
-						<p>{t("将删除 {count} 条漏洞记录。", { count: deletePreview?.count ?? deletePending.length })}</p>
-						{deletePreview ? (
-							<ul>
-								<li>{t("{count} 条证据", { count: deletePreview.evidence })}</li>
-								<li>{t("{count} 条复核备注", { count: deletePreview.notes })}</li>
-							</ul>
-						) : (
-							<p className="ws-panel__sub">{t("正在统计影响…")}</p>
-						)}
-						<p className="ws-panel__hint">
-							{t("记录里的证据引用与备注会一并删除；容器里的原文件不受影响。")}
-						</p>
-					</div>
-				</Overlay>
+				/>
 			) : null}
-		</div>
+
+			<ProTable<SentinelVulnSummary>
+				className="vulnhub-table"
+				rowKey="id"
+				size="middle"
+				columns={columns}
+				dataSource={items}
+				search={false}
+				pagination={false}
+				scroll={{ x: 1010 }}
+				rowSelection={{
+					selectedRowKeys: selectedIds,
+					onChange: (keys) => setSelected(new Set(keys as string[])),
+					columnWidth: 44,
+				}}
+				toolbar={{
+					title: (
+						<div className="vulnhub-toolbar">
+							<Input
+								allowClear
+								className="vulnhub-toolbar__search"
+								prefix={<SearchOutlined />}
+								value={search}
+								placeholder={t("搜索编号 / 标题 / 类型 / 描述 / 来源")}
+								onChange={(event) => setSearch(event.target.value)}
+								onPressEnter={() =>
+									onFiltersChange({ ...filters, search: search.trim() || undefined })
+								}
+							/>
+							<Popover
+								open={filterOpen}
+								onOpenChange={setFilterOpen}
+								trigger="click"
+								placement="bottomLeft"
+								content={filterPanel}
+							>
+								<Badge count={chips.length} size="small">
+									<Button icon={<FilterOutlined />} title={t("目标、会话、工程、任务、等级与状态都在这里设置")}>
+										{t("筛选")}
+									</Button>
+								</Badge>
+							</Popover>
+							<Button
+								type={filters.dubious ? "primary" : "default"}
+								title={t("只看评审 LLM 标记为「存疑」的记录：证据不足以支撑结论")}
+								onClick={() => onFiltersChange({ ...filters, dubious: filters.dubious ? undefined : true })}
+							>
+								{t("⚠ 存疑")}
+							</Button>
+							<Button
+								type="link"
+								disabled={items.length === 0}
+								title={t("选中当前筛选结果里的全部记录")}
+								onClick={() =>
+									setSelected(allSelected ? new Set() : new Set(items.map((item) => item.id)))
+								}
+							>
+								{allSelected ? t("取消全选") : t("全选筛选结果")}
+							</Button>
+							{chips.map((chip) => (
+								<Tag key={chip.key} closable onClose={chip.clear} className="vulnhub-chip">
+									{chip.label}：{chip.value}
+								</Tag>
+							))}
+						</div>
+					),
+				}}
+				onRow={(record) => ({
+					onClick: (event) => {
+						const target = event.target as HTMLElement;
+						if (target.closest("button, a, .ant-checkbox-wrapper, .ant-table-selection-column")) return;
+						onOpen(record.id);
+					},
+					style: { cursor: "pointer" },
+				})}
+				locale={{
+					emptyText: (
+						<Empty
+							image={Empty.PRESENTED_IMAGE_SIMPLE}
+							description={
+								<>
+									<div>{stats.total === 0 ? t("还没有漏洞记录") : t("没有符合条件的记录")}</div>
+									<div className="vulnhub-empty-hint">
+										{stats.total === 0
+											? t(
+													"代理用 vuln_submit 提交漏洞后会出现在这里（需要「设置 → 权限」中开启 vuln_submit）",
+												)
+											: t("调整搜索或筛选条件")}
+									</div>
+								</>
+							}
+						/>
+					),
+				}}
+			/>
+
+			<div className="vulnhub-hints">
+				<Text type="secondary">
+					{t("代理提交的漏洞一律先记为「待确认」；确认、改级、标误报都在详情里完成，改动会记入时间线。")}
+				</Text>
+				<Text type="secondary">
+					{t("导出只包含当前项目的记录与当前筛选条件。删除只能通过勾选记录进行：删除后证据与备注一并消失，不可恢复。")}
+				</Text>
+			</div>
+
+			<Modal
+				open={deletePending !== null}
+				getContainer={false}
+				forceRender
+				title={t("删除漏洞记录")}
+				okText={t("确认删除")}
+				cancelText={t("取消")}
+				okButtonProps={{ danger: true, disabled: deletePreview === null }}
+				onOk={() => {
+					if (deletePending) onConfirmDelete(deletePending);
+				}}
+				onCancel={onCancelDelete}
+				destroyOnHidden
+			>
+				<VulnDeleteBody pending={deletePending} preview={deletePreview} />
+			</Modal>
+		</Page>
 	);
 }
 
@@ -729,44 +790,53 @@ function EvidenceBlock({
 	onPreview: (path: string) => void;
 }) {
 	return (
-		<div className="vuln-evidence">
-			<div className="vuln-evidence__head">
-				<span className="vuln-evidence__index">{index + 1}</span>
-				<span>{item.note ?? (item.kind === "file" ? t("容器文件") : t("命令证据"))}</span>
-				{item.command ? <CopyButton text={item.command} label={t("复制命令")} /> : null}
-				{item.output ? <CopyButton text={item.output} label={t("复制输出")} /> : null}
-			</div>
-			{item.command ? <pre className="ws-console__body">{item.command}</pre> : null}
-			{item.output ? <pre className="ws-console__body">{item.output}</pre> : null}
+		<Card
+			size="small"
+			className="vulnhub-evidence"
+			title={
+				<Space size={8}>
+					<Tag variant="filled">{index + 1}</Tag>
+					<span>{item.note ?? (item.kind === "file" ? t("容器文件") : t("命令证据"))}</span>
+				</Space>
+			}
+			extra={
+				<Space size={4}>
+					{item.command ? <CopyButton text={item.command} label={t("复制命令")} /> : null}
+					{item.output ? <CopyButton text={item.output} label={t("复制输出")} /> : null}
+				</Space>
+			}
+		>
+			{item.command ? <pre className="vulnhub-pre">{item.command}</pre> : null}
+			{item.output ? <pre className="vulnhub-pre">{item.output}</pre> : null}
 			{item.path ? (
-				<div className="vuln-evidence__file">
-					<code>{item.path}</code>
-					<button type="button" onClick={() => onPreview(item.path as string)}>
+				<Space size={8} className="vulnhub-evidence__file">
+					<Text code>{item.path}</Text>
+					<Button size="small" onClick={() => onPreview(item.path as string)}>
 						{t("预览")}
-					</button>
-				</div>
+					</Button>
+				</Space>
 			) : null}
 			{preview && item.path && preview.path === item.path ? (
-				<div className="vuln-preview">
+				<div className="vulnhub-preview">
 					{preview.kind === "image" && preview.data ? (
 						<img src={`data:${preview.mimeType ?? "image/png"};base64,${preview.data}`} alt={item.path} />
 					) : preview.kind === "text" ? (
-						<pre className="ws-console__body">
+						<pre className="vulnhub-pre">
 							{preview.text}
 							{preview.truncated ? `\n${t("…（已截断）")}` : ""}
 						</pre>
 					) : (
-						<span className="ws-panel__hint">
+						<Text type="secondary">
 							{t("二进制文件（{size} 字节），请在「文件」弹窗中下载查看", { size: preview.size })}
-						</span>
+						</Text>
 					)}
 				</div>
 			) : null}
-		</div>
+		</Card>
 	);
 }
 
-export function VulnDetail({
+export function VulnDetailBody({
 	vuln,
 	preview,
 	provenance,
@@ -830,296 +900,278 @@ export function VulnDetail({
 		apply({ note: text });
 	};
 
+	const retryButton =
+		vuln.review.state === "failed" ? (
+			<Button size="small" onClick={() => onRetryReview(vuln.id, false)}>
+				{t("重试评审")}
+			</Button>
+		) : vuln.review.state === "queued" ? (
+			<Button size="small" disabled>
+				{t("评审中…")}
+			</Button>
+		) : (
+			<Button
+				size="small"
+				title={t(
+					"按 CVSS 3.1 指标重新计算等级与分数。这条如果已被手动改过等级（或状态），也会一并覆盖，时间线里会记录",
+				)}
+				onClick={() => onRetryReview(vuln.id, true)}
+			>
+				{t("重新评审")}
+			</Button>
+		);
+
+	const metaItems: DescriptionsProps["items"] = [
+		{ key: "label", label: t("编号"), children: <Text code>{vuln.label}</Text> },
+		{ key: "target", label: t("目标"), children: <Text code>{vuln.target}</Text> },
+		...(vuln.assetId
+			? [
+					{
+						key: "asset",
+						label: t("关联资产"),
+						children: (
+							<Button type="link" size="small" onClick={() => onOpenAsset(vuln.assetId as string)}>
+								{vuln.assetLabel ?? vuln.assetId}
+							</Button>
+						),
+					},
+				]
+			: []),
+		{ key: "category", label: t("类型"), children: vuln.category ?? "—" },
+		{ key: "source", label: t("来源"), children: vulnSource(vuln.source) },
+		{ key: "created", label: t("提交时间"), children: formatWhen(vuln.createdAt) },
+		...(vuln.engineId || vuln.taskId
+			? [
+					{
+						key: "engine",
+						label: t("工程 / 任务"),
+						children: `${provenance.engine ?? vuln.engineId ?? ""}${provenance.task ? ` / ${provenance.task}` : ""}`,
+					},
+				]
+			: []),
+		...(vuln.sessionId
+			? [
+					{
+						key: "session",
+						label: t("会话"),
+						children: provenance.session ?? vuln.sessionName ?? vuln.sessionId,
+					},
+				]
+			: []),
+		{
+			key: "review",
+			label: t("评审"),
+			children: (
+				<Space size={6} wrap>
+					<ReviewChip review={vuln.review} />
+					{vuln.review.state === "done" && vuln.review.model ? (
+						<Text type="secondary">{vuln.review.model}</Text>
+					) : null}
+					{vuln.review.at ? (
+						<Text type="secondary">{new Date(vuln.review.at).toLocaleString("zh-CN", { hour12: false })}</Text>
+					) : null}
+					{retryButton}
+				</Space>
+			),
+		},
+		...(vuln.review.state === "done" && vuln.review.reason
+			? [
+					{
+						key: "reason",
+						label: t("评审意见"),
+						span: 2,
+						children: (
+							<Text>
+								{vuln.review.verdict === "dubious" ? t("⚠ 存疑：") : ""}
+								{vuln.review.reason}
+							</Text>
+						),
+					},
+				]
+			: []),
+		...(vuln.review.state === "failed"
+			? [
+					{
+						key: "review-error",
+						label: t("评审失败原因"),
+						span: 2,
+						children: <Text type="danger">{vuln.review.error ?? t("未知错误")}</Text>,
+					},
+				]
+			: []),
+	];
+
 	return (
-		<div className="modal-backdrop" onClick={onClose}>
-			<div className="modal vuln-detail" onClick={(event) => event.stopPropagation()}>
-				<div className="vuln-detail__head">
-					<div>
-						<div className="vuln-detail__title" title={vuln.title}>
-							{vuln.title}
-						</div>
-						<div className="vuln-detail__meta">
-							<span className={severityClass(vuln.severity)}>{SENTINEL_VULN_SEVERITY_LABELS[vuln.severity]}</span>
-							<span className={isAgentRating(vuln.review) ? "vuln-cvss vuln-cvss-self" : "vuln-cvss"}>
-								{isAgentRating(vuln.review) ? `${t("自评")} CVSS ` : "CVSS "}
-								{vuln.cvss.toFixed(1)}
-							</span>
-							{vuln.cvssVector ? <span className="data-mono">{vuln.cvssVector}</span> : null}
-							<span>{SENTINEL_VULN_STATUS_LABELS[vuln.status]}</span>
-							{vuln.review?.verdict === "dubious" ? (
-								<span className="vuln-warn" title={vuln.review.reason ?? t("评审认为证据不足以支撑结论")}>
-									{t("评审存疑")}
-								</span>
-							) : null}
-							{vuln.severityMismatch ? (
-								<span className="vuln-warn" title={t("等级与 CVSS 分数不一致")}>
-									{t("等级与分数不一致")}
-								</span>
-							) : null}
-						</div>
-					</div>
-					<button type="button" className="ghost small" onClick={onClose} title={t("关闭")}>
-						<CloseIcon />
-					</button>
-				</div>
-
-				<div className="vuln-detail__body">
-					<div className="vuln-meta-grid">
-						<div>
-							<span>{t("编号")}</span>
-							<code>{vuln.label}</code>
-						</div>
-						<div>
-							<span>{t("目标")}</span>
-							<code>{vuln.target}</code>
-						</div>
-						{vuln.assetId ? (
-							<div>
-								<span>{t("关联资产")}</span>
-								<span>
-									<button
-										type="button"
-										className="link"
-										onClick={() => onOpenAsset(vuln.assetId as string)}
-									>
-										{vuln.assetLabel ?? vuln.assetId}
-									</button>
-								</span>
-							</div>
-						) : null}
-						<div>
-							<span>{t("类型")}</span>
-							<span>{vuln.category ?? "—"}</span>
-						</div>
-						<div>
-							<span>{t("来源")}</span>
-							<span>{vulnSource(vuln.source)}</span>
-						</div>
-						<div>
-							<span>{t("提交时间")}</span>
-							<span>{formatWhen(vuln.createdAt)}</span>
-						</div>
-						{vuln.engineId || vuln.taskId ? (
-							<div>
-								<span>{t("工程 / 任务")}</span>
-								<span>
-									{provenance.engine ?? vuln.engineId}
-									{provenance.task ? ` / ${provenance.task}` : ""}
-								</span>
-							</div>
-						) : null}
-						{vuln.sessionId ? (
-							<div>
-								<span>{t("会话")}</span>
-								<span title={vuln.sessionId}>
-									{provenance.session ?? vuln.sessionName ?? vuln.sessionId}
-								</span>
-							</div>
-						) : null}
-						<div>
-							<span>{t("评审")}</span>
-							<span>
-								<ReviewChip review={vuln.review} />
-								{vuln.review.state === "done" && vuln.review.model ? ` ${vuln.review.model}` : ""}
-								{vuln.review.at
-									? ` · ${new Date(vuln.review.at).toLocaleString("zh-CN", { hour12: false })}`
-									: ""}
-								{vuln.review.state === "failed" ? (
-									<button
-										type="button"
-										className="ghost small"
-										style={{ marginLeft: 8 }}
-										onClick={() => onRetryReview(vuln.id, false)}
-									>
-										{t("重试评审")}
-									</button>
-								) : vuln.review.state === "queued" ? (
-									<button type="button" className="ghost small" style={{ marginLeft: 8 }} disabled>
-										{t("评审中…")}
-									</button>
-								) : (
-									<button
-										type="button"
-										className="ghost small"
-										style={{ marginLeft: 8 }}
-										title={t(
-											"按 CVSS 3.1 指标重新计算等级与分数。这条如果已被手动改过等级（或状态），也会一并覆盖，时间线里会记录",
-										)}
-										onClick={() => onRetryReview(vuln.id, true)}
-									>
-										{t("重新评审")}
-									</button>
-								)}
-							</span>
-						</div>
-						{vuln.review.state === "done" && vuln.review.reason ? (
-							<div style={{ gridColumn: "1 / -1" }}>
-								<span>{t("评审意见")}</span>
-								<span>
-									{vuln.review.verdict === "dubious" ? t("⚠ 存疑：") : ""}
-									{vuln.review.reason}
-								</span>
-							</div>
-						) : null}
-						{vuln.review.state === "failed" ? (
-							<div style={{ gridColumn: "1 / -1" }}>
-								<span>{t("评审失败原因")}</span>
-								<span>{vuln.review.error ?? t("未知错误")}</span>
-							</div>
-						) : null}
-					</div>
-
-					<div className="vuln-action-band">
-						<span className={`vuln-state-big vuln-state-${vuln.status}`}>
+		<div className="vulnhub-detail">
+			<div className="vulnhub-detail__title">
+					<span className="vulnhub-detail__name">{vuln.title}</span>
+					<Space size={6} wrap className="vulnhub-detail__meta">
+						<Tag color={SEVERITY_COLORS[vuln.severity]} variant="filled">
+							{SENTINEL_VULN_SEVERITY_LABELS[vuln.severity]}
+						</Tag>
+						<Text type="secondary">
+							{isAgentRating(vuln.review) ? `${t("自评")} CVSS ` : "CVSS "}
+							{vuln.cvss.toFixed(1)}
+						</Text>
+						{vuln.cvssVector ? <Text code>{vuln.cvssVector}</Text> : null}
+						<Tag color={STATUS_COLORS[vuln.status]} variant="filled">
 							{SENTINEL_VULN_STATUS_LABELS[vuln.status]}
-						</span>
-						{vuln.status === "pending" ? (
-							<>
-								<button
-									type="button"
-									className="vuln-transition confirm"
-									onClick={() => transition("confirmed")}
-								>
-									{t("✓ 确认")}
-								</button>
-								<button
-									type="button"
-									className="vuln-transition false"
-									onClick={() => transition("false_positive")}
-								>
-									{t("✕ 标误报")}
-								</button>
-							</>
+						</Tag>
+						{vuln.review?.verdict === "dubious" ? (
+							<Tag color="warning" variant="filled">
+								{t("评审存疑")}
+							</Tag>
 						) : null}
-						{vuln.status !== "fixed" ? (
-							<button type="button" className="vuln-transition fix" onClick={() => transition("fixed")}>
-								{t("✔ 标已修复")}
-							</button>
+						{vuln.severityMismatch ? (
+							<Tag color="warning" variant="filled">
+								{t("等级与分数不一致")}
+							</Tag>
 						) : null}
-						{vuln.status !== "pending" ? (
-							<button type="button" className="vuln-transition" onClick={() => transition("pending")}>
-								{t("↩ 退回待确认")}
-							</button>
-						) : null}
-						<span className="vuln-action-spacer" />
-						{savedAt ? (
-							<span className="vuln-saved-hint">
-								{t("已保存 {time}", { time: savedAt.toLocaleTimeString("zh-CN", { hour12: false }) })}
-							</span>
-						) : null}
-					</div>
-					<div className="vuln-action-band vuln-action-band--rating">
-						<span className="vuln-action-label">{t("等级")}</span>
-						<select
-							value={severity}
-							onChange={(event) => setSeverity(event.target.value as SentinelVulnSeverity)}
-							onBlur={commitRating}
-						>
-							{SENTINEL_VULN_SEVERITIES.map((candidate) => (
-								<option key={candidate} value={candidate}>
-									{SENTINEL_VULN_SEVERITY_LABELS[candidate]}
-								</option>
-							))}
-						</select>
-						<span className="vuln-action-label">CVSS</span>
-						<input
-							className={`vuln-cvss-edit ${cvssValid ? "" : "invalid"}`}
-							value={cvss}
-							spellCheck={false}
-							onChange={(event) => setCvss(event.target.value)}
-							onBlur={commitRating}
-							onKeyDown={(event) => {
-								if (event.key === "Enter") commitRating();
-							}}
-						/>
-						{!cvssValid ? <span className="page-error">{t("CVSS 需要 0.0-10.0")}</span> : null}
-						{cvssValid && severityForScore(parsedCvss) !== severity ? (
-							<span className="vuln-warn">
-								{t("分数对应「{severity}」，与所选等级不一致", {
-									severity: SENTINEL_VULN_SEVERITY_LABELS[severityForScore(parsedCvss)],
-								})}
-							</span>
-						) : null}
-						<span className="vuln-action-spacer" />
-					</div>
-					<input
-						className="inline-input vuln-note-input"
-						value={note}
-						placeholder={t("复核备注（回车提交，追加到时间线）…")}
-						spellCheck={false}
-						onChange={(event) => setNote(event.target.value)}
-						onKeyDown={(event) => {
-							if (event.key === "Enter") submitNote();
-						}}
-					/>
-
-					<section>
-						<h3>{t("漏洞详情")}</h3>
-						<pre className="vuln-text">{vuln.description}</pre>
-					</section>
-
-					<section>
-						<div className="vuln-section-head">
-							<h3>{t("原始数据包")}</h3>
-							<CopyButton text={vuln.packet} label={t("复制数据包")} />
-						</div>
-						<pre className="vuln-packet">{vuln.packet}</pre>
-					</section>
-
-					{vuln.repro ? (
-						<section>
-							<h3>{t("复现步骤")}</h3>
-							<pre className="vuln-text">{vuln.repro}</pre>
-						</section>
-					) : null}
-
-					{vuln.evidence.length > 0 ? (
-						<section>
-							<h3>{t("证据")}</h3>
-							{vuln.evidence.map((item, index) => (
-								<EvidenceBlock
-									key={`${item.kind}-${item.path ?? item.command ?? index}`}
-									item={item}
-									index={index}
-									preview={preview}
-									onPreview={onPreview}
-								/>
-							))}
-						</section>
-					) : null}
-
-					{vuln.remediation ? (
-						<section>
-							<h3>{t("修复建议")}</h3>
-							<pre className="vuln-text">{vuln.remediation}</pre>
-						</section>
-					) : null}
-
-					{vuln.references && vuln.references.length > 0 ? (
-						<section>
-							<h3>{t("参考")}</h3>
-							<ul className="vuln-refs">
-								{vuln.references.map((reference) => (
-									<li key={reference}>{reference}</li>
-								))}
-							</ul>
-						</section>
-					) : null}
-
-					<section>
-						<h3>{t("处理时间线")}</h3>
-						<ul className="vuln-timeline">
-							{vuln.notes.map((entry, index) => (
-								<li key={`${entry.at}-${index}`}>
-									<span className="vuln-timeline__at">{formatWhen(entry.at)}</span>
-									<span className="vuln-timeline__author">{entry.author}</span>
-									<span>{entry.text}</span>
-								</li>
-							))}
-						</ul>
-					</section>
-				</div>
+				</Space>
 			</div>
+			<Descriptions size="small" column={2} bordered items={metaItems} className="vulnhub-detail__desc" />
+
+			<div className="vulnhub-actions">
+				<Space size={8} wrap>
+					{vuln.status === "pending" ? (
+						<>
+							<Button type="primary" onClick={() => transition("confirmed")}>
+								{t("✓ 确认")}
+							</Button>
+							<Button danger onClick={() => transition("false_positive")}>
+								{t("✕ 标误报")}
+							</Button>
+						</>
+					) : null}
+					{vuln.status !== "fixed" ? <Button onClick={() => transition("fixed")}>{t("✔ 标已修复")}</Button> : null}
+					{vuln.status !== "pending" ? (
+						<Button onClick={() => transition("pending")}>{t("↩ 退回待确认")}</Button>
+					) : null}
+				</Space>
+				{savedAt ? (
+					<Text type="secondary" className="vulnhub-saved">
+						{t("已保存 {time}", { time: savedAt.toLocaleTimeString("zh-CN", { hour12: false }) })}
+					</Text>
+				) : null}
+			</div>
+
+			<div className="vulnhub-rating">
+				<Text type="secondary">{t("等级")}</Text>
+				<Select
+					size="small"
+					value={severity}
+					onChange={(value) => setSeverity(value as SentinelVulnSeverity)}
+					onBlur={commitRating}
+					style={{ width: 112 }}
+					options={SENTINEL_VULN_SEVERITIES.map((candidate) => ({
+						value: candidate,
+						label: SENTINEL_VULN_SEVERITY_LABELS[candidate],
+					}))}
+				/>
+				<Text type="secondary">CVSS</Text>
+				<Input
+					size="small"
+					className="vulnhub-cvss-input"
+					status={cvssValid ? undefined : "error"}
+					value={cvss}
+					spellCheck={false}
+					onChange={(event) => setCvss(event.target.value)}
+					onBlur={commitRating}
+					onPressEnter={commitRating}
+				/>
+				{!cvssValid ? <Text type="danger">{t("CVSS 需要 0.0-10.0")}</Text> : null}
+				{cvssValid && severityForScore(parsedCvss) !== severity ? (
+					<Text type="warning">
+						{t("分数对应「{severity}」，与所选等级不一致", {
+							severity: SENTINEL_VULN_SEVERITY_LABELS[severityForScore(parsedCvss)],
+						})}
+					</Text>
+				) : null}
+			</div>
+
+			<Input
+				className="vulnhub-note"
+				value={note}
+				placeholder={t("复核备注（回车提交，追加到时间线）…")}
+				spellCheck={false}
+				onChange={(event) => setNote(event.target.value)}
+				onPressEnter={submitNote}
+			/>
+
+			<Section title={t("漏洞详情")}>
+				<pre className="vulnhub-pre">{vuln.description}</pre>
+			</Section>
+
+			<Section
+				title={t("原始数据包")}
+				extra={<CopyButton text={vuln.packet} label={t("复制数据包")} />}
+			>
+				<pre className="vulnhub-pre">{vuln.packet}</pre>
+			</Section>
+
+			{vuln.repro ? (
+				<Section title={t("复现步骤")}>
+					<pre className="vulnhub-pre">{vuln.repro}</pre>
+				</Section>
+			) : null}
+
+			{vuln.evidence.length > 0 ? (
+				<Section title={t("证据")}>
+					<div className="vulnhub-evidence-list">
+						{vuln.evidence.map((item, index) => (
+							<EvidenceBlock
+								key={`${item.kind}-${item.path ?? item.command ?? index}`}
+								item={item}
+								index={index}
+								preview={preview}
+								onPreview={onPreview}
+							/>
+						))}
+					</div>
+				</Section>
+			) : null}
+
+			{vuln.remediation ? (
+				<Section title={t("修复建议")}>
+					<pre className="vulnhub-pre">{vuln.remediation}</pre>
+				</Section>
+			) : null}
+
+			{vuln.references && vuln.references.length > 0 ? (
+				<Section title={t("参考")}>
+					<ul className="vulnhub-refs">
+						{vuln.references.map((reference) => (
+							<li key={reference}>{reference}</li>
+						))}
+					</ul>
+				</Section>
+			) : null}
+
+			<Section title={t("处理时间线")}>
+				<Timeline
+					items={vuln.notes.map((entry, index) => ({
+						key: `${entry.at}-${index}`,
+						children: (
+							<div className="vulnhub-timeline__row">
+								<Text type="secondary" className="vulnhub-timeline__at">
+									{formatWhen(entry.at)}
+								</Text>
+								<Text strong>{entry.author}</Text>
+								<Text>{entry.text}</Text>
+							</div>
+						),
+					}))}
+				/>
+			</Section>
 		</div>
+	);
+}
+
+/** The detail surface: the same content inside the drawer the page opens. */
+export function VulnDetail(props: Parameters<typeof VulnDetailBody>[0]) {
+	return (
+		<Drawer open width={780} onClose={props.onClose} destroyOnHidden className="vulnhub-drawer">
+			<VulnDetailBody {...props} />
+		</Drawer>
 	);
 }
