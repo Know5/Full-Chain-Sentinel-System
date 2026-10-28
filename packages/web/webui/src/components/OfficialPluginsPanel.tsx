@@ -1,6 +1,6 @@
 import { ProTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
-import { Button, Space, Tag, Typography } from "antd";
+import { Button, Space, Tag, Tooltip, Typography } from "antd";
 import { t } from "../i18n.ts";
 import type {
 	SentinelOfficialPluginView,
@@ -78,18 +78,21 @@ export function OfficialPluginsPanel({
 										<PluginIcon size={17} />
 									</span>
 									<div className="op__text">
-										<Space size={6} wrap>
-											<Text strong>{manifest.name}</Text>
+										<Space size={6}>
+											<Text strong ellipsis>
+												{manifest.name}
+											</Text>
 											<Tag color="blue" variant="filled">
 												{t("官方")}
 											</Tag>
 										</Space>
-										<Text type="secondary">{manifest.description}</Text>
-										<Space size={8} wrap>
-											<Text type="secondary">{formatSize(plugin.sizeBytes)}</Text>
-											<Text type="secondary">network {manifest.permissions.network}</Text>
-											<Text type="secondary">{manifest.resources.memory}</Text>
-										</Space>
+										<Tooltip
+											title={`${formatSize(plugin.sizeBytes)} · network ${manifest.permissions.network} · ${manifest.resources.memory}`}
+										>
+											<Text type="secondary" ellipsis>
+												{manifest.description}
+											</Text>
+										</Tooltip>
 									</div>
 								</Space>
 							);
@@ -104,16 +107,18 @@ export function OfficialPluginsPanel({
 					{
 						title: t("工具"),
 						key: "tools",
-						width: 180,
+						width: 200,
+						ellipsis: true,
 						render: (_, plugin) => (
-							<Space orientation="vertical" size={2}>
-								<Text type="secondary">{plugin.manifest.tools.length}</Text>
-								{plugin.manifest.tools.slice(0, 3).map((tool) => (
-									<Text code key={tool.name}>
-										{tool.name}
-									</Text>
-								))}
-							</Space>
+							<Text type="secondary" ellipsis>
+								{plugin.manifest.tools
+									.slice(0, 3)
+									.map((tool) => tool.name)
+									.join(" · ")}
+								{plugin.manifest.tools.length > 3
+									? ` +${plugin.manifest.tools.length - 3}`
+									: ""}
+							</Text>
 						),
 					},
 					{

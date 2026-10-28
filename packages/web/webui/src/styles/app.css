@@ -7033,3 +7033,98 @@ body {
 .ant-table-tbody > tr > td a {
 	font-size: 12.5px;
 }
+
+
+/* ---------- One line per table cell ---------- */
+
+/* Cells used to stack a title and a muted meta line, which made rows two lines
+   tall and every table a different height. Primary text and its meta now share
+   one line, truncated, with the full value in the title attribute. */
+/* Every row is one line: text truncates instead of wrapping, and only cells
+   that carry controls keep the right to wrap. */
+.ant-table-tbody > tr > td {
+	overflow: hidden;
+	white-space: nowrap;
+}
+
+.ant-table-tbody > tr > td:has(.ant-btn) {
+	white-space: normal;
+}
+
+.project-cell,
+.pluginhub-name,
+.permhub-plugin,
+.op__text,
+.sva-session {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+	white-space: nowrap;
+	overflow: hidden;
+}
+
+.project-cell__title {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
+
+.project-cell__name,
+.pluginhub-name .ant-typography:first-child,
+.permhub-plugin .ant-typography:first-child,
+.op__text .ant-typography:first-child,
+.sva-session .ant-typography:first-child {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.project-cell__meta {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	overflow: hidden;
+}
+
+.permhub-plugin__hint,
+.pluginhub-name .ant-typography:last-child,
+.op__text .ant-typography.ant-typography-secondary,
+.sva-session .ant-typography:last-child {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	font-size: 12px;
+	color: #667085;
+}
+
+.op__text {
+	flex: 1 1 auto;
+}
+
+.op__text > .ant-space {
+	flex: none;
+}
+
+.op__text .ant-typography {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* The POC id is an identifier, not code: mono text on one line, full value on
+   hover, instead of a bordered chip that truncates mid-word. */
+.poc-id {
+	display: inline-block;
+	max-width: 100%;
+	overflow: hidden;
+	font-family: var(--mono);
+	font-size: 12px;
+	color: #475467;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	vertical-align: bottom;
+}

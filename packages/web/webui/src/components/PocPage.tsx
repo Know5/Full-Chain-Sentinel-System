@@ -139,10 +139,14 @@ export function PocPage({
 			title: t("模板 ID"),
 			dataIndex: "id",
 			key: "id",
-			width: 200,
-			ellipsis: { showTitle: true },
+			width: 220,
+			ellipsis: true,
 			sorter: (left, right) => left.id.localeCompare(right.id),
-			render: (_, item) => <Text code>{item.id}</Text>,
+			render: (_, item) => (
+				<Tooltip title={item.id}>
+					<Text className="poc-id">{item.id}</Text>
+				</Tooltip>
+			),
 		},
 		{
 			title: t("等级"),
