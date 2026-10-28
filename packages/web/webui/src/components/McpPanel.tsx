@@ -419,7 +419,7 @@ export function McpPanel({
 
 			<ProTable<SentinelMcpServerView>
 				rowKey="name"
-				size="middle"
+				size="small"
 				columns={columns}
 				dataSource={config.servers}
 				search={false}

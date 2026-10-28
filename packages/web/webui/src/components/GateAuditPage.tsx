@@ -371,7 +371,7 @@ export function GateAuditPage({
 
 			<ProTable<SentinelGateDecision>
 				rowKey="id"
-				size="middle"
+				size="small"
 				columns={columns}
 				dataSource={items}
 				search={false}

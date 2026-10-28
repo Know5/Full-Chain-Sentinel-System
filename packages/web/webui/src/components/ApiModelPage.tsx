@@ -424,7 +424,7 @@ export function ApiModelPage({
 
 			<ProTable<SentinelApiModelSummary>
 				rowKey="id"
-				size="middle"
+				size="small"
 				columns={columns}
 				dataSource={visible}
 				search={false}

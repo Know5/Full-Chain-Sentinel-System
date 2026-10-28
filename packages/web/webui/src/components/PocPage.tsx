@@ -364,7 +364,7 @@ export function PocPage({
 			<ProTable<SentinelPocSummary>
 				className="poc-ledger"
 				rowKey="id"
-				size="middle"
+				size="small"
 				columns={columns}
 				dataSource={items}
 				search={false}

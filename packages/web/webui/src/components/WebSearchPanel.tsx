@@ -279,7 +279,7 @@ export function WebSearchPanel({
 
 			<ProTable<SentinelWebSearchKeyView>
 				rowKey="id"
-				size="middle"
+				size="small"
 				columns={columns}
 				dataSource={config.keys}
 				search={false}

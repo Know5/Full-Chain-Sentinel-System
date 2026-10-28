@@ -656,7 +656,7 @@ export function EnginePage(props: EnginePageProps) {
 		>
 			<ProTable<SentinelEngine>
 				rowKey="id"
-				size="middle"
+				size="small"
 				columns={columns}
 				dataSource={props.engines}
 				search={false}

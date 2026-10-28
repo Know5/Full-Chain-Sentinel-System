@@ -244,7 +244,7 @@ export function PresetPanel({
 
 			<ProTable<SentinelPresetView>
 				rowKey="id"
-				size="middle"
+				size="small"
 				columns={columns}
 				dataSource={presets}
 				search={false}

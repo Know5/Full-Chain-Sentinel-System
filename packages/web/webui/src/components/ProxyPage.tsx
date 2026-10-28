@@ -1082,7 +1082,7 @@ export function ProxyPage({
 
 			<ProTable<SentinelProxy>
 				rowKey="id"
-				size="middle"
+				size="small"
 				columns={columns}
 				dataSource={list}
 				search={false}

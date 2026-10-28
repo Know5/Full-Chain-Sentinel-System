@@ -430,7 +430,7 @@ export function SupervisorAuditPage({
 
 			<ProTable<SentinelSupervisorAuditItem>
 				rowKey="sessionId"
-				size="middle"
+				size="small"
 				columns={columns}
 				dataSource={page?.items ?? []}
 				loading={!page}

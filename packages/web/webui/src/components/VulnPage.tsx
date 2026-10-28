@@ -656,7 +656,7 @@ export function VulnPage({
 			<ProTable<SentinelVulnSummary>
 				className="vulnhub-table"
 				rowKey="id"
-				size="middle"
+				size="small"
 				columns={columns}
 				dataSource={items}
 				search={false}

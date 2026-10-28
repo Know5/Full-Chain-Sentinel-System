@@ -1067,7 +1067,7 @@ export function SettingsPanel({
 			>
 				<ProTable<SentinelModelEntryView>
 					rowKey="id"
-					size="middle"
+					size="small"
 					columns={columns}
 					dataSource={shown}
 					search={false}

@@ -338,7 +338,7 @@ export function ProjectsPage({
 
 			<Table<SentinelProjectInfo>
 				rowKey="id"
-				size="middle"
+				size="small"
 				columns={columns}
 				dataSource={list}
 				pagination={false}

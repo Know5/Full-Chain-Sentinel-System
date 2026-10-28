@@ -382,7 +382,7 @@ export function AssetPanel({
 
 			<ProTable<SentinelAssetPlatformView>
 				rowKey="id"
-				size="middle"
+				size="small"
 				columns={columns}
 				dataSource={config.platforms}
 				search={false}

@@ -614,7 +614,7 @@ export function AssetLibraryPage({
 
 			<ProTable<SentinelAssetSummary>
 				rowKey="id"
-				size="middle"
+				size="small"
 				columns={columns}
 				dataSource={items}
 				search={false}

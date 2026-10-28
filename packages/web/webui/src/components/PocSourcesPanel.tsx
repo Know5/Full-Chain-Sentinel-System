@@ -315,7 +315,7 @@ export function PocSourcesPanel({
 
 			<ProTable<SentinelPocSource>
 				rowKey="id"
-				size="middle"
+				size="small"
 				columns={columns}
 				dataSource={sources}
 				search={false}
