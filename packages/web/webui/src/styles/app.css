@@ -298,11 +298,10 @@ body {
    unfinished), but its width is capped so a five-column table is not stretched
    across an ultrawide monitor. */
 .console-page > .ui-page {
-	flex: 0 1 auto;
+	flex: 1;
 	width: 100%;
 	max-width: 1200px;
 	margin-inline: auto;
-	max-height: 100%;
 	min-height: 0;
 }
 
@@ -391,8 +390,114 @@ body {
 .ui-page__body {
 	flex: 1;
 	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
 	overflow: auto;
 	padding-top: 10px;
+}
+
+/* A table is the page body: it keeps the full height of the card, the header
+   stays put and the rows scroll, instead of a short table floating in white. */
+.ui-page__body > :not(.ant-table-wrapper):not(.ant-pro-table) {
+	flex: none;
+}
+
+.ui-page__body > .ant-table-wrapper,
+.ui-page__body > .ant-pro-table {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.ui-page__body .ant-pro-table > .ant-pro-card {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	background: transparent;
+	border: 0;
+	box-shadow: none;
+}
+
+.ui-page__body .ant-pro-card > .ant-pro-card-body {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	padding: 0 !important;
+}
+
+.ui-page__body .ant-spin-nested-loading {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.ui-page__body .ant-spin-container {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.ui-page__body .ant-table {
+	flex: 1;
+	min-height: 0;
+}
+
+.ui-page__body .ant-table-container {
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+}
+
+.ui-page__body .ant-table-body,
+.ui-page__body .ant-table-content {
+	flex: 1;
+	min-height: 0;
+	overflow: auto !important;
+}
+
+.ui-page__body .ant-table-thead > tr > th {
+	position: sticky;
+	top: 0;
+	z-index: 2;
+}
+
+.ui-page__body .ant-table-pagination {
+	flex: none;
+	margin-block: 8px 0 !important;
+}
+
+/* Dense table text: 13px rows on a 13px base read as a grid, not a list. */
+.ui-page__body .ant-table {
+	font-size: 12.5px;
+}
+
+.ui-page__body .ant-table-thead > tr > th {
+	padding-block: 6px !important;
+	font-size: 12px;
+	white-space: nowrap;
+}
+
+.ui-page__body .ant-table-tbody > tr > td {
+	padding-block: 5px !important;
+}
+
+.ui-page__body .ant-pro-table-list-toolbar {
+	padding-block: 0 8px;
+}
+
+/* Faint column rules: without them a wide table reads as floating text. */
+.ui-page__body .ant-table-tbody > tr > td:not(:last-child) {
+	border-inline-end: 1px solid var(--console-border);
+}
+
+.ui-page__body .ant-table-thead > tr > th:not(:last-child)::before {
+	background: var(--console-border) !important;
 }
 
 .ui-section {
