@@ -871,18 +871,23 @@ function TargetsBox({ engineId, onSend }: { engineId: string; onSend: (message: 
 function TaskBoard(props: { engine: SentinelEngine; onOpenTask(taskId: string): void; onAbortTask(taskId: string): void }) {
 	const tasks = props.engine.tasks;
 	return (
-		<Card
-			size="small"
-			className="enginehub-board"
-			title={t("任务看板")}
-			extra={<Text type="secondary">{t("{count} 个任务 · 点行看详情", { count: tasks.length })}</Text>}
-		>
-			<Table<SentinelEngineTask>
+		<Card size="small" className="enginehub-board">
+			<ProTable<SentinelEngineTask>
 				rowKey="id"
 				size="small"
 				dataSource={tasks}
+				search={false}
+				options={false}
 				pagination={false}
 				scroll={{ x: 820 }}
+				toolbar={{
+					title: <Text strong>{t("任务看板")}</Text>,
+					actions: [
+						<Text key="count" type="secondary">
+							{t("{count} 个任务 · 点行看详情", { count: tasks.length })}
+						</Text>,
+					],
+				}}
 				onRow={(task) => ({
 					onClick: () => props.onOpenTask(task.id),
 					style: { cursor: "pointer" },

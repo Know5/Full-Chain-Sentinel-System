@@ -6,7 +6,8 @@
  * Closing this window only hides it; supervision continues until 停止监督.
  */
 
-import { Alert, Button, Card, ConfigProvider, Popconfirm, Segmented, Space, Table, Tabs, Tag, Typography } from "antd";
+import { ProTable } from "@ant-design/pro-components";
+import { Alert, Button, Card, ConfigProvider, Popconfirm, Segmented, Space, Tabs, Tag, Typography } from "antd";
 import { useState } from "react";
 import { getLanguage, t } from "../i18n.ts";
 import { SUPERVISOR_STRATEGY_OPTIONS, supervisorStrategyKey, supervisorStrategyLabel } from "../supervisor-strategy.ts";
@@ -285,14 +286,14 @@ export function SupervisorFloatingWindow({
 
 			{state.tested.length > 0 ? (
 				<>
-					<Text strong className="svfw-section">
-						{t("已测试")}
-					</Text>
-					<Table
+					<ProTable
 						size="small"
 						rowKey={(entry) => `${entry.target}-${entry.test}`}
+						search={false}
+						options={false}
 						pagination={false}
 						dataSource={state.tested.slice(-5).reverse()}
+						toolbar={{ title: <Text strong>{t("已测试")}</Text> }}
 						columns={[
 							{ title: t("目标"), dataIndex: "target", key: "target", ellipsis: true },
 							{ title: t("测试"), dataIndex: "test", key: "test", ellipsis: true },

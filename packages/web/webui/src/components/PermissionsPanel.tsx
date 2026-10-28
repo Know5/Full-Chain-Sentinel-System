@@ -22,6 +22,7 @@
  */
 
 import { ReloadOutlined, SaveOutlined } from "@ant-design/icons";
+import { ProTable } from "@ant-design/pro-components";
 import {
 	Alert,
 	Button,
@@ -32,7 +33,6 @@ import {
 	Row,
 	Space,
 	Switch,
-	Table,
 	Tag,
 	Tooltip,
 	Typography,
@@ -460,7 +460,7 @@ export function PermissionsPanel({
 				</Col>
 			</Row>
 
-			<Card size="small" title={t("插件")} className="permhub-card">
+			<Card size="small" className="permhub-card">
 				<Text type="secondary" className="permhub-section-note">
 					{t(
 						"插件在实现上是 MCP 服务器，因此先受上面的 MCP 总开关约束；这里决定每个插件挂载给哪一类 Agent。关掉后该 Agent 的会话不连接这个插件，它的工具不会注册，tool_search 也搜不到。插件页的启用开关仍然有效，两处都开才会挂载。",
@@ -471,11 +471,14 @@ export function PermissionsPanel({
 				) : plugins.plugins.length === 0 ? (
 					<Text type="secondary">{t("还没有安装插件（设置 → 插件）。")}</Text>
 				) : (
-					<Table
+					<ProTable
 						size="small"
 						rowKey={(plugin) => `${plugin.hostId}/${plugin.manifest.id}`}
+						search={false}
+						options={false}
 						pagination={false}
 						dataSource={plugins.plugins}
+						toolbar={{ title: <Text strong>{t("插件")}</Text> }}
 						columns={[
 							{
 								title: t("插件"),

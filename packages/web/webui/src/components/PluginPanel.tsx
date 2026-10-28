@@ -16,6 +16,8 @@ import {
 	Tag,
 	Typography,
 } from "antd";
+import { ProTable } from "@ant-design/pro-components";
+import type { ProColumns } from "@ant-design/pro-components";
 import type { TableProps } from "antd";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { readFileBase64 } from "./PocPage.tsx";
@@ -679,7 +681,23 @@ export function PluginPanel({
 				</p>
 			) : null}
 
-			<div className="plugin-toolbar">
+			<ProTable<SentinelPluginView>
+				className="plugin-table"
+				rowKey={pluginKeyOf}
+				size="small"
+				dataSource={filtered}
+				search={false}
+				options={false}
+				pagination={false}
+				scroll={{ x: 900 }}
+				rowClassName={(plugin) => (selectedKey === pluginKeyOf(plugin) ? "is-selected" : "")}
+				onRow={(plugin) => ({
+					onClick: () => openPlugin(plugin),
+					style: { cursor: "pointer" },
+				})}
+				toolbar={{
+					title: (
+						<Space size={8} wrap className="plugin-toolbar">
 				<input
 					className="plugin-search"
 					value={query}
@@ -710,24 +728,14 @@ export function PluginPanel({
 						{ value: "failed", label: t("失败") },
 					]}
 				/>
-				<div className="plugin-toolbar__spacer" />
-				<span className="chip ok">{running} {t("运行")}</span>
-				{failed > 0 ? <span className="chip bad">{failed} {t("失败")}</span> : null}
-			</div>
-
-			<div className="plugin-table-wrap">
-				<Table<SentinelPluginView>
-					rowKey={pluginKeyOf}
-					size="small"
-					dataSource={filtered}
-					pagination={false}
-					scroll={{ x: 900 }}
-					rowClassName={(plugin) => (selectedKey === pluginKeyOf(plugin) ? "is-selected" : "")}
-					onRow={(plugin) => ({
-						onClick: () => openPlugin(plugin),
-						style: { cursor: "pointer" },
-					})}
-					columns={[
+						</Space>
+					),
+					actions: [
+						<span key="ok" className="chip ok">{running} {t("运行")}</span>,
+						...(failed > 0 ? [<span key="bad" className="chip bad">{failed} {t("失败")}</span>] : []),
+					],
+				}}
+				columns={[
 						{
 							title: t("状态"),
 							key: "dot",
@@ -833,9 +841,6 @@ export function PluginPanel({
 								: t("没有匹配的插件，换个关键字或筛选条件。"),
 					}}
 				/>
-			</div>
-
-		
 
 			<p className="mcp-footnote">
 				{t("工具调用不逐条拦截，只记审计；管理操作写入")} <code>plugin-audit.jsonl</code>{t("。启用开关只影响挂载，不会停止容器；卸载默认保留数据目录。")}

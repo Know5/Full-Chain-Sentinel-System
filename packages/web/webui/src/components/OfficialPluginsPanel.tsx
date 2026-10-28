@@ -1,4 +1,6 @@
-import { Button, Space, Table, Tag, Typography } from "antd";
+import { ProTable } from "@ant-design/pro-components";
+import type { ProColumns } from "@ant-design/pro-components";
+import { Button, Space, Tag, Typography } from "antd";
 import { t } from "../i18n.ts";
 import type {
 	SentinelOfficialPluginView,
@@ -47,13 +49,23 @@ export function OfficialPluginsPanel({
 			<Text type="secondary">
 				{t("随控制台分发的官方插件。安装时仍会选择目标主机，并确认构建许可与网络/能力权限。")}
 			</Text>
-			<Table<SentinelOfficialPluginView>
+			<ProTable<SentinelOfficialPluginView>
 				rowKey={(plugin) => plugin.manifest.id}
 				size="small"
 				className="op__table"
 				dataSource={plugins}
+				search={false}
+				options={false}
 				pagination={false}
 				scroll={{ x: 860 }}
+				toolbar={{
+					title: (
+						<Space size={6}>
+							<Text strong>{t("官方插件")}</Text>
+							<Text type="secondary">{t("{count} 个", { count: plugins.length })}</Text>
+						</Space>
+					),
+				}}
 				columns={[
 					{
 						title: t("插件"),

@@ -13,8 +13,10 @@
  */
 
 import { DeleteOutlined, EllipsisOutlined, GlobalOutlined, PlayCircleOutlined, PlusOutlined, ReloadOutlined, StopOutlined } from "@ant-design/icons";
-import { Alert, App, Badge, Button, Dropdown, Form, Input, Modal, Radio, Space, Table, Tag, Tooltip, Typography } from "antd";
-import type { TableColumnsType } from "antd";
+import { ProTable } from "@ant-design/pro-components";
+import type { ProColumns } from "@ant-design/pro-components";
+import { Alert, App, Badge, Button, Dropdown, Form, Input, Modal, Radio, Space, Tag, Tooltip, Typography } from "antd";
+
 import { useState } from "react";
 import { t } from "../i18n.ts";
 import type { SentinelProjectInfo, SentinelProxyConfigView } from "../types.ts";
@@ -154,7 +156,7 @@ export function ProjectsPage({
 		}
 	};
 
-	const columns: TableColumnsType<SentinelProjectInfo> = [
+	const columns: ProColumns<SentinelProjectInfo>[] = [
 		{
 			title: t("项目"),
 			dataIndex: "name",
@@ -210,7 +212,7 @@ export function ProjectsPage({
 			key: "sessions",
 			width: 92,
 			align: "right",
-			render: (value: number | undefined) => <span className="project-num">{value ?? 0}</span>,
+			render: (_, project) => <span className="project-num">{project.sessionCount ?? 0}</span>,
 		},
 		{
 			title: t("漏洞"),
@@ -218,7 +220,7 @@ export function ProjectsPage({
 			key: "vulns",
 			width: 92,
 			align: "right",
-			render: (value: number | undefined) => <span className="project-num">{value ?? 0}</span>,
+			render: (_, project) => <span className="project-num">{project.vulnCount ?? 0}</span>,
 		},
 		{
 			title: t("操作"),
@@ -336,12 +338,22 @@ export function ProjectsPage({
 				</div>
 			</div>
 
-			<Table<SentinelProjectInfo>
+			<ProTable<SentinelProjectInfo>
 				rowKey="id"
 				size="small"
 				columns={columns}
 				dataSource={list}
+				search={false}
+				options={false}
 				pagination={false}
+				toolbar={{
+					title: (
+						<Space size={6}>
+							<Text strong>{t("项目列表")}</Text>
+							<Text type="secondary">{t("{count} 个", { count: list.length })}</Text>
+						</Space>
+					),
+				}}
 				rowClassName={(project) => (project.id === activeProject?.id ? "project-row-active" : "")}
 				locale={{
 					emptyText: (

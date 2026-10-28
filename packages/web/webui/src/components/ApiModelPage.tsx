@@ -18,7 +18,7 @@
 import { ReloadOutlined, SearchOutlined } from "@ant-design/icons";
 import { ProTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
-import { Alert, Button, Card, Empty, Input, Select, Space, Table, Tabs, Tag, Timeline, Typography } from "antd";
+import { Alert, Button, Card, Empty, Input, Select, Space, Tabs, Tag, Timeline, Typography } from "antd";
 import { useEffect, useMemo, useState } from "react";
 import swaggerUiCss from "swagger-ui-dist/swagger-ui.css?url";
 import swaggerUiBundle from "swagger-ui-dist/swagger-ui-bundle.js?url";
@@ -124,15 +124,18 @@ function EntityCard({ entity }: { entity: SentinelApiModelEntity }) {
 				</Text>
 			) : null}
 			{entity.fields && entity.fields.length > 0 ? (
-				<Table
+				<ProTable
 					size="small"
 					rowKey="name"
+					search={false}
+					options={false}
 					pagination={false}
 					dataSource={entity.fields}
+					toolbar={{ title: <Text strong>{t("字段")}</Text> }}
 					columns={[
 						{ title: t("字段"), dataIndex: "name", key: "name" },
-						{ title: t("类型"), dataIndex: "type", key: "type", render: (value: string | undefined) => value ?? "—" },
-						{ title: t("说明"), dataIndex: "description", key: "description", render: (value: string | undefined) => value ?? "" },
+						{ title: t("类型"), dataIndex: "type", key: "type" },
+						{ title: t("说明"), dataIndex: "description", key: "description" },
 					]}
 				/>
 			) : null}
