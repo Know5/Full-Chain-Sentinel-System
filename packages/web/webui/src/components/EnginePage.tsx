@@ -1573,10 +1573,7 @@ function CreateEngineForm(props: {
 		<div className="enginewiz">
 			<div className="enginewiz-head">
 				<div>
-					<Text type="secondary">
-						{t("工程")} / {t("新建工程")}
-					</Text>
-					<Title level={3} className="enginewiz-title">
+					<Title level={4} className="enginewiz-title">
 						{t("新建工程")}
 					</Title>
 					<Text type="secondary">{t("把目标、指挥和执行拆开，完成一步再走一步。")}</Text>
@@ -1584,15 +1581,30 @@ function CreateEngineForm(props: {
 				<Button onClick={props.onCancel}>{t("取消")}</Button>
 			</div>
 
-			<Steps
-				current={step - 1}
-				className="enginewiz-steps"
-				items={stepMeta.map((item) => ({ title: item.title, content: item.hint }))}
-			/>
+			<div className="enginewiz-progress">
+				<Steps
+					current={step - 1}
+					size="small"
+					className="enginewiz-steps"
+					items={stepMeta.map((item) => ({ title: item.title }))}
+				/>
+				<Text type="secondary" className="enginewiz-step-hint">
+					{t("第 {step} 步 / 共 3 步 · {hint}", { step, hint: stepMeta[step - 1]?.hint ?? "" })}
+				</Text>
+			</div>
 
 			<Row gutter={[16, 16]}>
 				<Col xs={24} lg={16}>
-					<Card size="small">
+					<Card
+						size="small"
+						title={
+							step === 1
+								? t("第 1 步 · 目标")
+								: step === 2
+									? t("第 2 步 · 指挥")
+									: t("第 3 步 · 执行")
+						}
+					>
 						{formError ? <Alert type="error" showIcon className="ui-page__alert" title={formError} /> : null}
 
 						{step === 1 ? (

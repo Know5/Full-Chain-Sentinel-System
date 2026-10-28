@@ -3466,7 +3466,8 @@ body {
 .enginewiz {
 	display: flex;
 	flex-direction: column;
-	gap: 16px;
+	gap: 12px;
+	padding-bottom: 8px;
 }
 
 .enginewiz-head {
@@ -3477,11 +3478,23 @@ body {
 }
 
 .enginewiz-title {
-	margin: 4px 0 2px !important;
+	margin: 0 !important;
+	font-size: 18px !important;
+}
+
+.enginewiz-progress {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 4px 0 2px;
 }
 
 .enginewiz-steps {
-	margin: 4px 0 8px;
+	margin: 0;
+}
+
+.enginewiz-step-hint {
+	font-size: 12px;
 }
 
 .enginewiz-section {
@@ -3531,7 +3544,13 @@ body {
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	margin-top: 20px;
+	margin-top: 16px;
+	padding-top: 12px;
+	border-top: 1px solid var(--console-border);
+}
+
+.enginewiz-foot > .ant-typography:last-child {
+	margin-left: auto;
 }
 
 .enginewiz-draft .ant-card-body,
@@ -7065,7 +7084,15 @@ body {
 	white-space: normal;
 }
 
-.project-cell,
+.project-container {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	overflow: hidden;
+	flex-wrap: nowrap;
+}
+
 .pluginhub-name,
 .permhub-plugin,
 .op__text,

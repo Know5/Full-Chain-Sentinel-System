@@ -519,13 +519,23 @@ export function VulnPage({
 			width: 168,
 			ellipsis: true,
 			render: (_, item) => (
-				<Space size={6} className="vulnhub-target">
-					<Text className="table-mono" title={item.target}>
-						{item.target}
-					</Text>
-					{item.assetLabel ? <Tag variant="filled">{item.assetLabel}</Tag> : null}
-				</Space>
+				<Text className="table-mono" title={item.target}>
+					{item.target}
+				</Text>
 			),
+		},
+		{
+			title: t("关联资产"),
+			dataIndex: "assetLabel",
+			key: "asset",
+			width: 120,
+			ellipsis: true,
+			render: (_, item) =>
+				item.assetLabel ? (
+					<Tag variant="filled">{item.assetLabel}</Tag>
+				) : (
+					<Text type="secondary">—</Text>
+				),
 		},
 		{
 			title: t("标题"),

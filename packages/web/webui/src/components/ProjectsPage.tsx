@@ -158,53 +158,68 @@ export function ProjectsPage({
 
 	const columns: ProColumns<SentinelProjectInfo>[] = [
 		{
-			title: t("项目"),
+			title: t("项目名"),
 			dataIndex: "name",
 			key: "name",
-			render: (_, project) => {
-				const active = project.id === activeProject?.id;
-				return (
-					<div className="project-cell">
-						<div className="project-cell__title">
-							<span className="project-cell__name">{project.name}</span>
-							{active ? (
-								<Tag color="blue" variant="filled">
-									{t("当前")}
-								</Tag>
-							) : null}
-							{project.proxyName ? (
-								<Tooltip
-									title={
-										project.proxyNodeName
-											? t("出网走代理「{name}」的节点「{node}」", {
-													name: project.proxyName,
-													node: project.proxyNodeName,
-												})
-											: t("出网走代理「{name}」", { name: project.proxyName })
-									}
-								>
-									<Tag icon={<GlobalOutlined />} variant="filled" color="geekblue">
-										{project.proxyNodeName ?? project.proxyName}
-									</Tag>
-								</Tooltip>
-							) : null}
-						</div>
-						<div className="project-cell__meta">
-							<Tooltip title={stateHint(project)}>
-								<span className="project-cell__state">
-									<Badge status={stateStatus(project)} />
-									{stateLabel(project)}
-								</span>
-							</Tooltip>
-							{project.container ? (
-								<Tooltip title={project.container}>
-									<code className="project-cell__container">{shortContainer(project.container)}</code>
-								</Tooltip>
-							) : null}
-						</div>
-					</div>
-				);
-			},
+			ellipsis: { showTitle: true },
+			render: (_, project) => (
+				<Space size={6}>
+					<Text strong ellipsis title={project.name}>
+						{project.name}
+					</Text>
+					{project.id === activeProject?.id ? (
+						<Tag color="blue" variant="filled">
+							{t("当前")}
+						</Tag>
+					) : null}
+				</Space>
+			),
+		},
+		{
+			title: t("容器名"),
+			dataIndex: "container",
+			key: "container",
+			width: 220,
+			render: (_, project) => (
+				<Space size={6} className="project-container">
+					<Tooltip title={stateHint(project)}>
+						<Badge status={stateStatus(project)} />
+					</Tooltip>
+					{project.container ? (
+						<Tooltip title={project.container}>
+							<Text className="table-mono">{shortContainer(project.container)}</Text>
+						</Tooltip>
+					) : null}
+					{project.state === "running" ? null : (
+						<Text type="secondary">{stateLabel(project)}</Text>
+					)}
+				</Space>
+			),
+		},
+		{
+			title: t("代理"),
+			key: "proxy",
+			width: 180,
+			ellipsis: true,
+			render: (_, project) =>
+				project.proxyName ? (
+					<Tooltip
+						title={
+							project.proxyNodeName
+								? t("出网走代理「{name}」的节点「{node}」", {
+										name: project.proxyName,
+										node: project.proxyNodeName,
+									})
+								: t("出网走代理「{name}」", { name: project.proxyName })
+						}
+					>
+						<Tag icon={<GlobalOutlined />} variant="filled" color="geekblue">
+							{project.proxyNodeName ?? project.proxyName}
+						</Tag>
+					</Tooltip>
+				) : (
+					<Text type="secondary">—</Text>
+				),
 		},
 		{
 			title: t("会话"),

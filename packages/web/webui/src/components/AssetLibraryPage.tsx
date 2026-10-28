@@ -515,13 +515,23 @@ export function AssetLibraryPage({
 			key: "name",
 			ellipsis: { showTitle: true },
 			render: (_, item) => (
-				<div className="assethub-name">
-					<Text className="table-mono" title={item.name}>
-						{item.name}
-					</Text>
-					{item.title ? <Text type="secondary">{item.title}</Text> : null}
-				</div>
+				<Text className="table-mono" title={item.name}>
+					{item.name}
+				</Text>
 			),
+		},
+		{
+			title: t("标题"),
+			dataIndex: "title",
+			key: "title",
+			width: 220,
+			ellipsis: { showTitle: true },
+			render: (_, item) =>
+				item.title ? (
+					<Text type="secondary">{item.title}</Text>
+				) : (
+					<Text type="secondary">—</Text>
+				),
 		},
 		{
 			title: t("协议"),
