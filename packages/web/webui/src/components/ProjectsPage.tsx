@@ -287,6 +287,11 @@ export function ProjectsPage({
 		},
 	];
 
+	const runningCount = list.filter((project) => project.state === "running").length;
+	const stoppedCount = list.length - runningCount;
+	const sessionTotal = list.reduce((sum, project) => sum + (project.sessionCount ?? 0), 0);
+	const vulnTotal = list.reduce((sum, project) => sum + (project.vulnCount ?? 0), 0);
+
 	return (
 		<Page
 			title={t("项目")}
@@ -307,6 +312,29 @@ export function ProjectsPage({
 					onClose={() => setError(null)}
 				/>
 			) : null}
+
+			<div className="projstats">
+				<div className="projstats__item">
+					<span className="projstats__value">{list.length}</span>
+					<span className="projstats__label">{t("项目总数")}</span>
+				</div>
+				<div className="projstats__item">
+					<span className="projstats__value is-on">{runningCount}</span>
+					<span className="projstats__label">{t("容器运行中")}</span>
+				</div>
+				<div className="projstats__item">
+					<span className="projstats__value">{stoppedCount}</span>
+					<span className="projstats__label">{t("未运行")}</span>
+				</div>
+				<div className="projstats__item">
+					<span className="projstats__value">{sessionTotal}</span>
+					<span className="projstats__label">{t("会话")}</span>
+				</div>
+				<div className="projstats__item">
+					<span className="projstats__value">{vulnTotal}</span>
+					<span className="projstats__label">{t("漏洞记录")}</span>
+				</div>
+			</div>
 
 			<Table<SentinelProjectInfo>
 				rowKey="id"
