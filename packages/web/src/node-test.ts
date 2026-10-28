@@ -147,7 +147,9 @@ export async function measureNodes(
 
 	const port = await freePort();
 	const container = `sentinel-nodetest-${randomUUID().slice(0, 8)}`;
-	const configPath = join(options.agentDir, "proxy", ".nodetest.json");
+	// One file per batch: two profiles can be tested at once, and a shared name would
+	// let the second container read the first one's outbounds.
+	const configPath = join(options.agentDir, "proxy", `.nodetest-${randomUUID().slice(0, 8)}.json`);
 	mkdirSync(dirname(configPath), { recursive: true });
 	writeFileSync(configPath, buildTestConfig(nodes, port), { mode: 0o600 });
 

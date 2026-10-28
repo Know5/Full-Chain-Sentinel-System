@@ -615,8 +615,13 @@ function missingTunnelTools(): string {
  * The two failure shapes are checked separately: a process that exited is asked for
  * its log, and a process that keeps retrying is given the whole timeout before its
  * last line is reported.
+ *
+ * Exported for the profile test in `proxy-check.ts`: it creates the same sidecar a
+ * project would get, so "the tunnel is up" has to mean the same thing there.
  */
-async function waitForOpenVpnTunnel(containerName: string): Promise<{ ok: true } | { ok: false; error: string }> {
+export async function waitForOpenVpnTunnel(
+	containerName: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
 	const seconds = Math.round(OPENVPN_TIMEOUT_MS / 1000);
 	const deadline = Date.now() + OPENVPN_TIMEOUT_MS;
 	let detail = t("隧道没有在 {seconds} 秒内建立", { seconds });

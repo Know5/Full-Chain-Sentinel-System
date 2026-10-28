@@ -1792,6 +1792,11 @@ export type SentinelClientMessage =
 	| { type: "set_proxy_node"; id: string; nodeTag: string }
 	/** Measure every node of one subscription against a URL. */
 	| { type: "test_proxy_nodes"; id: string; url: string }
+	/**
+	 * Fetch a URL through one profile's exit, in a throwaway container. The result
+	 * is stored on the profile and arrives with the next `proxy_config`.
+	 */
+	| { type: "test_proxy_connection"; id: string; url: string }
 	| { type: "delete_proxy"; id: string }
 	/** Which profile a project without a choice of its own follows; null = none. */
 	| { type: "set_default_proxy"; id: string | null }
@@ -2695,6 +2700,26 @@ export interface SentinelProxySettings {
 }
 
 /**
+ * The last connectivity test of one profile: whether traffic actually reached the
+ * test URL through that exit.
+ *
+ * Stored rather than kept in the page: the question "is this proxy still working"
+ * is asked once and then read many times, and a result that disappears on reload
+ * would have to be paid for with another container every time.
+ */
+export interface SentinelProxyTest {
+	ok: boolean;
+	/** Round trip in milliseconds; null when the request did not come back. */
+	latencyMs: number | null;
+	/** When the test ran. */
+	testedAt: number;
+	/** The URL traffic was sent to; kept so an old result is never read as a new one. */
+	url: string;
+	/** Why it failed, or null when it worked. */
+	error: string | null;
+}
+
+/**
  * One named proxy, managed on the 代理 page. A profile always describes something
  * that runs — "no proxy" is a project's choice, not a profile.
  */
@@ -2716,6 +2741,8 @@ export interface SentinelProxy {
 	/** Why the nodes of the last parse were skipped, for the picker. */
 	skipped: { name: string; reason: string }[];
 	routePrivateDirect: boolean;
+	/** Absent until the profile has been tested. */
+	test?: SentinelProxyTest | null;
 	createdAt: number;
 }
 

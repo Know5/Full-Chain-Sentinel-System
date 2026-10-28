@@ -149,6 +149,12 @@ case "$cmd" in
 		exit 0
 		;;
 	exec)
+		# The profile test fetches a URL from inside a tunnel container with curl;
+		# answer like a healthy exit so the probe's own bookkeeping is what is tested.
+		if [ "$2" = "curl" ]; then
+			printf '204 0.123\\n'
+			exit 0
+		fi
 		# The console asks a tunnel sidecar for its interfaces (ip -o addr show),
 		# because a container that shares the namespace has to be checked for a tunnel
 		# rather than asked about one. The host has no ip command, so the fake answers

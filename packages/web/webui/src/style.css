@@ -2845,6 +2845,20 @@ button.ghost.small.on {
 	font-size: 12px;
 }
 
+/* The last connectivity result, under the exit it belongs to. */
+.proxy-cell__test {
+	font-family: var(--mono);
+	font-size: 11px;
+}
+
+.proxy-cell__test.ok {
+	color: var(--ok);
+}
+
+.proxy-cell__test.bad {
+	color: var(--danger);
+}
+
 .proxy-num {
 	text-align: right;
 }
@@ -2956,6 +2970,53 @@ button.ghost.small.on {
 	color: var(--text);
 	font-family: var(--mono);
 	font-size: 12px;
+}
+
+/* A tunnel test opens a second connection with the same key/certificate. */
+.proxy-test-warning {
+	margin: 0;
+	color: var(--warn);
+	font-size: 12px;
+	line-height: 1.6;
+}
+
+/* One profile's last connectivity test: green/red verdict, reason, and what was fetched. */
+.proxy-test-result {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 10px 12px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--card);
+	font-size: 12px;
+}
+
+.proxy-test-result strong {
+	font-size: 13px;
+}
+
+.proxy-test-result.ok strong {
+	color: var(--ok);
+}
+
+.proxy-test-result.bad strong {
+	color: var(--danger);
+}
+
+.proxy-test-result__error {
+	color: var(--danger);
+	font-family: var(--mono);
+	font-size: 11px;
+	line-height: 1.5;
+	overflow-wrap: anywhere;
+}
+
+.proxy-test-result__meta {
+	color: var(--dim);
+	font-family: var(--mono);
+	font-size: 11px;
+	overflow-wrap: anywhere;
 }
 
 .proxy-skipped {

@@ -36,6 +36,7 @@ import {
 	proxiesPath,
 	proxyEnabled,
 	readProxies,
+	recordProxyTest,
 	resolveProjectProxy,
 	saveProxy,
 	setDefaultProxy,
@@ -270,6 +271,48 @@ test("names are unique, and a rename keeps the id so projects stay attached", ()
 	expect(renamed.proxy?.id).toBe(id);
 	expect(renamed.proxy?.simple.server).toBe("9.9.9.9");
 	expect(renamed.proxy?.routePrivateDirect).toBe(false);
+});
+
+test("a connectivity result is stored with its URL and dropped when the profile is edited", () => {
+	const { agentDir } = setup();
+	const { id } = addProfile(agentDir);
+	const recorded = recordProxyTest(agentDir, id, {
+		ok: true,
+		latencyMs: 42,
+		testedAt: 123,
+		url: "https://example.org/generate_204",
+		error: null,
+	});
+	expect(recorded.error).toBeUndefined();
+	// The row can show the result after a reload.
+	const stored = readProxies(agentDir).proxies.find((entry) => entry.id === id);
+	expect(stored?.test).toEqual({
+		ok: true,
+		latencyMs: 42,
+		testedAt: 123,
+		url: "https://example.org/generate_204",
+		error: null,
+	});
+	// A tunnel's target can be an internal address; it must not become the URL a
+	// subscription's auto group ranks its nodes against.
+	expect(readProxies(agentDir).testUrl).not.toBe("https://example.org/generate_204");
+
+	// Saving may change the address, credentials or tunnel, so a result that
+	// describes the old configuration must not stay next to the new one.
+	const edited = saveProxy(agentDir, {
+		id,
+		name: "香港节点",
+		mode: "simple",
+		simple: { type: "socks5", server: "1.2.3.4", port: 1080, username: "", password: "", tls: false },
+		wireguard: { config: "", dns: "", killSwitch: true },
+		openvpn: { config: "", dns: "", username: "", password: "", killSwitch: true },
+		subscriptionUrl: "",
+		subscriptionUserAgent: "",
+		subscriptionIntervalHours: 0,
+		nodeTag: "",
+		routePrivateDirect: true,
+	});
+	expect(edited.proxy?.test).toBeNull();
 });
 
 test("a project resolves through its own choice, the default, or not at all", () => {

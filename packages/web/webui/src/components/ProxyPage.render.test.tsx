@@ -12,7 +12,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { expect, test } from "vitest";
 import { EMPTY_OPENVPN, EMPTY_WIREGUARD } from "../types.ts";
 import type { SentinelProjectInfo, SentinelProxy, SentinelProxyConfigView } from "../types.ts";
-import { ProxyNodeDialog, ProxyPage } from "./ProxyPage.tsx";
+import { ProxyNodeDialog, ProxyPage, ProxyTestDialog } from "./ProxyPage.tsx";
 
 function profile(overrides: Partial<SentinelProxy> = {}): SentinelProxy {
 	return {
@@ -58,6 +58,7 @@ function render(view: SentinelProxyConfigView, projects: SentinelProjectInfo[] =
 			onRefreshSubscription: async () => null,
 			onSetNode: async () => null,
 			onTestNodes: async () => null,
+			onTestConnection: async () => null,
 			refreshingId: null,
 			testingId: null,
 		}),
@@ -183,6 +184,138 @@ test("the node dialog shows measured latency, a timeout, and the test controls",
 	expect(html).toContain("测速地址");
 	expect(html).toContain("https://www.gstatic.com/generate_204");
 	expect(html).toContain("批量测速");
+});
+
+test("a simple or tunnel profile offers a connectivity test and shows its last result", () => {
+	const html = render(
+		config({
+			proxies: [
+				profile({
+					test: {
+						ok: true,
+						latencyMs: 42,
+						testedAt: 1,
+						url: "https://www.gstatic.com/generate_204",
+						error: null,
+					},
+				}),
+			],
+		}),
+	);
+	// The action is real traffic, not a port check.
+	expect(html).toContain(">测试</button>");
+	// The stored result is visible in the row, so a reload does not lose it.
+	expect(html).toContain("✓ 42 ms");
+});
+
+test("a failed test is red in the row and keeps the reason as a tooltip", () => {
+	const html = render(
+		config({
+			proxies: [
+				profile({
+					mode: "wireguard",
+					wireguard: {
+						config: "[Interface]\nPrivateKey = x\n\n[Peer]\nEndpoint = vpn.example.com:51820",
+						dns: "",
+						killSwitch: true,
+					},
+					test: { ok: false, latencyMs: null, testedAt: 1, url: "https://example.org", error: "握手超时" },
+				}),
+			],
+		}),
+	);
+	expect(html).toContain("✗ 测试失败");
+	expect(html).toContain('title="握手超时"');
+});
+
+test("a subscription keeps the node picker instead of a profile test", () => {
+	const html = render(
+		config({
+			proxies: [
+				profile({
+					mode: "subscription",
+					subscription: { url: "https://example.com/sub", userAgent: "sing-box", updatedAt: 1, error: null, intervalHours: 0 },
+					nodes: [{ tag: "香港", name: "香港", protocol: "trojan", outbound: {} }],
+					nodeTag: "香港",
+				}),
+			],
+		}),
+	);
+	expect(html).toContain(">节点</button>");
+	// Its nodes are measured in the picker; a profile-level test would have to pick
+	// one silently.
+	expect(html).not.toContain(">测试</button>");
+});
+
+test("the test dialog shows the URL, the last result and the failure reason", () => {
+	const proxy = profile({
+		mode: "openvpn",
+		openvpn: { config: "client\nremote vpn.example.com 1194\n<ca>x</ca>", dns: "", username: "", password: "", killSwitch: true },
+		test: { ok: false, latencyMs: null, testedAt: 1, url: "https://internal.example/health", error: "TLS handshake failed" },
+	});
+	const html = renderToStaticMarkup(
+		createElement(ProxyTestDialog, {
+			proxy,
+			busy: false,
+			testUrl: "https://www.gstatic.com/generate_204",
+			runningUses: 0,
+			onTest: async () => null,
+			onClose: () => {},
+		}),
+	);
+	expect(html).toContain("测试代理");
+	// The last URL is what the box opens with, not the page-wide default.
+	expect(html).toContain("https://internal.example/health");
+	expect(html).toContain("测试失败");
+	expect(html).toContain("TLS handshake failed");
+	expect(html).toContain("重新测试");
+});
+
+test("testing a tunnel that a running project uses warns before it can disturb it", () => {
+	const html = renderToStaticMarkup(
+		createElement(ProxyTestDialog, {
+			proxy: profile({ mode: "wireguard" }),
+			busy: false,
+			testUrl: "https://www.gstatic.com/generate_204",
+			runningUses: 2,
+			onTest: async () => null,
+			onClose: () => {},
+		}),
+	);
+	// A second connection with the same key/certificate can take the peer's endpoint
+	// or knock the first client offline, so the operator is told before starting.
+	expect(html).toContain("2 个运行中的项目");
+	expect(html).toContain("duplicate-cn");
+});
+
+test("a simple proxy has no such warning: its credentials can be used more than once", () => {
+	const html = renderToStaticMarkup(
+		createElement(ProxyTestDialog, {
+			proxy: profile(),
+			busy: false,
+			testUrl: "https://www.gstatic.com/generate_204",
+			runningUses: 2,
+			onTest: async () => null,
+			onClose: () => {},
+		}),
+	);
+	expect(html).not.toContain("运行中的项目");
+});
+
+test("the test dialog starts empty and offers the first run", () => {
+	const html = renderToStaticMarkup(
+		createElement(ProxyTestDialog, {
+			proxy: profile(),
+			busy: false,
+			testUrl: "https://www.gstatic.com/generate_204",
+			runningUses: 0,
+			onTest: async () => null,
+			onClose: () => {},
+		}),
+	);
+	expect(html).toContain("https://www.gstatic.com/generate_204");
+	expect(html).toContain("还没有测试过");
+	expect(html).toContain("开始测试");
 });
 
 test("a tunnel profile has no private-direct column value and no node picker", () => {

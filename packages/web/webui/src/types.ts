@@ -1574,6 +1574,8 @@ export type SentinelClientMessage =
 	| { type: "set_proxy_node"; id: string; nodeTag: string }
 	/** Measure every node of one subscription against a URL. */
 	| { type: "test_proxy_nodes"; id: string; url: string }
+	/** Fetch a URL through one profile's exit, in a throwaway container. */
+	| { type: "test_proxy_connection"; id: string; url: string }
 	| { type: "delete_proxy"; id: string }
 	/** Which profile a project without a choice of its own follows; null = none. */
 	| { type: "set_default_proxy"; id: string | null }
@@ -2443,6 +2445,18 @@ export interface SentinelProxySettings {
 	routePrivateDirect: boolean;
 }
 
+/** The last connectivity test of one profile, as the server stored it. */
+export interface SentinelProxyTest {
+	ok: boolean;
+	/** Round trip in milliseconds; null when the request did not come back. */
+	latencyMs: number | null;
+	testedAt: number;
+	/** The URL traffic was sent to. */
+	url: string;
+	/** Why it failed, or null when it worked. */
+	error: string | null;
+}
+
 /**
  * One named proxy, managed on the 代理 page. A profile always describes something
  * that runs — "no proxy" is a project's choice, not a profile.
@@ -2465,6 +2479,8 @@ export interface SentinelProxy {
 	/** Nodes the last parse could not use, and why. */
 	skipped: { name: string; reason: string }[];
 	routePrivateDirect: boolean;
+	/** Absent until the profile has been tested. */
+	test?: SentinelProxyTest | null;
 	createdAt: number;
 }
 

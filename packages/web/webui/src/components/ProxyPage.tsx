@@ -600,6 +600,101 @@ export function ProxyNodeDialog({
 	);
 }
 
+/**
+ * The connectivity test of one profile.
+ *
+ * The result belongs to the profile rather than to this dialog, so closing it and
+ * reopening later shows the last run instead of an empty box. The URL is editable
+ * because a split tunnel has no useful public target: what "works" means depends on
+ * which destinations the configuration actually routes into the tunnel.
+ */
+export function ProxyTestDialog({
+	proxy,
+	testUrl,
+	busy,
+	runningUses,
+	onTest,
+	onClose,
+}: {
+	proxy: SentinelProxy;
+	testUrl: string;
+	busy: boolean;
+	/** Running projects on this profile; only a tunnel can be disturbed by a test. */
+	runningUses: number;
+	/** Run the test; resolves with a request-level error, not a failed result. */
+	onTest: (id: string, url: string) => Promise<string | null>;
+	onClose: () => void;
+}) {
+	const [url, setUrl] = useState(proxy.test?.url ?? testUrl);
+	const [testing, setTesting] = useState(false);
+	const [error, setError] = useState<string | null>(null);
+	const result = proxy.test;
+	const tunnel = isTunnel(proxy.mode);
+
+	const run = async () => {
+		setError(null);
+		setTesting(true);
+		const message = await onTest(proxy.id, url.trim());
+		setTesting(false);
+		if (message) setError(message);
+	};
+
+	return (
+		<ConfirmDialog
+			title={t("测试代理")}
+			subtitle={proxy.name}
+			onCancel={onClose}
+			footer={
+				<>
+					<button type="button" className="ghost" disabled={testing} onClick={onClose}>
+						{t("关闭")}
+					</button>
+					<button type="button" className="primary" disabled={busy || testing} onClick={() => void run()}>
+						{testing ? t("测试中…") : result ? t("重新测试") : t("开始测试")}
+					</button>
+				</>
+			}
+		>
+			<p className="settings-hint">
+				{tunnel
+					? t("测试会启动一个临时隧道容器，真的建起网卡后从隧道里访问测试地址，测完即删。分流的 AllowedIPs / 服务器路由不覆盖这个地址时，它本来就不走隧道，请换成隧道内可达的地址。")
+					: t("测试会启动一个临时 sing-box 容器，用这个档案自己的出站真实访问测试地址，测完即删。返回 204 的地址最准。")}
+			</p>
+			{tunnel && runningUses > 0 ? (
+				<p className="proxy-test-warning">
+					{t("这个档案正被 {count} 个运行中的项目使用：测试会用同一份证书或密钥再连一次，可能让它们的隧道短暂中断（OpenVPN 未开 duplicate-cn 时会被踢下线）。", {
+						count: runningUses,
+					})}
+				</p>
+			) : null}
+			<label className="proxy-test-url">
+				<span>{t("测试地址")}</span>
+				<input
+					value={url}
+					spellCheck={false}
+					placeholder="https://www.gstatic.com/generate_204"
+					onChange={(event) => setUrl(event.target.value)}
+				/>
+			</label>
+			{result ? (
+				<div className={`proxy-test-result ${result.ok ? "ok" : "bad"}`}>
+					<strong>
+						{result.ok ? t("连接正常") : t("测试失败")}
+						{result.ok && result.latencyMs !== null ? ` · ${result.latencyMs} ms` : ""}
+					</strong>
+					{result.error ? <span className="proxy-test-result__error">{result.error}</span> : null}
+					<span className="proxy-test-result__meta">
+						{t("上次测试：{when} · {url}", { when: when(result.testedAt), url: result.url })}
+					</span>
+				</div>
+			) : (
+				<p className="settings-hint">{t("还没有测试过")}</p>
+			)}
+			{error ? <div className="page-error">{error}</div> : null}
+		</ConfirmDialog>
+	);
+}
+
 export function ProxyPage({
 	config,
 	projects,
@@ -609,6 +704,7 @@ export function ProxyPage({
 	onRefreshSubscription,
 	onSetNode,
 	onTestNodes,
+	onTestConnection,
 	refreshingId,
 	testingId,
 }: {
@@ -621,6 +717,8 @@ export function ProxyPage({
 	onRefreshSubscription: (id: string) => Promise<string | null>;
 	onSetNode: (id: string, nodeTag: string) => Promise<string | null>;
 	onTestNodes: (id: string, url: string) => Promise<string | null>;
+	/** Fetch a URL through one profile's exit and store the result. */
+	onTestConnection: (id: string, url: string) => Promise<string | null>;
 	/** The profile whose subscription is being re-read right now. */
 	refreshingId: string | null;
 	/** The profile whose nodes are being measured right now. */
@@ -629,6 +727,7 @@ export function ProxyPage({
 	const [editing, setEditing] = useState<SentinelProxyInput | null>(null);
 	const [deleting, setDeleting] = useState<SentinelProxy | null>(null);
 	const [picking, setPicking] = useState<string | null>(null);
+	const [checking, setChecking] = useState<string | null>(null);
 	const [testing, setTesting] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
 
@@ -639,6 +738,21 @@ export function ProxyPage({
 		for (const project of Array.isArray(projects) ? projects : []) {
 			// A project with no choice of its own counts against whichever profile is
 			// the default, because deleting that one would move it.
+			const id = project.proxyId === undefined ? fallback : (project.proxyId ?? undefined);
+			if (id) counts.set(id, (counts.get(id) ?? 0) + 1);
+		}
+		return counts;
+	}, [list, projects, config?.defaultId]);
+	/**
+	 * The projects that are connected right now. A tunnel test opens a second
+	 * connection with the same key or certificate, so these are the ones it can
+	 * disturb; a stopped project has no tunnel to lose.
+	 */
+	const runningUses = useMemo(() => {
+		const counts = new Map<string, number>();
+		const fallback = list.find((entry) => entry.id === config?.defaultId)?.id;
+		for (const project of Array.isArray(projects) ? projects : []) {
+			if (project.state !== "running") continue;
 			const id = project.proxyId === undefined ? fallback : (project.proxyId ?? undefined);
 			if (id) counts.set(id, (counts.get(id) ?? 0) + 1);
 		}
@@ -733,6 +847,18 @@ export function ProxyPage({
 										{proxy.id === config?.defaultId ? <span className="tag tag-primary">{t("默认")}</span> : null}
 									</span>
 									<span className="proxy-cell__sub">{describeProfile(proxy)}</span>
+									{proxy.test ? (
+										<span
+											className={`proxy-cell__test ${proxy.test.ok ? "ok" : "bad"}`}
+											title={proxy.test.error ?? undefined}
+										>
+											{proxy.test.ok
+												? proxy.test.latencyMs === null
+													? `✓ ${t("连接正常")}`
+													: `✓ ${proxy.test.latencyMs} ms`
+												: `✗ ${t("测试失败")}`}
+										</span>
+									) : null}
 								</span>
 								<span className="proxy-kind">
 									{proxy.mode === "subscription"
@@ -770,7 +896,19 @@ export function ProxyPage({
 										>
 											{t("节点")}
 										</button>
-									) : null}
+									) : (
+										<button
+											type="button"
+											disabled={busy}
+											title={t("从这个档案真实访问一个地址，确认它还能用")}
+											onClick={() => {
+												setError(null);
+												setChecking(proxy.id);
+											}}
+										>
+											{t("测试")}
+										</button>
+									)}
 									<button
 										type="button"
 										onClick={() => {
@@ -829,6 +967,23 @@ export function ProxyPage({
 							onRefresh={() => void refresh(proxy)}
 							onTest={(url) => void testNodes(proxy, url)}
 							onClose={() => setPicking(null)}
+						/>
+					);
+				})()
+			) : null}
+
+			{checking ? (
+				(() => {
+					const proxy = list.find((entry) => entry.id === checking);
+					if (!proxy) return null;
+					return (
+						<ProxyTestDialog
+							proxy={proxy}
+							busy={busy}
+							testUrl={config?.testUrl ?? ""}
+							runningUses={runningUses.get(proxy.id) ?? 0}
+							onTest={onTestConnection}
+							onClose={() => setChecking(null)}
 						/>
 					);
 				})()

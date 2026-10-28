@@ -3045,6 +3045,9 @@ export function App() {
 								setTestingProxyId(id);
 								return runProxyAction(() => send({ type: "test_proxy_nodes", id, url }), 180000);
 							}}
+							onTestConnection={(id, url) =>
+								runProxyAction(() => send({ type: "test_proxy_connection", id, url }), 240000)
+							}
 							refreshingId={refreshingProxyId}
 							onRefreshSubscription={(id) => {
 								setRefreshingProxyId(id);

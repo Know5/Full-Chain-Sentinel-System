@@ -28,6 +28,7 @@ import type {
 	SentinelProxyNode,
 	SentinelProxySettings,
 	SentinelProxySubscription,
+	SentinelProxyTest,
 	SentinelSimpleProxy,
 	SentinelWireGuard,
 } from "./protocol.ts";
@@ -257,6 +258,27 @@ export function normalizeOpenVpn(value: unknown): SentinelOpenVpn {
 	};
 }
 
+/**
+ * The stored result of a connectivity test.
+ *
+ * A result without a URL is dropped: it would be a green or red mark with no way
+ * to tell what was fetched, and the page can always run the test again.
+ */
+function normalizeProxyTest(value: unknown): SentinelProxyTest | undefined {
+	if (!value || typeof value !== "object") return undefined;
+	const input = value as Partial<SentinelProxyTest>;
+	const url = asString(input.url).trim();
+	if (!url) return undefined;
+	return {
+		ok: input.ok === true,
+		latencyMs:
+			typeof input.latencyMs === "number" && Number.isFinite(input.latencyMs) ? Math.trunc(input.latencyMs) : null,
+		testedAt: typeof input.testedAt === "number" && Number.isFinite(input.testedAt) ? input.testedAt : Date.now(),
+		url,
+		error: asString(input.error).trim() || null,
+	};
+}
+
 function normalizeSubscription(value: unknown): SentinelProxySubscription | null {
 	if (!value || typeof value !== "object") return null;
 	const input = value as Partial<SentinelProxySubscription>;
@@ -297,6 +319,7 @@ function normalizeProfile(value: unknown): SentinelProxy | undefined {
 			return reason ? [{ name: asString((entry as { name?: unknown }).name).trim(), reason }] : [];
 		}),
 		routePrivateDirect: asBool(input.routePrivateDirect, true),
+		test: normalizeProxyTest(input.test) ?? null,
 		createdAt: typeof input.createdAt === "number" && Number.isFinite(input.createdAt) ? input.createdAt : Date.now(),
 	};
 }
@@ -412,6 +435,9 @@ export function saveProxy(
 		nodeTag,
 		skipped: sameUrl ? (existing?.skipped ?? []) : [],
 		routePrivateDirect: normalized.routePrivateDirect,
+		// The old result describes settings that may no longer be in the profile, so
+		// it is dropped rather than shown next to a configuration it never tested.
+		test: null,
 		createdAt: existing?.createdAt ?? Date.now(),
 	};
 	const proxies = existing
@@ -514,6 +540,30 @@ export async function testProxyNodes(
 
 /** Profiles whose nodes are being measured right now. */
 const inFlightTests = new Set<string>();
+
+/**
+ * Store one profile's connectivity result.
+ *
+ * The URL stays inside the result rather than replacing the file's shared test URL:
+ * a tunnel's target may be an internal address that a subscription's `urltest`
+ * must never inherit, and the dialog reopens with the URL it actually tested.
+ */
+export function recordProxyTest(
+	agentDir: string,
+	id: string,
+	test: SentinelProxyTest,
+): { proxies: ProxiesFile; proxy?: SentinelProxy; error?: string } {
+	const file = readProxies(agentDir);
+	const proxy = file.proxies.find((entry) => entry.id === id);
+	if (!proxy) return { proxies: file, error: t("代理不存在") };
+	const updated: SentinelProxy = { ...proxy, test };
+	const next = {
+		...file,
+		proxies: file.proxies.map((entry) => (entry.id === id ? updated : entry)),
+	};
+	writeProxies(agentDir, next);
+	return { proxies: next, proxy: updated };
+}
 
 /** Which cached node a subscription profile routes through. */
 export function setProxyNode(

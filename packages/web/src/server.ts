@@ -74,6 +74,7 @@ import type {
 	SentinelProxyConfigView,
 	SentinelServerMessage,
 } from "./protocol.ts";
+import { checkProxyConnection } from "./proxy-check.ts";
 import { switchProjectNode } from "./proxy-switch.ts";
 import { VulnReviewer } from "./reviewer.ts";
 import { SubscriptionScheduler } from "./subscription-scheduler.ts";
@@ -112,6 +113,7 @@ import {
 	deleteProxy,
 	proxyConfigView,
 	readProxies,
+	recordProxyTest,
 	refreshProxySubscription,
 	resolveProjectProxy,
 	saveProxy,
@@ -416,6 +418,8 @@ export async function startSentinelServer(
 ): Promise<{ close: () => void; url: string; environment: Promise<SentinelEnvReport> }> {
 	const startupCwd = resolve(options.cwd ?? process.cwd());
 	const clients = new Set<WebSocket>();
+	/** Profiles whose connectivity test is running; one is enough per profile. */
+	const proxyChecksInFlight = new Set<string>();
 	const agentDir = options.agentDir;
 	if (agentDir) setServerLanguage(readUiConfig(agentDir).language);
 	// The gate follows authentication by default: a console with no password to
@@ -1840,6 +1844,70 @@ export async function startSentinelServer(
 						error: tested.error,
 					} satisfies SentinelServerMessage);
 					await afterProxyChange();
+					return;
+				}
+				case "test_proxy_connection": {
+					if (!agentDir) {
+						sendError(socket, t("未配置配置目录，无法测试代理"));
+						return;
+					}
+					const file = readProxies(agentDir);
+					const proxy = file.proxies.find((entry) => entry.id === message.id);
+					if (!proxy) {
+						sendTo(socket, {
+							type: "proxy_config",
+							config: await proxyView(),
+							error: t("代理不存在"),
+						} satisfies SentinelServerMessage);
+						return;
+					}
+					const settings = resolveProjectProxy(agentDir, proxy.id);
+					if (!settings) {
+						sendTo(socket, {
+							type: "proxy_config",
+							config: await proxyView(),
+							error: t("代理不存在"),
+						} satisfies SentinelServerMessage);
+						return;
+					}
+					if (proxy.mode === "subscription") {
+						sendTo(socket, {
+							type: "proxy_config",
+							config: await proxyView(),
+							error: t("订阅代理请用「节点」里的批量测速"),
+						} satisfies SentinelServerMessage);
+						return;
+					}
+					if (proxyChecksInFlight.has(proxy.id)) {
+						sendTo(socket, {
+							type: "proxy_config",
+							config: await proxyView(),
+							error: t("这个代理正在测试，请稍等"),
+						} satisfies SentinelServerMessage);
+						return;
+					}
+					const url = message.url.trim() || file.testUrl || DEFAULT_TEST_URL;
+					proxyChecksInFlight.add(proxy.id);
+					try {
+						// A failed test is a result, not a refused request: it is stored on the
+						// profile and travels with the next config, so the page can show it
+						// next to the exit it belongs to instead of in a transient banner.
+						const checked = await checkProxyConnection(agentDir, settings, url);
+						const recorded = recordProxyTest(agentDir, proxy.id, {
+							ok: checked.ok,
+							latencyMs: checked.latencyMs,
+							error: checked.ok ? null : (checked.error ?? t("测试失败")),
+							url,
+							testedAt: Date.now(),
+						});
+						sendTo(socket, {
+							type: "proxy_config",
+							config: await proxyView(),
+							error: recorded.error,
+						} satisfies SentinelServerMessage);
+					} finally {
+						proxyChecksInFlight.delete(proxy.id);
+					}
 					return;
 				}
 				case "switch_project_node": {
