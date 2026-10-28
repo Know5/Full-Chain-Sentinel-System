@@ -397,21 +397,48 @@ body {
 	padding-top: 10px;
 }
 
+/* Settings pages wrap their panel in one more div; it has to pass the height
+   through, otherwise every settings table stays content-sized. */
+.ui-page__body > .settings-page__content,
+.settings-page__content {
+	flex: 1;
+	min-height: 0;
+	gap: 12px;
+}
+
 /* A table is the page body: it keeps the full height of the card, the header
    stays put and the rows scroll, instead of a short table floating in white. */
-.ui-page__body > :not(.ant-table-wrapper):not(.ant-pro-table) {
+:is(.ui-page__body, .settings-page__content) > :not(.ant-table-wrapper):not(.ant-pro-table):not(.plugin-table-wrap):not(.op):not(.settings-page__content) {
 	flex: none;
 }
 
-.ui-page__body > .ant-table-wrapper,
-.ui-page__body > .ant-pro-table {
+:is(.ui-page__body, .settings-page__content) > :is(.ant-table-wrapper, .ant-pro-table, .plugin-table-wrap, .op) {
 	flex: 1;
 	min-height: 0;
 	display: flex;
 	flex-direction: column;
 }
 
-.ui-page__body .ant-pro-table > .ant-pro-card {
+/* An empty table hugs its placeholder row: stretching a "no rows" message over
+   the whole page reads as a rendering bug, not as a data grid. */
+:is(.ui-page__body, .settings-page__content) > :is(.ant-table-wrapper, .ant-pro-table):has(.ant-table-placeholder) {
+	flex: 0 0 auto;
+}
+
+/* Wrapper divs around a table (the plugin list, the official catalog) have to
+   pass the height through, and their own intro text must not stretch. */
+:is(.ui-page__body, .settings-page__content) > :is(.plugin-table-wrap, .op) > :not(.ant-table-wrapper) {
+	flex: none;
+}
+
+:is(.ui-page__body, .settings-page__content) > :is(.plugin-table-wrap, .op) > .ant-table-wrapper {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+:is(.ui-page__body, .settings-page__content) .ant-pro-table > .ant-pro-card {
 	flex: 1;
 	min-height: 0;
 	display: flex;
@@ -421,7 +448,7 @@ body {
 	box-shadow: none;
 }
 
-.ui-page__body .ant-pro-card > .ant-pro-card-body {
+:is(.ui-page__body, .settings-page__content) .ant-pro-card > .ant-pro-card-body {
 	flex: 1;
 	min-height: 0;
 	display: flex;
@@ -429,74 +456,83 @@ body {
 	padding: 0 !important;
 }
 
-.ui-page__body .ant-spin-nested-loading {
+/* ProTable keeps the toolbar and the table side by side in its card body; the
+   table is the part that has to take the remaining height. */
+:is(.ui-page__body, .settings-page__content) .ant-pro-card-body > .ant-table-wrapper {
 	flex: 1;
 	min-height: 0;
 	display: flex;
 	flex-direction: column;
 }
 
-.ui-page__body .ant-spin-container {
+:is(.ui-page__body, .settings-page__content) .ant-pro-card-body > .ant-pro-table-list-toolbar {
+	flex: none;
+}
+
+:is(.ui-page__body, .settings-page__content) .ant-table-wrapper > .ant-spin,
+:is(.ui-page__body, .settings-page__content) .ant-spin-nested-loading,
+:is(.ui-page__body, .settings-page__content) .ant-spin-container {
 	flex: 1;
 	min-height: 0;
 	display: flex;
 	flex-direction: column;
 }
 
-.ui-page__body .ant-table {
+:is(.ui-page__body, .settings-page__content) .ant-table {
 	flex: 1;
 	min-height: 0;
 }
 
-.ui-page__body .ant-table-container {
+:is(.ui-page__body, .settings-page__content) .ant-table-container {
 	height: 100%;
 	display: flex;
 	flex-direction: column;
 }
 
-.ui-page__body .ant-table-body,
-.ui-page__body .ant-table-content {
+:is(.ui-page__body, .settings-page__content) .ant-table-body,
+:is(.ui-page__body, .settings-page__content) .ant-table-content {
 	flex: 1;
 	min-height: 0;
 	overflow: auto !important;
 }
 
-.ui-page__body .ant-table-thead > tr > th {
+:is(.ui-page__body, .settings-page__content) .ant-table-thead > tr > th {
 	position: sticky;
 	top: 0;
 	z-index: 2;
 }
 
-.ui-page__body .ant-table-pagination {
+:is(.ui-page__body, .settings-page__content) .ant-table-pagination {
 	flex: none;
 	margin-block: 8px 0 !important;
 }
 
-/* Dense table text: 13px rows on a 13px base read as a grid, not a list. */
-.ui-page__body .ant-table {
+/* Dense table text, everywhere a table appears: page body, drawer, modal and
+   the supervisor's floating card. 13px rows on a 13px base read as a list. */
+.ant-table {
 	font-size: 12.5px;
 }
 
-.ui-page__body .ant-table-thead > tr > th {
+.ant-table-thead > tr > th {
 	padding-block: 6px !important;
 	font-size: 12px;
 	white-space: nowrap;
 }
 
-.ui-page__body .ant-table-tbody > tr > td {
+.ant-table-tbody > tr > td {
 	padding-block: 5px !important;
 }
 
-.ui-page__body .ant-pro-table-list-toolbar {
+.ant-pro-table-list-toolbar {
 	padding-block: 0 8px;
 }
 
 /* Faint column rules: without them a wide table reads as floating text. */
-.ui-page__body .ant-table-tbody > tr > td:not(:last-child) {
+.ant-table-tbody > tr > td:not(:last-child) {
 	border-inline-end: 1px solid var(--console-border);
 }
 
-.ui-page__body .ant-table-thead > tr > th:not(:last-child)::before {
+.ant-table-thead > tr > th:not(:last-child)::before {
 	background: var(--console-border) !important;
 }
 
