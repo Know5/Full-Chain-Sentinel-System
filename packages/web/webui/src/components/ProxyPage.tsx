@@ -93,11 +93,75 @@ function profileOf(proxy: SentinelProxy): SentinelProxyInput {
 }
 
 /**
+ * The four exit kinds, as the editor's left rail shows them.
+ *
+ * The short line is the rail's second line; the full description is shown next to
+ * the form, where there is room for it. Keeping both here means adding a mode is
+ * one entry, not four scattered blocks.
+ */
+type ProxyMode = SentinelProxyInput["mode"];
+
+interface ProxyModeCard {
+	mode: ProxyMode;
+	icon: string;
+	label: string;
+	short: string;
+	kind: string;
+	description: string;
+}
+
+const PROXY_MODE_CARDS: readonly ProxyModeCard[] = [
+	{
+		mode: "simple",
+		icon: "S",
+		label: "SOCKS5 / HTTP",
+		short: t("一个地址端口，所有出网都走它"),
+		kind: t("代理"),
+		description: t("填一个地址端口，容器里所有出网流量都从它走。适合本机 Clash 或 VPS 上的 socks5/http 代理。"),
+	},
+	{
+		mode: "subscription",
+		icon: "订",
+		label: t("订阅链接"),
+		short: t("机场或面板地址，缓存多个节点"),
+		kind: t("订阅"),
+		description: t(
+			"贴机场或自建面板的订阅地址，保存时拉取一次，解析出多个节点后在这里选一个。支持 base64 分享链接、Clash 与 sing-box 配置。",
+		),
+	},
+	{
+		mode: "wireguard",
+		icon: "WG",
+		label: "WireGuard",
+		short: t("真隧道，一个出口，无节点"),
+		kind: t("隧道"),
+		description: t(
+			"一条隧道而不是一个代理：容器里的一切（含 ping、UDP、原始套接字）都走它，但只有这一个出口，没有节点可切。",
+		),
+	},
+	{
+		mode: "openvpn",
+		icon: "OV",
+		label: "OpenVPN",
+		short: t("真隧道，粘贴 .ovpn 与账号"),
+		kind: t("隧道"),
+		description: t(
+			"同样是一条隧道，配置换成 .ovpn：粘贴内联证书的配置，账号密码单独填；服务器推送的 DNS 会自动用上。",
+		),
+	},
+];
+
+/**
  * The editor for one profile. It is a dialog rather than an inline form because a
  * node is described by up to six fields plus a JSON box, and half of them are
  * credentials: a row in a table is the wrong shape for that.
+ *
+ * The layout is a left rail of exit kinds and a right pane of only the selected
+ * kind's fields. A single column made the four descriptions and the tunnel
+ * configuration compete for the same 500px, and the dialog grew taller than the
+ * viewport before the operator had typed anything.
  */
-function ProxyEditor({
+export function ProxyEditor({
 	initial,
 	busy,
 	error,
@@ -122,11 +186,14 @@ function ProxyEditor({
 	const patchSimple = (next: Partial<SentinelProxyInput["simple"]>) =>
 		setDraft((prev) => ({ ...prev, simple: { ...prev.simple, ...next } }));
 	const named = draft.name.trim().length > 0;
+	const activeMode = PROXY_MODE_CARDS.find((entry) => entry.mode === draft.mode) ?? PROXY_MODE_CARDS[0];
+	if (!activeMode) return null;
 
 	return (
 		<ConfirmDialog
 			title={initial.id ? t("编辑代理") : t("新建代理")}
 			subtitle={draft.name.trim() || t("未命名")}
+			className="proxy-editor-dialog"
 			onCancel={onCancel}
 			footer={
 				<button type="button" className="primary" disabled={busy || !named} onClick={() => onSave(draft)}>
@@ -134,71 +201,48 @@ function ProxyEditor({
 				</button>
 			}
 		>
-			<div className="proxy-editor">
-				<label className="proxy-field">
-					<span>{t("名称")}</span>
-					<input
-						value={draft.name}
-						placeholder={t("如 香港节点 / 本机 Clash")}
-						spellCheck={false}
-						/* biome-ignore lint/a11y/noAutofocus: the dialog exists to name and fill this node */
-						autoFocus
-						onChange={(event) => patch({ name: event.target.value })}
-					/>
-				</label>
+			<div className="proxy-editor-split">
+				<aside className="proxy-editor-rail" role="radiogroup" aria-label={t("出口类型")}>
+					<div className="proxy-editor-rail__label">{t("出口类型")}</div>
+					{PROXY_MODE_CARDS.map((entry) => (
+						<label key={entry.mode} className={draft.mode === entry.mode ? "selected" : undefined}>
+							<input
+								type="radio"
+								name="proxy-kind"
+								checked={draft.mode === entry.mode}
+								onChange={() => patch({ mode: entry.mode })}
+							/>
+							<span className="proxy-editor-mode__icon" aria-hidden="true">
+								{entry.icon}
+							</span>
+							<span className="proxy-editor-mode__text">
+								<b>{entry.label}</b>
+								<small>{entry.short}</small>
+							</span>
+						</label>
+					))}
+				</aside>
+				<div className="proxy-editor-main">
+					<div className="proxy-editor-mode-head">
+						<div>
+							<h3>{activeMode.label}</h3>
+							<p>{activeMode.description}</p>
+						</div>
+						<span className="proxy-editor-kind">{activeMode.kind}</span>
+					</div>
+					<label className="proxy-field">
+						<span>{t("名称")}</span>
+						<input
+							value={draft.name}
+							placeholder={t("如 香港节点 / 本机 Clash")}
+							spellCheck={false}
+							/* biome-ignore lint/a11y/noAutofocus: the dialog exists to name and fill this node */
+							autoFocus
+							onChange={(event) => patch({ name: event.target.value })}
+						/>
+					</label>
 
-				<div className="env-network-options">
-					<label className={draft.mode === "simple" ? "selected" : undefined}>
-						<input
-							type="radio"
-							name="proxy-kind"
-							checked={draft.mode === "simple"}
-							onChange={() => patch({ mode: "simple" })}
-						/>
-						<span className="env-network-label">{t("SOCKS5 / HTTP 代理")}</span>
-						<span className="env-network-detail">
-							{t("填一个地址端口，容器里所有出网流量都从它走。适合本机 Clash 或 VPS 上的 socks5/http 代理。")}
-						</span>
-					</label>
-					<label className={draft.mode === "subscription" ? "selected" : undefined}>
-						<input
-							type="radio"
-							name="proxy-kind"
-							checked={draft.mode === "subscription"}
-							onChange={() => patch({ mode: "subscription" })}
-						/>
-						<span className="env-network-label">{t("订阅链接")}</span>
-						<span className="env-network-detail">
-							{t("贴机场或自建面板的订阅地址，保存时拉取一次，解析出多个节点后在这里选一个。支持 base64 分享链接、Clash 与 sing-box 配置。")}
-						</span>
-					</label>
-					<label className={draft.mode === "wireguard" ? "selected" : undefined}>
-						<input
-							type="radio"
-							name="proxy-kind"
-							checked={draft.mode === "wireguard"}
-							onChange={() => patch({ mode: "wireguard" })}
-						/>
-						<span className="env-network-label">WireGuard</span>
-						<span className="env-network-detail">
-							{t("一条隧道而不是一个代理：容器里的一切（含 ping、UDP、原始套接字）都走它，但只有这一个出口，没有节点可切。")}
-						</span>
-					</label>
-					<label className={draft.mode === "openvpn" ? "selected" : undefined}>
-						<input
-							type="radio"
-							name="proxy-kind"
-							checked={draft.mode === "openvpn"}
-							onChange={() => patch({ mode: "openvpn" })}
-						/>
-						<span className="env-network-label">OpenVPN</span>
-						<span className="env-network-detail">
-							{t("同样是一条隧道，配置换成 .ovpn：粘贴内联证书的配置，账号密码单独填；服务器推送的 DNS 会自动用上。")}
-						</span>
-					</label>
-				</div>
-
-				{draft.mode === "simple" ? (
+					{draft.mode === "simple" ? (
 					<div className="env-proxy-fields">
 						<label>
 							<span>{t("类型")}</span>
@@ -261,7 +305,7 @@ function ProxyEditor({
 							<span>{t("WireGuard 配置（直接粘贴 wg0.conf）")}</span>
 							<textarea
 								className="env-proxy-json"
-								rows={12}
+								rows={10}
 								value={draft.wireguard.config}
 								placeholder={WIREGUARD_PLACEHOLDER}
 								spellCheck={false}
@@ -292,7 +336,7 @@ function ProxyEditor({
 							<span>{t("OpenVPN 配置（直接粘贴 .ovpn，证书要内联）")}</span>
 							<textarea
 								className="env-proxy-json"
-								rows={14}
+								rows={10}
 								value={draft.openvpn.config}
 								placeholder={OPENVPN_PLACEHOLDER}
 								spellCheck={false}
@@ -395,6 +439,7 @@ function ProxyEditor({
 								: t("保存时会用 sing-box 校验一次（镜像已在本地时），不通过的配置会带着报错退回，不会等到重建容器才发现。")}
 				</p>
 				{error ? <div className="page-error">{error}</div> : null}
+				</div>
 			</div>
 		</ConfirmDialog>
 	);

@@ -10,9 +10,9 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, test } from "vitest";
-import { EMPTY_OPENVPN, EMPTY_WIREGUARD } from "../types.ts";
+import { EMPTY_OPENVPN, EMPTY_PROXY_INPUT, EMPTY_WIREGUARD } from "../types.ts";
 import type { SentinelProjectInfo, SentinelProxy, SentinelProxyConfigView } from "../types.ts";
-import { ProxyNodeDialog, ProxyPage, ProxyTestDialog } from "./ProxyPage.tsx";
+import { ProxyEditor, ProxyNodeDialog, ProxyPage, ProxyTestDialog } from "./ProxyPage.tsx";
 
 function profile(overrides: Partial<SentinelProxy> = {}): SentinelProxy {
 	return {
@@ -316,6 +316,49 @@ test("the test dialog starts empty and offers the first run", () => {
 	expect(html).toContain("https://www.gstatic.com/generate_204");
 	expect(html).toContain("还没有测试过");
 	expect(html).toContain("开始测试");
+});
+
+test("the proxy editor keeps the four exit kinds in a left rail", () => {
+	const html = renderToStaticMarkup(
+		createElement(ProxyEditor, {
+			initial: { ...EMPTY_PROXY_INPUT, name: "香港节点", mode: "wireguard" },
+			busy: false,
+			error: null,
+			onSave: () => {},
+			onCancel: () => {},
+		}),
+	);
+	// All four kinds are visible as navigation, but only the selected kind's form
+	// is rendered; the subscription URL is not in the DOM until it is selected.
+	expect(html).toContain("出口类型");
+	expect(html).toContain("SOCKS5 / HTTP");
+	expect(html).toContain("订阅链接");
+	expect(html).toContain("WireGuard");
+	expect(html).toContain("OpenVPN");
+	expect(html).toContain("WireGuard 配置");
+	expect(html).toContain("断线即断网");
+	expect(html).not.toContain("订阅地址");
+});
+
+test("the proxy editor shows the simple fields when that kind is selected", () => {
+	const html = renderToStaticMarkup(
+		createElement(ProxyEditor, {
+			initial: {
+				...EMPTY_PROXY_INPUT,
+				name: "本机 Clash",
+				mode: "simple",
+				simple: { ...EMPTY_PROXY_INPUT.simple, type: "http" },
+			},
+			busy: false,
+			error: null,
+			onSave: () => {},
+			onCancel: () => {},
+		}),
+	);
+	expect(html).toContain("端口");
+	expect(html).toContain("HTTPS 上游");
+	expect(html).toContain("内网与回环地址直连");
+	expect(html).not.toContain("WireGuard 配置");
 });
 
 test("a tunnel profile has no private-direct column value and no node picker", () => {

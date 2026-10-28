@@ -2820,6 +2820,206 @@ button.ghost.small.on {
 	gap: 10px;
 }
 
+/* 代理编辑器：左侧类型导航，右侧只放当前模式的参数。 */
+.modal.confirm-dialog.proxy-editor-dialog {
+	width: min(900px, calc(100vw - 48px));
+	max-height: calc(100vh - 96px);
+	padding: 0 0 16px;
+}
+
+.proxy-editor-dialog .confirm-dialog__head {
+	padding: 15px 20px 11px;
+}
+
+.proxy-editor-dialog .confirm-dialog__foot {
+	padding: 14px 20px 0;
+}
+
+.proxy-editor-dialog .confirm-dialog__body {
+	padding: 0;
+	gap: 0;
+}
+
+.proxy-editor-split {
+	display: grid;
+	grid-template-columns: 236px minmax(0, 1fr);
+	min-height: 0;
+}
+
+.proxy-editor-rail {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 14px 12px;
+	border-right: 1px solid var(--border);
+	background: var(--raised);
+}
+
+.proxy-editor-rail__label {
+	margin: 0 4px 4px;
+	color: var(--faint);
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+}
+
+.proxy-editor-rail label {
+	position: relative;
+	display: grid;
+	grid-template-columns: 27px minmax(0, 1fr);
+	gap: 8px;
+	align-items: start;
+	padding: 9px;
+	border: 1px solid transparent;
+	border-radius: 8px;
+	color: var(--dim);
+	cursor: pointer;
+}
+
+.proxy-editor-rail label:hover {
+	background: var(--card);
+}
+
+.proxy-editor-rail label.selected {
+	border-color: var(--accent-border);
+	background: var(--card);
+	box-shadow: 0 1px 2px #0000000f;
+}
+
+.proxy-editor-rail label:focus-within {
+	border-color: var(--accent);
+	box-shadow: 0 0 0 2px var(--accent-ring);
+}
+
+.proxy-editor-rail input {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	opacity: 0;
+}
+
+.proxy-editor-mode__icon {
+	display: grid;
+	width: 27px;
+	height: 27px;
+	place-items: center;
+	border-radius: 7px;
+	background: var(--raised);
+	color: var(--dim);
+	font-size: 10px;
+	font-weight: 700;
+}
+
+.proxy-editor-rail label.selected .proxy-editor-mode__icon {
+	background: var(--accent);
+	color: #fff;
+}
+
+.proxy-editor-mode__text b {
+	display: block;
+	color: var(--text-bright);
+	font-size: 12px;
+	font-weight: 600;
+}
+
+.proxy-editor-mode__text small {
+	display: block;
+	margin-top: 2px;
+	color: var(--dim);
+	font-size: 11px;
+	line-height: 1.4;
+}
+
+.proxy-editor-main {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	min-width: 0;
+	padding: 16px 20px 14px;
+}
+
+.proxy-editor-mode-head {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+}
+
+.proxy-editor-mode-head h3 {
+	margin: 0;
+	color: var(--text-bright);
+	font-size: 13px;
+	font-weight: 600;
+}
+
+.proxy-editor-mode-head p {
+	margin: 3px 0 0;
+	color: var(--dim);
+	font-size: 12px;
+	line-height: 1.55;
+}
+
+.proxy-editor-kind {
+	flex: none;
+	margin-left: auto;
+	padding: 3px 8px;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	background: var(--raised);
+	color: var(--faint);
+	font-size: 11px;
+}
+
+.proxy-editor-main .proxy-field,
+.proxy-editor-main .env-proxy-fields label {
+	font-size: 13px;
+}
+
+.proxy-editor-main .proxy-field input,
+.proxy-editor-main .env-proxy-fields input,
+.proxy-editor-main .env-proxy-fields select {
+	font-family: var(--sans);
+	font-size: 13px;
+	border-color: var(--border-strong);
+}
+
+.proxy-editor-main .env-proxy-fields textarea {
+	font-family: var(--mono);
+	font-size: 12.5px;
+	border-color: var(--border-strong);
+}
+
+.proxy-editor-main .env-proxy-check,
+.proxy-editor-main .check {
+	font-size: 12.5px;
+}
+
+.proxy-editor-main .env-proxy-fields {
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 860px) {
+	.proxy-editor-split {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.proxy-editor-rail {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		border-right: 0;
+		border-bottom: 1px solid var(--border);
+	}
+
+	.proxy-editor-rail__label {
+		grid-column: 1 / -1;
+	}
+}
+
+@media (max-width: 600px) {
+	.proxy-editor-main .env-proxy-fields {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
 .proxy-table .data-row {
 	grid-template-columns: minmax(160px, 1.4fr) minmax(120px, 1fr) 56px 72px minmax(140px, auto);
 }
