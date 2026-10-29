@@ -4,7 +4,6 @@ import { AboutPage } from "./components/AboutPage.tsx";
 import { ApiModelPage } from "./components/ApiModelPage.tsx";
 import { ApprovalQueue } from "./components/ApprovalQueue.tsx";
 import { AuthGate } from "./components/AuthGate.tsx";
-import { SessionPanel } from "./chat/SessionPanel.tsx";
 import { ConsoleShell } from "./shell/ConsoleShell.tsx";
 import type { PluginNavEntry } from "./shell/navigation.tsx";
 import { ConsentGate } from "./components/ConsentGate.tsx";
@@ -13,6 +12,7 @@ import { BranchModal } from "./components/BranchModal.tsx";
 import { ChatToolbar } from "./components/ChatToolbar.tsx";
 import { Composer } from "./components/Composer.tsx";
 import { DroidPage } from "./components/DroidPage.tsx";
+import { DashboardPage } from "./components/DashboardPage.tsx";
 import { IosPage } from "./components/IosPage.tsx";
 import { EnginePage } from "./components/EnginePage.tsx";
 import { EnvironmentPanel } from "./components/EnvironmentPanel.tsx";
@@ -337,7 +337,7 @@ export function App() {
 	const [expandedRuns, setExpandedRuns] = useState<Set<string>>(new Set());
 	const [errors, setErrors] = useState<string[]>([]);
 	/** The one page the content area shows; navigation lives in the sider. */
-	const [page, setPage] = useState<SentinelPageId>("chat");
+	const [page, setPage] = useState<SentinelPageId>("dashboard");
 	/**
 	 * Console authentication: the console renders only once the session is
 	 * confirmed; otherwise the login (or first-run setup) screen replaces it.
@@ -447,7 +447,7 @@ export function App() {
 	const assetPageSizeRef = useRef(50);
 	const [assetDetail, setAssetDetail] = useState<SentinelAssetDetail | null>(null);
 	const assetDetailRef = useRef<SentinelAssetDetail | null>(null);
-	const pageRef = useRef<SentinelPageId>("chat");
+	const pageRef = useRef<SentinelPageId>("dashboard");
 	const [assetDeletePending, setAssetDeletePending] = useState<string[] | null>(null);
 	const [assetDeletePreview, setAssetDeletePreview] = useState<SentinelAssetDeletePreview | null>(null);
 	const [pocItems, setPocItems] = useState<SentinelPocSummary[]>([]);
@@ -1979,6 +1979,12 @@ export function App() {
 		if (filesOpen) loadFiles(filePathRef.current);
 		if (subagentsOpen) send({ type: "get_state" });
 		switch (page) {
+			case "dashboard":
+				send({ type: "get_state" });
+				send({ type: "list_sessions" });
+				send({ type: "list_engines" });
+				send({ type: "list_vulns" });
+				break;
 			case "chat":
 				send({ type: "get_state" });
 				refreshStats();
@@ -2087,6 +2093,14 @@ export function App() {
 		loadGates,
 		loadPlugins,
 	]);
+
+	/** The landing page reads project data without opening or creating a session. */
+	useEffect(() => {
+		if (page !== "dashboard" || !connected) return;
+		send({ type: "list_sessions" });
+		send({ type: "list_engines" });
+		send({ type: "list_vulns" });
+	}, [page, connected, snapshot?.project?.id, send]);
 
 	/**
 	 * The audit page reads on open and on every filter change. Its query is also
@@ -2580,6 +2594,17 @@ export function App() {
 				projects={projects}
 				activeProject={snapshot?.project ?? null}
 				busy={streaming}
+				sessionPanel={needsProject ? undefined : {
+					sessions,
+					activeSessionId: snapshot?.activeSessionId ?? null,
+					runningSessions: runningSessionIds,
+					engines,
+					onNew: () => send({ type: "new_session" }),
+					onSwitch: (path) => send({ type: "switch_session", path }),
+					onRename: (path, name) => send({ type: "rename_session", path, name }),
+					onDelete: (path) => send({ type: "delete_session", path }),
+					onSetStatus: (path, status) => send({ type: "set_session_status", path, status }),
+				}}
 				onSwitchProject={(id) => send({ type: "switch_project", id })}
 				onCreateProject={addProject}
 				onManageProjects={() => openPage("projects")}
@@ -2591,7 +2616,7 @@ export function App() {
 			>
 					{/* A page that throws costs that page, not the console: the shell stays
 					    usable and the message says what broke. */}
-					<PageBoundary key={page} onHome={() => setPage("chat")}>
+					<PageBoundary key={page} onHome={() => openPage("dashboard")}>
 					{connected ? null : (
 						<Alert
 							type="warning"
@@ -2670,7 +2695,7 @@ export function App() {
 								<p className="muted">{t("正在打开插件界面…")}</p>
 							</div>
 						)
-					) : needsProject && page === "chat" ? (
+					) : needsProject && (page === "chat" || page === "dashboard") ? (
 						<ProjectGate
 							projects={projects}
 							busy={streaming}
@@ -2678,19 +2703,23 @@ export function App() {
 							onSwitch={(id) => send({ type: "switch_project", id })}
 							onOpenSettings={() => openPage("settings.model")}
 						/>
+					) : page === "dashboard" ? (
+						<DashboardPage
+							project={projects.find((project) => project.id === snapshot?.project?.id) ?? snapshot?.project ?? null}
+							sessions={sessions}
+							runningSessions={runningSessionIds}
+							engines={engines}
+							pendingApprovals={pendingApprovals.length}
+							vulnStats={vulnStats}
+							loading={!connected || snapshot === null}
+							onNavigate={openPage}
+							onOpenSession={(path) => {
+								send({ type: "switch_session", path });
+								openPage("chat");
+							}}
+						/>
 					) : page === "chat" ? (
 						<div className="chat-workspace">
-							<SessionPanel
-								sessions={sessions}
-								activeSessionId={snapshot?.activeSessionId ?? null}
-								runningSessions={runningSessionIds}
-								engines={engines}
-								onNew={() => send({ type: "new_session" })}
-								onSwitch={(path) => send({ type: "switch_session", path })}
-								onRename={(path, name) => send({ type: "rename_session", path, name })}
-								onDelete={(path) => send({ type: "delete_session", path })}
-								onSetStatus={(path, status) => send({ type: "set_session_status", path, status })}
-							/>
 							<div className="chat-main">
 								<div className="page-card">
 							<div className="chat-head">
@@ -2825,7 +2854,7 @@ export function App() {
 														))}
 														{live && liveThinking ? (
 															<AgentEntry>
-																<details className="thinking" open>
+																<details className="thinking">
 																	<summary>{t("思考中…")}</summary>
 																	<pre>{liveThinking}</pre>
 																</details>

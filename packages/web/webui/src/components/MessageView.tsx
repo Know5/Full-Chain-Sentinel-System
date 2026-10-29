@@ -1,5 +1,5 @@
-import { ExpandOutlined } from "@ant-design/icons";
-import { Alert, Button, Collapse, Space, Tag, Typography } from "antd";
+import { BranchesOutlined, ExpandOutlined, SafetyOutlined } from "@ant-design/icons";
+import { Button, Collapse, Space, Tag, Typography } from "antd";
 import { useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -7,6 +7,7 @@ import { t } from "../i18n.ts";
 import { formatTokens, textFromContent } from "../transcript.ts";
 import type { AgentMessageView, ContentBlockView } from "../types.ts";
 import { ToolCard } from "./ToolCard.tsx";
+import "./process.css";
 
 const { Text } = Typography;
 
@@ -51,16 +52,29 @@ export function formatTime(timestamp?: number): string {
  * One operator entry: a prompt line with a marker, the way a console echoes
  * input. No avatar, no bubble, no role tag.
  */
-function OperatorEntry({ timestamp, children }: { timestamp?: number; children: React.ReactNode }) {
+function OperatorEntry({
+	timestamp,
+	action,
+	children,
+}: {
+	timestamp?: number;
+	action?: React.ReactNode;
+	children: React.ReactNode;
+}) {
 	return (
 		<div className="entry entry--operator">
 			<span className="entry__mark">&gt;</span>
 			<div className="entry__body">
 				{children}
-				{timestamp ? (
-					<Text type="secondary" className="entry__time">
-						{formatTime(timestamp)}
-					</Text>
+				{timestamp || action ? (
+					<div className="entry__footer">
+						{timestamp ? (
+							<Text type="secondary" className="entry__time">
+								{formatTime(timestamp)}
+							</Text>
+						) : null}
+						{action}
+					</div>
 				) : null}
 			</div>
 		</div>
@@ -99,7 +113,9 @@ export function AgentEntry({
 /** Turn common provider/endpoint failures into an actionable Chinese hint. */
 function hintForError(message: string): string {
 	if (/502|upstream/i.test(message)) {
-		return t("端点网关连不上上游模型服务：检查中转渠道是否被禁用、上游服务是否存活。可用「设置 → 模型 → 测试连接」验证。");
+		return t(
+			"端点网关连不上上游模型服务：检查中转渠道是否被禁用、上游服务是否存活。可用「设置 → 模型 → 测试连接」验证。",
+		);
 	}
 	if (/401|403|unauthorized|api key|authentication/i.test(message)) {
 		return t("认证失败：检查 API Key 是否有效，或在「设置 → 模型」中重新填写。");
@@ -206,7 +222,8 @@ function StepRow({
 	/** Title for the shared viewer; defaults to the generic tool-output label. */
 	viewerTitle?: string;
 }) {
-	const duration = durationMs ? (durationMs >= 1000 ? `${(durationMs / 1000).toFixed(1)}s` : `${durationMs}ms`) : "";
+	const duration =
+		durationMs !== undefined ? (durationMs >= 1000 ? `${(durationMs / 1000).toFixed(1)}s` : `${durationMs}ms`) : "";
 	return (
 		<Collapse
 			ghost
@@ -216,16 +233,14 @@ function StepRow({
 				{
 					key: "output",
 					label: (
-						<Space size={8} className="steprow__label">
-							{time ? (
-								<Text type="secondary" className="steprow__time">
-									{formatTime(time)}
-								</Text>
-							) : null}
+						<div className="steprow__label">
+							<Text type="secondary" className="steprow__time">
+								{formatTime(time) || "—"}
+							</Text>
 							<Tag variant="filled" className="steprow__tool">
 								{tool}
 							</Tag>
-							<Text type="secondary" ellipsis className="steprow__arg">
+							<Text type="secondary" className="steprow__arg" title={argument}>
 								{argument || t("(无参数)")}
 							</Text>
 							{duration ? (
@@ -241,13 +256,26 @@ function StepRow({
 									aria-label={t("在查看器中打开全部内容")}
 									onClick={(event) => {
 										event.stopPropagation();
-										onFullscreen(viewerTitle, output);
+										onFullscreen(viewerTitle ?? (argument || undefined), output);
 									}}
 								/>
 							) : null}
-						</Space>
+						</div>
 					),
-					children: <pre className="steprow__pre">{output || t("（无输出）")}</pre>,
+					children: (
+						<div className="steprow__details">
+							{argument && !viewerTitle ? (
+								<div>
+									<Text type="secondary">{t("参数")}</Text>
+									<pre className="steprow__pre">{argument}</pre>
+								</div>
+							) : null}
+							<div>
+								<Text type="secondary">{viewerTitle ?? t("输出")}</Text>
+								<pre className="steprow__pre">{output || t("（无输出）")}</pre>
+							</div>
+						</div>
+					),
 				},
 			]}
 		/>
@@ -298,7 +326,22 @@ export function MessageView({
 			: String(message.content ?? "");
 		const images = messageImages(message.content);
 		return (
-			<OperatorEntry timestamp={message.timestamp}>
+			<OperatorEntry
+				timestamp={message.timestamp}
+				action={
+					forkEntryId && onFork ? (
+						<Button
+							size="small"
+							type="text"
+							icon={<BranchesOutlined />}
+							className="fork-button"
+							onClick={() => onFork(forkEntryId)}
+						>
+							{t("从此分叉")}
+						</Button>
+					) : null
+				}
+			>
 				{images.length > 0 ? (
 					<div className="message-images">
 						{images.map((image, index) => (
@@ -312,11 +355,6 @@ export function MessageView({
 					</div>
 				) : null}
 				{text ? <div className="log-op-text">{text}</div> : null}
-				{forkEntryId && onFork ? (
-					<Button size="small" type="link" className="fork-button" onClick={() => onFork(forkEntryId)}>
-						{t("从此分叉")}
-					</Button>
-				) : null}
 			</OperatorEntry>
 		);
 	}
@@ -331,6 +369,9 @@ export function MessageView({
 				(block as { type?: string }).type === "toolCall" && (block as { name?: string }).name === "spawn_agent",
 		);
 		const thinkingText = thinking.map((block) => (block as { thinking?: string }).thinking ?? "").join("\n");
+		// Tool-call metadata is shown with its result; an empty AI entry only
+		// inserts a timestamp and blank space between the process steps.
+		if (!text && thinking.length === 0 && !failed && !message.errorMessage) return null;
 		// 方案 B：只含思考、没有正文的 assistant（被中止/压缩截断的常见形态）在
 		// settled run 里就是一行「思考」，不再套 AI 徽标行和折叠块。
 		if (compact && thinking.length > 0 && !text) {
@@ -487,23 +528,22 @@ export function MessageView({
 				</FoldRow>
 			);
 		}
-		// Supervisor advice is a real intervention: unlike an internal marker it
-		// must stay visible, so the operator can see exactly what was injected.
+		// Keep the intervention visible without letting long advice interrupt the
+		// timeline. The original injected text remains available on expansion.
 		if (message.customType === "zg-supervisor-advice") {
 			const text = textFromContent(message.content);
+			const preview = text.split("\n").find((line) => line.trim() && !line.trim().startsWith("【")) ?? text;
 			return (
-				<Alert
-					type="warning"
-					showIcon
-					className="supervisor-advice-row"
-					title={
-						<Space size={8}>
-							<Text strong>{t("监督建议已介入")}</Text>
-							{message.timestamp ? <Text type="secondary">{formatTime(message.timestamp)}</Text> : null}
-						</Space>
-					}
-					description={<pre className="foldrow__pre">{text}</pre>}
-				/>
+				<details className="supervisor-advice-row">
+					<summary className="supervisor-advice-row__head">
+						<SafetyOutlined />
+						<Text strong>{t("监督建议已介入")}</Text>
+						{message.timestamp ? <Text type="secondary">{formatTime(message.timestamp)}</Text> : null}
+						<span className="supervisor-advice-row__preview">{preview}</span>
+						<span className="supervisor-advice-row__toggle" aria-hidden="true" />
+					</summary>
+					<pre>{text}</pre>
+				</details>
 			);
 		}
 		// Business-modeling rows: the briefing the button injected and the line that

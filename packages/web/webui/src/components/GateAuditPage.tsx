@@ -14,7 +14,7 @@
 import { ReloadOutlined, SearchOutlined } from "@ant-design/icons";
 import { ProTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
-import { Alert, Button, Drawer, Empty, Input, Select, Space, Statistic, Tabs, Tag, Typography } from "antd";
+import { Alert, Button, Drawer, Empty, Input, Select, Space, Tabs, Tag, Typography } from "antd";
 import { useMemo, useState } from "react";
 import { getLanguage, t } from "../i18n.ts";
 import type {
@@ -28,6 +28,7 @@ import type {
 } from "../types.ts";
 import { SENTINEL_GATE_APPROVAL_LABELS, SENTINEL_GATE_DECISION_LABELS, SENTINEL_GATE_TAB_BUCKETS } from "../types.ts";
 import { Page } from "../ui/Page.tsx";
+import { MetricStrip, type MetricItem } from "../ui/MetricStrip.tsx";
 
 const { Text } = Typography;
 
@@ -292,12 +293,16 @@ export function GateAuditPage({
 				]),
 	];
 
-	const statItems =
+	const statItems: MetricItem[] =
 		tab === "ai"
 			? [
 					{ label: t("拦截"), value: stats?.byDecision.block ?? 0 },
 					{ label: t("放行"), value: stats?.byDecision.allow ?? 0 },
-					{ label: t("失败"), value: stats?.byDecision.failed ?? 0, danger: (stats?.byDecision.failed ?? 0) > 0 },
+					{
+						label: t("失败"),
+						value: stats?.byDecision.failed ?? 0,
+						tone: (stats?.byDecision.failed ?? 0) > 0 ? "danger" : undefined,
+					},
 					{ label: t("拦截率"), value: stats ? percent(stats.blockRate) : "-" },
 					{ label: t("平均耗时"), value: stats ? formatLatency(stats.avgLatencyMs) : "-" },
 					{ label: t("24 小时"), value: stats?.last24h ?? 0 },
@@ -307,7 +312,11 @@ export function GateAuditPage({
 			: [
 					{ label: t("自动放行"), value: stats?.byApproval.auto ?? 0 },
 					{ label: t("人工放行"), value: stats?.byApproval.human ?? 0 },
-					{ label: t("人工拦截"), value: stats?.byDecision.block ?? 0, danger: (stats?.byDecision.block ?? 0) > 0 },
+					{
+						label: t("人工拦截"),
+						value: stats?.byDecision.block ?? 0,
+						tone: (stats?.byDecision.block ?? 0) > 0 ? "danger" : undefined,
+					},
 					{ label: t("24 小时"), value: stats?.last24h ?? 0 },
 				];
 
@@ -352,17 +361,7 @@ export function GateAuditPage({
 				]}
 			/>
 
-			<div className="gatehub-stats">
-				{statItems.map((item) => (
-					<Statistic
-						key={item.label}
-						title={item.label}
-						value={item.value}
-						styles={{ content: item.danger ? { color: "#dc2626" } : undefined }}
-					/>
-				))}
-				{tab === "auto" ? <Text type="secondary">{t("这些调用不经过判定，只留痕")}</Text> : null}
-			</div>
+			<MetricStrip items={statItems} note={tab === "auto" ? t("这些调用不经过判定，只留痕") : undefined} />
 
 			{stats?.lastError ? (
 				<Alert
@@ -508,9 +507,7 @@ export function GateAuditPage({
 				title={
 					<Space size={8} wrap>
 						<Text strong>{detailItem ? SENTINEL_GATE_DECISION_LABELS[detailItem.decision] : ""}</Text>
-						{detailItem ? (
-							<Text type="secondary">{formatClock(detailItem.at)}</Text>
-						) : null}
+						{detailItem ? <Text type="secondary">{formatClock(detailItem.at)}</Text> : null}
 					</Space>
 				}
 			>

@@ -17,7 +17,21 @@
 import { ReloadOutlined, SearchOutlined } from "@ant-design/icons";
 import { ProTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
-import { Alert, Badge, Button, Col, Descriptions, Drawer, Empty, Input, Row, Select, Space, Statistic, Tag, Typography } from "antd";
+import {
+	Alert,
+	Badge,
+	Button,
+	Col,
+	Descriptions,
+	Drawer,
+	Empty,
+	Input,
+	Row,
+	Select,
+	Space,
+	Tag,
+	Typography,
+} from "antd";
 import { useEffect, useState } from "react";
 import { getLanguage, t } from "../i18n.ts";
 import { SUPERVISOR_STRATEGY_OPTIONS, supervisorStrategyLabel } from "../supervisor-strategy.ts";
@@ -34,6 +48,7 @@ import type {
 	SentinelSupervisorStrategy,
 } from "../types.ts";
 import { Page } from "../ui/Page.tsx";
+import { MetricStrip } from "../ui/MetricStrip.tsx";
 
 const { Text } = Typography;
 
@@ -412,21 +427,17 @@ export function SupervisorAuditPage({
 				</Button>
 			}
 		>
-			<div className="sva-summary">
-				<Statistic title={t("监督会话")} value={stats.total} />
-				<Statistic title={t("有进展")} value={stats.advancing} styles={{ content: { color: "#16a34a" } }} />
-				<Statistic title={t("停滞")} value={stats.stalled} styles={{ content: stats.stalled > 0 ? { color: "#d97706" } : undefined }} />
-				<Statistic title={t("循环")} value={stats.looping} styles={{ content: stats.looping > 0 ? { color: "#dc2626" } : undefined }} />
-				<Statistic title={t("已停止")} value={stats.stopped} />
-				<Statistic
-					title={t("待确认建议")}
-					value={stats.pendingAdvice}
-					styles={{ content: stats.pendingAdvice > 0 ? { color: "#d97706" } : undefined }}
-				/>
-				<Text type="secondary" className="sva-summary__note">
-					{t("进度与停止按每个会话的最新状态统计")}
-				</Text>
-			</div>
+			<MetricStrip
+				items={[
+					{ label: t("监督会话"), value: stats.total },
+					{ label: t("有进展"), value: stats.advancing, tone: "success" },
+					{ label: t("停滞"), value: stats.stalled, tone: stats.stalled > 0 ? "warning" : undefined },
+					{ label: t("循环"), value: stats.looping, tone: stats.looping > 0 ? "danger" : undefined },
+					{ label: t("已停止"), value: stats.stopped },
+					{ label: t("待确认建议"), value: stats.pendingAdvice, tone: stats.pendingAdvice > 0 ? "warning" : undefined },
+				]}
+				note={t("进度与停止按每个会话的最新状态统计")}
+			/>
 
 			<ProTable<SentinelSupervisorAuditItem>
 				rowKey="sessionId"

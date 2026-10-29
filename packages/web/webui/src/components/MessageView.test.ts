@@ -46,7 +46,9 @@ test("a repeated tool call folds under the reminder label", () => {
 });
 
 test("an unknown custom message still renders nothing", () => {
-	const html = renderToStaticMarkup(createElement(MessageView, { message: custom("sentinel-unknown", "不应该出现的内容") }));
+	const html = renderToStaticMarkup(
+		createElement(MessageView, { message: custom("sentinel-unknown", "不应该出现的内容") }),
+	);
 	expect(html).toBe("");
 });
 
@@ -115,6 +117,31 @@ test("a live tool card keeps the call time at the front", () => {
 			output: "",
 		}),
 	);
-	expect(html).toContain('toolcard__time');
+	expect(html).toContain("toolcard__time");
 	expect(html).toContain("20:31:50");
+});
+
+test("tool-call metadata does not create an empty AI entry between process steps", () => {
+	const html = renderToStaticMarkup(
+		createElement(MessageView, {
+			message: {
+				role: "assistant",
+				content: [{ type: "toolCall", id: "call", name: "bash", arguments: { command: "pwd" } }],
+				timestamp: 1_700_000_000_000,
+			},
+			compact: true,
+		}),
+	);
+	expect(html).toBe("");
+});
+
+test("an assistant failure without prose still shows the error and recovery hint", () => {
+	const html = renderToStaticMarkup(
+		createElement(MessageView, {
+			message: { role: "assistant", content: [], stopReason: "error", errorMessage: "401 unauthorized" },
+			compact: true,
+		}),
+	);
+	expect(html).toContain("401 unauthorized");
+	expect(html).toContain("认证失败");
 });

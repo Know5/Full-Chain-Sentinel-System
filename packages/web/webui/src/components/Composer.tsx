@@ -1,4 +1,11 @@
-import { ArrowUpOutlined, BellOutlined, CloseOutlined, PaperClipOutlined, PictureOutlined, StopOutlined } from "@ant-design/icons";
+import {
+	ArrowUpOutlined,
+	BellOutlined,
+	CloseOutlined,
+	PaperClipOutlined,
+	PictureOutlined,
+	StopOutlined,
+} from "@ant-design/icons";
 import { Alert, Button, Input, Progress, Segmented, Space, Typography } from "antd";
 import { useEffect, useRef, useState } from "react";
 import { t } from "../i18n.ts";
@@ -21,6 +28,7 @@ import { ModelingMenu } from "./ModelingMenu.tsx";
 import { PresetMenu, type PresetMenuAnchor, presetMenuPosition } from "./PresetMenu.tsx";
 import { SupervisorStartMenu, type SupervisorLaunchMode } from "./SupervisorStartMenu.tsx";
 import { supervisorStrategyKey } from "../supervisor-strategy.ts";
+import "./composer.css";
 
 const { Text } = Typography;
 
@@ -41,7 +49,9 @@ async function readImage(file: File): Promise<SentinelImageAttachment | null> {
 const DEFAULT_HINT = t("输入目标与任务，Enter 发送，Shift+Enter 换行，可粘贴截图或拖入文件");
 
 function initialSupervisorStrategies(defaults: SentinelSupervisorStrategyRef[]): SentinelSupervisorStrategyRef[] {
-	return defaults.length > 0 ? defaults.map((entry) => ({ ...entry })) : [{ strategy: "steady", customStrategyId: null }];
+	return defaults.length > 0
+		? defaults.map((entry) => ({ ...entry }))
+		: [{ strategy: "steady", customStrategyId: null }];
 }
 
 /**
@@ -304,7 +314,9 @@ export function Composer({
 				})
 				.catch((error: unknown) => {
 					const message = error instanceof Error ? error.message : t("上传失败");
-					setAttachments((prev) => prev.map((item) => (item.id === entry.id ? { ...item, error: message } : item)));
+					setAttachments((prev) =>
+						prev.map((item) => (item.id === entry.id ? { ...item, error: message } : item)),
+					);
 				});
 		}
 	};
@@ -344,6 +356,7 @@ export function Composer({
 								size="small"
 								type={supervisor ? "primary" : "default"}
 								icon={<SupervisorIcon />}
+								aria-expanded={supervisor ? supervisorWindowOpen : undefined}
 								onClick={(event) => {
 									if (supervisor) {
 										onShowSupervisorWindow();
@@ -363,17 +376,8 @@ export function Composer({
 											: t("开启监督：观察，或介入并选择自动发送 / 确认后发送")
 								}
 							>
-								{supervisor
-									? supervisor.status === "stopped"
-										? t("监督已停止")
-										: t("监督中")
-									: t("监督")}
+								{supervisor ? (supervisor.status === "stopped" ? t("监督已停止") : t("监督中")) : t("监督")}
 							</Button>
-							{supervisor && !supervisorWindowOpen ? (
-								<Button size="small" onClick={onShowSupervisorWindow} title={t("重新显示监督悬浮窗；监督仍在继续")}>
-									{t("显示悬浮窗")}
-								</Button>
-							) : null}
 							{supervisorMenu ? (
 								<SupervisorStartMenu
 									anchor={supervisorMenu}
@@ -488,7 +492,9 @@ export function Composer({
 								? t("请先创建或选择一个项目")
 								: droidEnabled
 									? t("当前对话已挂载安卓工具（droid_* / apk_*）。点击摘除；其他对话不受影响")
-									: t("为当前对话挂载安卓工具（droid_* / apk_*）：需要先在「安卓设备」页配置反连与 token，并有一台设备在线")
+									: t(
+											"为当前对话挂载安卓工具（droid_* / apk_*）：需要先在「安卓设备」页配置反连与 token，并有一台设备在线",
+										)
 						}
 					>
 						{t("安卓")}
@@ -506,7 +512,9 @@ export function Composer({
 								? t("请先创建或选择一个项目")
 								: iosEnabled
 									? t("当前对话已挂载 iOS 工具（ios_*）。点击摘除；其他对话不受影响")
-									: t("为当前对话挂载 iOS 工具（ios_*）：需要先在「iOS 设备」页创建 token，并有一台越狱设备在线")
+									: t(
+											"为当前对话挂载 iOS 工具（ios_*）：需要先在「iOS 设备」页创建 token，并有一台越狱设备在线",
+										)
 						}
 					>
 						{t("iOS")}
@@ -567,9 +575,7 @@ export function Composer({
 								/>
 							</div>
 						))}
-						<span className="composerbox__count">
-							{t("{count} 张图片待发送", { count: images.length })}
-						</span>
+						<span className="composerbox__count">{t("{count} 张图片待发送", { count: images.length })}</span>
 					</div>
 				) : null}
 				{attachments.length > 0 ? (
@@ -595,11 +601,7 @@ export function Composer({
 									size="small"
 									shape="circle"
 									icon={<CloseOutlined />}
-									title={
-										item.uploaded
-											? t("从待发送列表移除（文件仍在 uploads/ 里）")
-											: t("移除")
-									}
+									title={item.uploaded ? t("从待发送列表移除（文件仍在 uploads/ 里）") : t("移除")}
 									onClick={() => setAttachments((prev) => prev.filter((entry) => entry.id !== item.id))}
 								/>
 							</div>
@@ -671,11 +673,7 @@ export function Composer({
 						size="small"
 						icon={<BellOutlined />}
 						onClick={onToggleNotifyRun}
-						title={
-							notifyRun
-								? t("本次运行完成后发送通知（点击关闭）")
-								: t("本次运行完成后不通知（点击开启）")
-						}
+						title={notifyRun ? t("本次运行完成后发送通知（点击关闭）") : t("本次运行完成后不通知（点击开启）")}
 					>
 						{t("通知")}
 					</Button>
@@ -745,23 +743,23 @@ export function Composer({
 				className="composerbox__status"
 				title={t("按本轮每个 assistant 消息的 output tokens 与该消息耗时计算，不含工具执行时间")}
 			>
-					{blocked ? t("已锁定") : streaming ? t("运行中…") : t("空闲")}
-					{stats
-						? `${t(" · Token 输入 {input} / 输出 {output}", {
-								input: formatTokens(stats.tokens.input),
-								output: formatTokens(stats.tokens.output),
-							})}${stats.cost > 0 ? t(" · 花费 {cost}", { cost: `$${stats.cost.toFixed(4)}` }) : ""}`
-						: ""}
-					{" · "}
-					{throughput
-						? `${t("本轮均速 {rate} tok/s", { rate: formatThroughput(throughput.tokPerSec) })}${
-								streaming
-									? t("（生成中）")
-									: ` · ${formatTokens(throughput.outputTokens)} tokens / ${(throughput.durationMs / 1000).toFixed(1)}s`
-							}`
-						: streaming
-							? t("本轮生成中…")
-							: t("本轮 tok/s —")}
+				{blocked ? t("已锁定") : streaming ? t("运行中…") : t("空闲")}
+				{stats
+					? `${t(" · Token 输入 {input} / 输出 {output}", {
+							input: formatTokens(stats.tokens.input),
+							output: formatTokens(stats.tokens.output),
+						})}${stats.cost > 0 ? t(" · 花费 {cost}", { cost: `$${stats.cost.toFixed(4)}` }) : ""}`
+					: ""}
+				{" · "}
+				{throughput
+					? `${t("本轮均速 {rate} tok/s", { rate: formatThroughput(throughput.tokPerSec) })}${
+							streaming
+								? t("（生成中）")
+								: ` · ${formatTokens(throughput.outputTokens)} tokens / ${(throughput.durationMs / 1000).toFixed(1)}s`
+						}`
+					: streaming
+						? t("本轮生成中…")
+						: t("本轮 tok/s —")}
 			</Text>
 		</div>
 	);

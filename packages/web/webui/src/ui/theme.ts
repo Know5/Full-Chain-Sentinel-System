@@ -10,7 +10,7 @@
  * reuse the same tokens instead of duplicating the palette.
  */
 
-import type { ThemeConfig } from "antd";
+import { theme, type ThemeConfig } from "antd";
 
 /** Seed colors shared by the theme and the few hand-written surfaces. */
 export const CONSOLE_COLORS = {
@@ -35,6 +35,7 @@ const FONT_FAMILY =
 	'-apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Microsoft YaHei", "Segoe UI", Roboto, sans-serif';
 
 export const consoleTheme: ThemeConfig = {
+	algorithm: theme.defaultAlgorithm,
 	cssVar: { key: "sentinel" },
 	hashed: false,
 	token: {
@@ -179,5 +180,29 @@ export const consoleTheme: ThemeConfig = {
 		Badge: {
 			textFontSizeSM: 11,
 		},
+	},
+};
+
+/** Scoped to the sidebar so its inputs and popup menus share the dark rail. */
+export const consoleSidebarTheme: ThemeConfig = {
+	algorithm: theme.darkAlgorithm,
+	cssVar: { key: "sentinel-sidebar" },
+	token: {
+		colorBgContainer: "#101b2e",
+		colorBgElevated: CONSOLE_COLORS.sider,
+		colorBorder: "#29364a",
+		colorText: "#e2e8f0",
+		colorTextSecondary: "#a5b4c9",
+		colorTextTertiary: "#94a3b8",
+		colorTextPlaceholder: "#94a3b8",
+		colorBgTextHover: "rgba(148, 163, 184, 0.1)",
+		controlItemBgActive: "rgba(59, 130, 246, 0.2)",
+	},
+	components: {
+		Segmented: {
+			trackBg: "rgba(148, 163, 184, 0.08)",
+			itemSelectedBg: "rgba(59, 130, 246, 0.2)",
+		},
+		Select: { optionSelectedBg: "rgba(59, 130, 246, 0.2)" },
 	},
 };

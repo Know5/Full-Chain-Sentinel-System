@@ -1,0 +1,14 @@
+/* The outer composer owns the focus border, including its toolbar and actions. */
+.composerbox textarea.composerbox__input,
+.composerbox textarea.composerbox__input:hover,
+.composerbox textarea.composerbox__input:focus {
+	border: 0;
+	outline: none;
+	box-shadow: none;
+	background: transparent;
+}
+
+.composerbox .composerbox__box:focus-within {
+	border-color: var(--accent);
+	box-shadow: 0 0 0 2px var(--accent-ring);
+}

@@ -57,6 +57,7 @@ import type {
 } from "../types.ts";
 import { SENTINEL_VULN_SEVERITIES, SENTINEL_VULN_SEVERITY_LABELS, SENTINEL_VULN_STATUS_LABELS } from "../types.ts";
 import { Page, Section } from "../ui/Page.tsx";
+import "./vulnerability-assets.css";
 
 const { Text } = Typography;
 
@@ -530,11 +531,10 @@ export function VulnPage({
 			title: t("关联资产"),
 			dataIndex: "assetLabel",
 			key: "asset",
-			width: 104,
-			ellipsis: true,
+			width: 180,
 			render: (_, item) =>
 				item.assetLabel ? (
-					<Tag variant="filled">{item.assetLabel}</Tag>
+					<Tag className="vulnhub-asset-label" variant="filled">{item.assetLabel}</Tag>
 				) : (
 					<Text type="secondary">—</Text>
 				),
@@ -676,7 +676,7 @@ export function VulnPage({
 				search={false}
 				options={false}
 				pagination={false}
-				scroll={{ x: 1010 }}
+				scroll={{ x: 1120 }}
 				rowSelection={{
 					selectedRowKeys: selectedIds,
 					onChange: (keys) => setSelected(new Set(keys as string[])),
@@ -945,7 +945,7 @@ export function VulnDetailBody({
 						key: "asset",
 						label: t("关联资产"),
 						children: (
-							<Button type="link" size="small" onClick={() => onOpenAsset(vuln.assetId as string)}>
+							<Button className="vulnhub-asset-link" type="link" size="small" onClick={() => onOpenAsset(vuln.assetId as string)}>
 								{vuln.assetLabel ?? vuln.assetId}
 							</Button>
 						),

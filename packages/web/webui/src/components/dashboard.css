@@ -1,0 +1,217 @@
+.dashboard.ui-page {
+	min-height: 0;
+	overflow-y: auto;
+	align-content: start;
+	width: 100%;
+	display: grid;
+	gap: 12px;
+}
+
+.dashboard__metrics {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 12px;
+}
+
+.dashboard__metric,
+.dashboard__session {
+	font: inherit;
+	color: var(--ant-color-text);
+	text-align: left;
+	cursor: pointer;
+}
+
+.dashboard__metric {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 14px;
+	border: 1px solid var(--ant-color-border-secondary);
+	border-radius: 8px;
+	background: var(--ant-color-bg-container);
+}
+
+.dashboard__metric:disabled {
+	cursor: default;
+}
+
+.dashboard__metric-label {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	color: var(--ant-color-text-secondary);
+}
+
+.dashboard__metric-label > :last-child {
+	margin-left: auto;
+	color: var(--ant-color-text-quaternary);
+}
+
+.dashboard__metric > strong {
+	font-size: 28px;
+	line-height: 1.2;
+	font-variant-numeric: tabular-nums;
+}
+
+.dashboard__metric:hover:enabled,
+.dashboard__metric:focus-visible {
+	border-color: var(--ant-color-primary);
+}
+
+.dashboard__columns {
+	display: grid;
+	grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+	gap: 12px;
+	align-items: start;
+}
+
+.dashboard__columns > *,
+.dashboard__secondary > * {
+	min-width: 0;
+}
+
+.dashboard__secondary {
+	display: grid;
+	gap: 12px;
+}
+
+.dashboard__sessions {
+	display: grid;
+}
+
+.dashboard__session {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	width: 100%;
+	padding: 12px 4px;
+	background: transparent;
+	border: 0;
+	border-bottom: 1px solid var(--ant-color-border-secondary);
+}
+
+.dashboard__session:last-child {
+	border-bottom: 0;
+}
+
+.dashboard__session:hover,
+.dashboard__session:focus-visible {
+	background: var(--ant-color-fill-quaternary);
+}
+
+.dashboard__session-copy {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	flex: 1;
+	min-width: 0;
+}
+
+.dashboard__session-copy > span {
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.dashboard__session-time {
+	white-space: nowrap;
+	font-size: 12px;
+	color: var(--ant-color-text-tertiary);
+}
+
+.dashboard__session > .anticon {
+	color: var(--ant-color-text-quaternary);
+}
+
+.dashboard__active .ant-btn {
+	justify-content: flex-start;
+	padding-inline: 0;
+}
+
+.dashboard__active .ant-btn > span:not(.ant-badge, .anticon) {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-align: left;
+	text-overflow: ellipsis;
+}
+
+.dashboard__status-footer {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-top: 16px;
+	padding-top: 12px;
+	border-top: 1px solid var(--ant-color-border-secondary);
+}
+
+.dashboard__severity {
+	display: grid;
+	gap: 14px;
+}
+
+.dashboard__severity-row {
+	display: grid;
+	grid-template-columns: 36px 1fr 32px;
+	align-items: center;
+	gap: 12px;
+	font-size: 12px;
+}
+
+.dashboard__severity-row strong {
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+}
+
+.dashboard__severity-track {
+	height: 6px;
+	border-radius: 4px;
+	background: var(--ant-color-fill-secondary);
+	overflow: hidden;
+}
+
+.dashboard__severity-track > span {
+	display: block;
+	height: 100%;
+	border-radius: inherit;
+	background: var(--ant-color-text-quaternary);
+}
+
+.dashboard__severity-row.is-critical .dashboard__severity-track > span,
+.dashboard__severity-row.is-high .dashboard__severity-track > span {
+	background: var(--ant-color-error);
+}
+
+.dashboard__severity-row.is-medium .dashboard__severity-track > span {
+	background: var(--ant-color-warning);
+}
+
+.dashboard__severity-row.is-low .dashboard__severity-track > span {
+	background: var(--ant-color-primary);
+}
+
+@media (max-width: 1100px) {
+	.dashboard__columns {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.dashboard__secondary {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+@media (max-width: 575px) {
+	.dashboard__metrics {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 10px;
+	}
+
+	.dashboard__metric {
+		padding: 14px;
+	}
+
+	.dashboard__secondary {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}

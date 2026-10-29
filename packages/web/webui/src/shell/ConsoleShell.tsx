@@ -1,32 +1,34 @@
 /**
  * The console shell: navigation rail, header, content area.
  *
- * The layout is the one the operator already knows — a dark rail on the left,
- * a light work area on the right — rebuilt on Ant Design primitives. What moved
- * is the session list: conversations are chat-scoped, so they live in the chat
- * page rail instead of growing the global navigation. The sider keeps only
- * navigation and the account/connection state.
+ * One sidebar changes between conversations and global navigation. Opening
+ * all features replaces its contents without leaving the active conversation.
  */
 
 import {
+	ArrowLeftOutlined,
 	GithubOutlined,
 	LogoutOutlined,
 	MenuFoldOutlined,
 	MenuUnfoldOutlined,
+	MessageOutlined,
 	ReloadOutlined,
 	SettingOutlined,
 	TranslationOutlined,
 } from "@ant-design/icons";
-import { Avatar, Badge, Button, Divider, Drawer, Dropdown, Grid, Layout, Menu, Tag, Tooltip, Typography } from "antd";
+import { Avatar, Badge, Button, ConfigProvider, Divider, Drawer, Dropdown, Flex, Grid, Layout, Menu, Tag, Tooltip, Typography } from "antd";
 import type { MenuProps } from "antd";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { CONSOLE_VERSION, PROJECT_REPOSITORY } from "../branding.ts";
+import { SessionPanel, type SessionPanelProps } from "../chat/SessionPanel.tsx";
 import { SentinelMark } from "../components/icons.tsx";
 import { getLanguage, t } from "../i18n.ts";
 import type { SentinelMode, SentinelPageId, SentinelProjectInfo } from "../types.ts";
 import { SENTINEL_MODE_LABELS } from "../types.ts";
+import { consoleSidebarTheme } from "../ui/theme.ts";
 import { NAV_GROUPS, PAGE_TITLES, SETTINGS_CHILDREN, navLabel, type MenuEntry, type PluginNavEntry } from "./navigation.tsx";
 import { ProjectSwitcher } from "./ProjectSwitcher.tsx";
+import "./sidebar.css";
 
 const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
@@ -46,6 +48,7 @@ export interface ConsoleShellProps {
 	projects: SentinelProjectInfo[];
 	activeProject: SentinelProjectInfo | null;
 	busy: boolean;
+	sessionPanel?: SessionPanelProps;
 	onSwitchProject: (id: string) => void;
 	onCreateProject: (name: string) => Promise<string | null>;
 	onManageProjects: () => void;
@@ -86,6 +89,7 @@ export function ConsoleShell({
 	projects,
 	activeProject,
 	busy,
+	sessionPanel,
 	onSwitchProject,
 	onCreateProject,
 	onManageProjects,
@@ -97,6 +101,14 @@ export function ConsoleShell({
 	const screens = Grid.useBreakpoint();
 	const compact = screens.md === false;
 	const [drawerOpen, setDrawerOpen] = useState(false);
+	const [globalNavigation, setGlobalNavigation] = useState(false);
+	const hasConversations = page === "chat" && sessionPanel !== undefined;
+	const showConversations = hasConversations && !globalNavigation;
+	const railCollapsed = !compact && collapsed;
+
+	useEffect(() => {
+		setGlobalNavigation(false);
+	}, [page]);
 
 	const badgeFor = (entry: MenuEntry): ReactNode => {
 		if (entry.page === "settings.model" && !modelConfigured) {
@@ -156,6 +168,7 @@ export function ConsoleShell({
 	];
 
 	const onMenuClick: MenuProps["onClick"] = ({ key }) => {
+		setGlobalNavigation(false);
 		onNavigate(key as SentinelPageId);
 		setDrawerOpen(false);
 	};
@@ -221,15 +234,70 @@ export function ConsoleShell({
 		</div>
 	);
 
+	const sidebarContent = (
+		<ConfigProvider theme={consoleSidebarTheme}>
+			<Flex vertical className="console-sidebar">
+				{showConversations ? (
+					<div className="console-sidebar__switch">
+						<Tooltip title={railCollapsed ? t("全部功能") : undefined} placement="right">
+							<Button
+								type="text"
+								block
+								icon={<ArrowLeftOutlined />}
+								onClick={() => setGlobalNavigation(true)}
+								aria-label={t("全部功能")}
+							>
+								{railCollapsed ? null : t("全部功能")}
+							</Button>
+						</Tooltip>
+					</div>
+				) : null}
+				<div className="console-sidebar__navigation console-sider__scroll" hidden={showConversations}>
+					{menu}
+				</div>
+				{sessionPanel ? (
+					<div className="console-sidebar__sessions" hidden={!showConversations || railCollapsed}>
+						<SessionPanel
+							{...sessionPanel}
+							onNew={() => {
+								sessionPanel.onNew();
+								setDrawerOpen(false);
+							}}
+							onSwitch={(path) => {
+								sessionPanel.onSwitch(path);
+								setDrawerOpen(false);
+							}}
+						/>
+					</div>
+				) : null}
+				{showConversations && railCollapsed ? (
+					<div className="console-sidebar__expand">
+						<Tooltip title={t("展开侧边栏")} placement="right">
+							<Button type="text" icon={<MessageOutlined />} onClick={onToggleCollapse} aria-label={t("展开侧边栏")} />
+						</Tooltip>
+					</div>
+				) : null}
+				{showConversations && !railCollapsed ? (
+					<div className="console-sidebar__settings">
+						<Button type="text" icon={<SettingOutlined />} onClick={() => {
+							onNavigate("settings.model");
+							setDrawerOpen(false);
+						}}>{t("设置")}</Button>
+					</div>
+				) : null}
+			</Flex>
+		</ConfigProvider>
+	);
+
 	const header = (
 		<Header className="console-header">
 			<div className="console-header__left">
-				{compact ? (
+				{compact || collapsed ? (
 					<Button
 						type="text"
 						icon={<MenuUnfoldOutlined />}
-						onClick={() => setDrawerOpen(true)}
-						aria-label={t("打开导航")}
+						onClick={() => compact ? setDrawerOpen(true) : onToggleCollapse()}
+						aria-label={t(compact ? "打开导航" : "展开侧边栏")}
 					/>
 				) : null}
 				<ProjectSwitcher
@@ -276,7 +344,7 @@ export function ConsoleShell({
 					open={drawerOpen}
 					onClose={() => setDrawerOpen(false)}
 					placement="left"
-					width={264}
+					size={264}
 					closable={false}
 					rootClassName="console-drawer"
 					styles={{ body: { padding: 0, display: "flex", flexDirection: "column" } }}
@@ -288,14 +356,14 @@ export function ConsoleShell({
 							</span>
 							<span className="console-brand__title">{t("全链哨兵")}</span>
 						</div>
-						{menu}
+						{sidebarContent}
 						{siderFooter(true)}
 					</div>
 				</Drawer>
 			) : (
 				<Sider
 					className="console-sider"
-					width={232}
+					width={248}
 					collapsedWidth={64}
 					collapsed={collapsed}
 					trigger={null}
@@ -304,7 +372,7 @@ export function ConsoleShell({
 				>
 					<div className="console-sider__inner">
 						{brand(!collapsed)}
-						<div className="console-sider__scroll">{menu}</div>
+						{sidebarContent}
 						{siderFooter(!collapsed)}
 					</div>
 				</Sider>

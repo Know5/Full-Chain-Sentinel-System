@@ -1,0 +1,71 @@
+.console-page > .ui-page.doctrine-manager {
+	flex: 1;
+	min-height: 0;
+	overflow: hidden;
+}
+
+.doctrine-manager > .ui-page__body {
+	overflow-y: auto;
+	overscroll-behavior-y: contain;
+	scrollbar-gutter: stable;
+}
+
+.doctrine-manager__layout {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+	align-items: start;
+	gap: 20px;
+}
+
+.doctrine-manager__library,
+.doctrine-manager__label {
+	min-width: 0;
+}
+
+.doctrine-manager__list {
+	margin-top: 10px;
+	background: transparent;
+}
+
+.doctrine-manager__list .ant-collapse-title {
+	min-width: 0;
+}
+
+.doctrine-manager__list .ant-collapse-header {
+	align-items: center;
+}
+
+.doctrine-manager__label > .ant-space {
+	max-width: 100%;
+	overflow-wrap: anywhere;
+}
+
+.doctrine-manager__preview {
+	display: block;
+	margin-top: 4px;
+	overflow: hidden;
+	font-size: 12px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.doctrine-manager__text {
+	margin: 0;
+	color: var(--ant-color-text-secondary, #475467);
+	font: inherit;
+	font-size: 12px;
+	line-height: 1.8;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.doctrine-manager__form {
+	min-width: 0;
+}
+
+@media (max-width: 1000px) {
+	.doctrine-manager__layout {
+		grid-template-columns: minmax(0, 1fr);
+		gap: 16px;
+	}
+}

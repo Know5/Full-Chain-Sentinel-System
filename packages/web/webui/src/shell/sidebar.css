@@ -1,0 +1,95 @@
+.console-sidebar {
+	flex: 1;
+	min-height: 0;
+	color: var(--ant-color-text);
+}
+
+.console-sidebar [hidden] {
+	display: none;
+}
+
+.console-sidebar__switch {
+	flex: none;
+	padding: 4px 10px 10px;
+}
+
+.console-sidebar__switch .ant-btn {
+	justify-content: flex-start;
+}
+
+.console-sidebar__sessions {
+	display: flex;
+	flex: 1;
+	min-height: 0;
+}
+
+.console-sidebar .session-panel {
+	display: flex;
+	flex: 1;
+	width: 100%;
+	min-width: 0;
+	padding: 8px 12px 12px;
+	gap: 12px;
+	border-radius: 0;
+	background: transparent;
+	color: inherit;
+}
+
+.console-sidebar .session-panel__filters {
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.console-sidebar .session-panel__source {
+	min-width: 88px;
+}
+
+.console-sidebar .session-panel__section,
+.console-sidebar .session-panel__search-icon,
+.console-sidebar .session-row__more {
+	color: var(--ant-color-text-tertiary);
+}
+
+.console-sidebar .session-row__name {
+	color: var(--ant-color-text);
+}
+
+.console-sidebar .session-row:hover {
+	background: var(--ant-color-bg-text-hover);
+}
+
+.console-sidebar .session-row.is-active {
+	background: var(--ant-control-item-bg-active);
+}
+
+.console-sidebar .session-row.is-active .session-row__name {
+	color: var(--ant-color-text);
+}
+
+.console-sidebar .session-row__more {
+	opacity: 1;
+}
+
+.console-sidebar .session-row:focus-visible {
+	box-shadow: inset 0 0 0 2px var(--ant-color-primary);
+}
+
+.console-sidebar__settings {
+	flex: none;
+	padding: 4px 12px 12px;
+}
+
+.console-sidebar__expand {
+	display: flex;
+	flex: 1;
+	justify-content: center;
+	align-items: flex-start;
+}
+
+@media (max-width: 575px) {
+	.console-header__left > .ant-tag,
+	.console-header__divider,
+	.console-header__right .ant-badge-status-text {
+		display: none;
+	}
+}

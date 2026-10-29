@@ -1,0 +1,229 @@
+/* Use the same full-width content area as the toolbar and composer. */
+.chat-main .transcript {
+	padding-inline: 4px;
+	scrollbar-gutter: stable both-edges;
+}
+
+.chat-main .transcript > * {
+	max-width: none;
+	margin-inline: 0;
+}
+
+/* Direct flex children keep long commands from squeezing the timestamp. */
+.run-body > .steprow,
+.entry__body > .steprow,
+.entry__body > .foldrow,
+.run-body > .foldrow {
+	position: relative;
+	min-width: 0;
+	max-width: 100%;
+	background: var(--card);
+}
+
+.steprow :is(.ant-collapse-item, .ant-collapse-panel, .ant-collapse-body),
+.foldrow :is(.ant-collapse-item, .ant-collapse-panel, .ant-collapse-body) {
+	box-sizing: border-box;
+	min-width: 0;
+	max-width: 100%;
+}
+
+.run-body .toolcard,
+.toolcard.is-open > .toolcard__panel {
+	min-width: 0;
+	max-width: 100%;
+}
+
+.toolcard.is-open > .toolcard__panel {
+	flex: 1;
+}
+
+.toolcard__panel .ant-card-head-wrapper {
+	flex-wrap: wrap;
+	gap: 4px;
+}
+
+.steprow .ant-collapse-body,
+.foldrow .ant-collapse-body {
+	padding: 0 8px 6px 30px !important;
+}
+
+.foldrow .ant-collapse-title {
+	min-width: 0;
+}
+
+.run-body > .steprow + .steprow {
+	margin-top: 2px;
+}
+
+.steprow .ant-collapse-title {
+	min-width: 0;
+	flex: 1;
+}
+
+.steprow .steprow__label {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 28px;
+	width: 100%;
+	min-width: 0;
+}
+
+.steprow .steprow__time {
+	flex: 0 0 8ch;
+	white-space: nowrap;
+	font-family: var(--mono, ui-monospace, monospace);
+}
+
+.steprow .steprow__tool {
+	flex: none;
+	max-width: 160px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.steprow .steprow__arg {
+	display: block;
+	flex: 1 1 0;
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.steprow .steprow__dur,
+.steprow .steprow__label > .ant-btn {
+	flex: none;
+	white-space: nowrap;
+}
+
+.steprow .steprow__details {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	gap: 12px;
+	min-width: 0;
+	padding: 4px 0 8px;
+}
+
+.steprow__details > div {
+	min-width: 0;
+}
+
+.steprow .steprow__details .steprow__pre {
+	margin-top: 4px;
+}
+
+.steprow .steprow__pre,
+.foldrow .foldrow__pre,
+.toolcard .toolcard__pre,
+.entry__body .thinking pre {
+	box-sizing: border-box;
+	min-width: 0;
+	max-width: 100%;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.entry--operator .entry__footer {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 12px;
+	min-width: 0;
+	margin-top: 2px;
+}
+
+.entry__footer .fork-button {
+	flex: none;
+	margin: 0;
+	height: 22px;
+	padding: 0 4px;
+	font-size: 11px;
+	color: var(--dim);
+}
+
+.run-body > .supervisor-advice-row,
+.supervisor-advice-row {
+	position: relative;
+	min-width: 0;
+	margin: 8px 0 8px 30px;
+	padding: 8px 12px;
+	border: 0;
+	border-left: 2px solid var(--ant-color-warning, #d97706);
+	border-radius: 0 6px 6px 0;
+	background: var(--ant-color-warning-bg, #fffbe6);
+}
+
+.supervisor-advice-row__head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 12px;
+	cursor: pointer;
+	list-style: none;
+}
+
+.supervisor-advice-row__head::-webkit-details-marker {
+	display: none;
+}
+
+.supervisor-advice-row__head > :not(.supervisor-advice-row__preview) {
+	flex: none;
+}
+
+.supervisor-advice-row__preview {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--dim);
+}
+
+.supervisor-advice-row__toggle {
+	width: 6px;
+	height: 6px;
+	margin-inline: 4px;
+	border-right: 1px solid currentColor;
+	border-bottom: 1px solid currentColor;
+	transform: rotate(45deg);
+}
+
+.supervisor-advice-row[open] .supervisor-advice-row__toggle {
+	transform: rotate(225deg);
+}
+
+.supervisor-advice-row__head > .anticon {
+	color: var(--ant-color-warning, #d97706);
+}
+
+.supervisor-advice-row > pre {
+	margin: 8px 0 0;
+	max-height: 240px;
+	overflow: auto;
+	font-size: 12px;
+}
+
+@media (max-width: 575px) {
+	.supervisor-advice-row__head {
+		flex-wrap: wrap;
+	}
+
+	.supervisor-advice-row__preview {
+		flex-basis: calc(100% - 24px);
+		order: 1;
+	}
+
+	.supervisor-advice-row__toggle {
+		margin-left: auto;
+	}
+
+	.steprow .steprow__label {
+		gap: 6px;
+	}
+
+	.steprow .steprow__tool {
+		max-width: 92px;
+	}
+}

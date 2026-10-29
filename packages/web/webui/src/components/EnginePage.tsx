@@ -51,6 +51,7 @@ import type {
 	SentinelPresetView,
 	SentinelSubagentEvent,
 } from "../types.ts";
+import "./doctrine-manager.css";
 
 const { Text, Title } = Typography;
 
@@ -1942,33 +1943,36 @@ function DoctrineManager(props: {
 		setText("");
 	};
 	return (
-		<div className="doctrinehub">
-			<div className="doctrinehub-head">
-				<div>
-					<Title level={3} className="doctrinehub-title">
-						{t("指挥思路")}
-					</Title>
-					<Text type="secondary">{t("命名的文本模板，创建工程时多选叠加注入指挥官")}</Text>
-				</div>
-				<Button onClick={props.onClose}>{t("返回")}</Button>
-			</div>
-
-			{props.doctrines.length === 0 ? (
-				<Alert type="info" showIcon className="ui-page__alert" title={t("还没有指挥思路。在下方新增一条。")} />
-			) : (
-				<Space orientation="vertical" size={12} className="doctrinehub-list">
-					{props.doctrines.map((doctrine) => (
-						<Card
-							key={doctrine.id}
-							size="small"
-							title={
-								<Space size={8} wrap>
-									<Text strong>{doctrine.name}</Text>
-									{doctrine.builtin ? <Tag variant="filled">{t("内置")}</Tag> : null}
-								</Space>
-							}
-							extra={
-								doctrine.builtin ? null : (
+		<Page
+			className="doctrine-manager"
+			title={t("指挥思路")}
+			description={t("命名的文本模板，创建工程时多选叠加注入指挥官")}
+			extra={<Button onClick={props.onClose}>{t("返回")}</Button>}
+		>
+			<div className="doctrine-manager__layout">
+				<section className="doctrine-manager__library">
+					<Text strong>
+						{t("指挥思路")} <Text type="secondary">{props.doctrines.length}</Text>
+					</Text>
+					{props.doctrines.length === 0 ? (
+						<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t("还没有指挥思路")} />
+					) : (
+						<Collapse
+							className="doctrine-manager__list"
+							items={props.doctrines.map((doctrine) => ({
+								key: doctrine.id,
+								label: (
+									<div className="doctrine-manager__label">
+										<Space size={8} wrap>
+											<Text strong>{doctrine.name}</Text>
+											{doctrine.builtin ? <Tag variant="filled">{t("内置")}</Tag> : null}
+										</Space>
+										<Text type="secondary" className="doctrine-manager__preview">
+											{doctrine.text.split("\n")[0]}
+										</Text>
+									</div>
+								),
+								extra: doctrine.builtin ? null : (
 									<Popconfirm
 										title={t("删除思路")}
 										description={t("删除思路「{name}」？", { name: doctrine.name })}
@@ -1977,36 +1981,30 @@ function DoctrineManager(props: {
 										cancelText={t("取消")}
 										onConfirm={() => props.onDelete(doctrine.id)}
 									>
-										<Button size="small" type="link" danger>
+										<Button size="small" type="text" danger onClick={(event) => event.stopPropagation()}>
 											{t("删除")}
 										</Button>
 									</Popconfirm>
-								)
-							}
-						>
-							<pre className="doctrinehub-pre">{doctrine.text}</pre>
-						</Card>
-					))}
-				</Space>
-			)}
-
-			<Card size="small" title={t("新增思路")}>
-				<Form layout="vertical" requiredMark={false} onFinish={submit}>
-					<Form.Item label={t("思路名称")} required>
-						<Input value={name} onChange={(event) => setName(event.target.value)} placeholder={t("思路名称")} />
-					</Form.Item>
-					<Form.Item label={t("思路内容（纯文本，注入指挥官系统指令）")} required>
-						<Input.TextArea
-							rows={6}
-							value={text}
-							onChange={(event) => setText(event.target.value)}
+								),
+								children: <pre className="doctrine-manager__text">{doctrine.text}</pre>,
+							}))}
 						/>
-					</Form.Item>
-					<Button type="primary" htmlType="submit" disabled={!name.trim() || !text.trim()}>
-						{t("保存")}
-					</Button>
-				</Form>
-			</Card>
-		</div>
+					)}
+				</section>
+				<Card className="doctrine-manager__form" size="small" title={t("新增思路")}>
+					<Form layout="vertical" requiredMark={false} onFinish={submit}>
+						<Form.Item label={t("思路名称")} required>
+							<Input value={name} onChange={(event) => setName(event.target.value)} placeholder={t("思路名称")} />
+						</Form.Item>
+						<Form.Item label={t("思路内容（纯文本，注入指挥官系统指令）")} required>
+							<Input.TextArea rows={6} value={text} onChange={(event) => setText(event.target.value)} />
+						</Form.Item>
+						<Button type="primary" htmlType="submit" disabled={!name.trim() || !text.trim()}>
+							{t("保存")}
+						</Button>
+					</Form>
+				</Card>
+			</div>
+		</Page>
 	);
 }

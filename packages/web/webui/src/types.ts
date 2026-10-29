@@ -19,6 +19,7 @@ export const SENTINEL_MODE_LABELS: Record<SentinelMode, string> = {
  * between them; 文件 and 子代理 are overlays opened from the chat page.
  */
 export type SentinelPageId =
+	| "dashboard"
 	| "chat"
 	| "projects"
 	| "proxies"

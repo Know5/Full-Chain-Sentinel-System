@@ -1,0 +1,56 @@
+.metric-strip {
+	display: flex;
+	flex: none;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 6px 16px;
+	padding: 8px 0;
+	border-bottom: 1px solid var(--console-border);
+}
+
+.metric-strip__values {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px 18px;
+	min-width: 0;
+	margin: 0;
+}
+
+.metric-strip__item {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	font-size: 12px;
+	line-height: 22px;
+}
+
+.metric-strip__item dt,
+.metric-strip__note {
+	color: var(--ant-color-text-tertiary, #667085);
+}
+
+.metric-strip__value {
+	margin: 0;
+	color: var(--ant-color-text, #101828);
+	font-size: 14px;
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	overflow-wrap: anywhere;
+}
+
+.metric-strip__value.is-success {
+	color: var(--ant-color-success, #16a34a);
+}
+
+.metric-strip__value.is-warning {
+	color: var(--ant-color-warning, #d97706);
+}
+
+.metric-strip__value.is-danger {
+	color: var(--ant-color-error, #dc2626);
+}
+
+.metric-strip__note {
+	margin-left: auto;
+	font-size: 12px;
+}

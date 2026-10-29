@@ -1,18 +1,14 @@
 /**
- * The conversation rail of the chat page.
- *
- * Sessions used to grow inside the global sider, which made the navigation
- * change shape every time a task started. A conversation belongs to the chat
- * workspace, so it lives here: one filterable list, engine conversations
- * grouped under their engine, and the row actions behind a menu instead of a
- * hover card.
+ * Conversations shown in the console's sidebar, grouped by engine, with
+ * search, filters, and per-session actions.
  */
 
 import { DeleteOutlined, EditOutlined, MoreOutlined, PlusOutlined, SearchOutlined } from "@ant-design/icons";
-import { App, Badge, Button, Dropdown, Empty, Input, Modal, Segmented, Select, Tooltip, Typography } from "antd";
+import { App, Badge, Button, ConfigProvider, Dropdown, Empty, Input, Modal, Segmented, Select, Tooltip, Typography } from "antd";
 import type { MenuProps } from "antd";
 import { useMemo, useState } from "react";
 import { t } from "../i18n.ts";
+import { consoleTheme } from "../ui/theme.ts";
 import type { SentinelEngine, SentinelSessionStatus, SessionInfoView } from "../types.ts";
 import { SESSION_STATUS_LABELS } from "../components/SessionStatusControl.tsx";
 
@@ -190,7 +186,7 @@ export function SessionPanel({
 				aria-current={active ? "true" : undefined}
 				onClick={() => onSwitch(session.path)}
 				onKeyDown={(event) => {
-					if (event.key === "Enter" || event.key === " ") {
+					if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
 						event.preventDefault();
 						onSwitch(session.path);
 					}
@@ -215,7 +211,7 @@ export function SessionPanel({
 	};
 
 	return (
-		<aside className="session-panel">
+		<aside className="session-panel" aria-label={t("会话")}>
 			<div className="session-panel__head">
 				<Text strong className="session-panel__title">
 					{t("会话")}
@@ -237,6 +233,7 @@ export function SessionPanel({
 				onChange={(event) => setQuery(event.target.value)}
 				prefix={<SearchOutlined className="session-panel__search-icon" />}
 				placeholder={t("搜索会话")}
+				aria-label={t("搜索会话")}
 			/>
 
 			<div className="session-panel__filters">
@@ -250,6 +247,7 @@ export function SessionPanel({
 					]}
 				/>
 				<Select
+					aria-label={t("全部来源")}
 					size="small"
 					value={sourceFilter}
 					onChange={(value) => setSource(value as SourceFilter)}
@@ -281,34 +279,36 @@ export function SessionPanel({
 				))}
 			</div>
 
-			<Modal
-				title={t("重命名会话")}
-				open={renaming !== null}
-				okText={t("保存")}
-				cancelText={t("取消")}
-				onCancel={() => setRenaming(null)}
-				destroyOnHidden
-				onOk={() => {
-					if (!renaming) return;
-					const name = renaming.name.trim();
-					if (!name) return;
-					onRename(renaming.path, name);
-					setRenaming(null);
-				}}
-			>
-				<Input
-					autoFocus
-					value={renaming?.name ?? ""}
-					onChange={(event) => setRenaming((prev) => (prev ? { ...prev, name: event.target.value } : prev))}
-					onPressEnter={() => {
+			<ConfigProvider theme={consoleTheme}>
+				<Modal
+					title={t("重命名会话")}
+					open={renaming !== null}
+					okText={t("保存")}
+					cancelText={t("取消")}
+					onCancel={() => setRenaming(null)}
+					destroyOnHidden
+					onOk={() => {
 						if (!renaming) return;
 						const name = renaming.name.trim();
 						if (!name) return;
 						onRename(renaming.path, name);
 						setRenaming(null);
 					}}
-				/>
-			</Modal>
+				>
+					<Input
+						autoFocus
+						value={renaming?.name ?? ""}
+						onChange={(event) => setRenaming((prev) => (prev ? { ...prev, name: event.target.value } : prev))}
+						onPressEnter={() => {
+							if (!renaming) return;
+							const name = renaming.name.trim();
+							if (!name) return;
+							onRename(renaming.path, name);
+							setRenaming(null);
+						}}
+					/>
+				</Modal>
+			</ConfigProvider>
 		</aside>
 	);
 }

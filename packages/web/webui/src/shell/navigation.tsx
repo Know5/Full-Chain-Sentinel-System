@@ -20,6 +20,7 @@ import {
 	CloudDownloadOutlined,
 	ContainerOutlined,
 	DatabaseOutlined,
+	DashboardOutlined,
 	EyeOutlined,
 	FileSearchOutlined,
 	GlobalOutlined,
@@ -57,6 +58,7 @@ export const NAV_GROUPS: { group: string; items: MenuEntry[] }[] = [
 	{
 		group: "工作台",
 		items: [
+			{ page: "dashboard", label: t("项目概览"), icon: DashboardOutlined },
 			{ page: "chat", label: t("对话"), icon: MessageOutlined },
 			{ page: "projects", label: t("项目"), icon: AppstoreOutlined },
 			{ page: "vulns", label: t("漏洞"), icon: BugOutlined },
