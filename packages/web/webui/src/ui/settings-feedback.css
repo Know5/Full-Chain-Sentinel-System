@@ -1,0 +1,68 @@
+.settings-feedback {
+	margin: 10px 0;
+	padding: 8px 10px;
+	border-radius: var(--ant-border-radius-sm, 6px);
+	background: var(--ant-color-fill-quaternary, #f8fafc);
+	color: var(--ant-color-text-secondary, #475467);
+	font-size: 12px;
+	line-height: 1.6;
+}
+
+.settings-feedback__line {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+}
+
+.settings-feedback__line > .anticon {
+	flex: none;
+	margin-top: 3px;
+	font-size: 14px;
+}
+
+.settings-feedback--error .settings-feedback__line > .anticon {
+	color: var(--ant-color-error, #dc2626);
+}
+
+.settings-feedback--success .settings-feedback__line > .anticon {
+	color: var(--ant-color-success, #16a34a);
+}
+
+.settings-feedback--info .settings-feedback__line > .anticon {
+	color: var(--ant-color-info, #2563eb);
+}
+
+.settings-feedback__copy {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.settings-feedback__title {
+	margin-inline-end: 8px;
+	color: var(--ant-color-text, #101828);
+	font-weight: 500;
+}
+
+.settings-feedback__details {
+	margin: 5px 0 0 22px;
+}
+
+.settings-feedback__details summary {
+	width: fit-content;
+	cursor: pointer;
+	color: var(--ant-color-text-tertiary, #667085);
+}
+
+.settings-feedback__details pre {
+	max-height: 220px;
+	margin: 8px 0 0;
+	padding: 8px;
+	overflow: auto;
+	border: 1px solid var(--ant-color-border-secondary, #eef1f5);
+	border-radius: var(--ant-border-radius-sm, 6px);
+	background: var(--ant-color-bg-container, #fff);
+	color: var(--ant-color-text-secondary, #475467);
+	font: 12px/1.6 var(--mono, ui-monospace, monospace);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}

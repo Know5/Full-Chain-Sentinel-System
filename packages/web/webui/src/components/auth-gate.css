@@ -1,0 +1,241 @@
+.auth-screen {
+	position: fixed;
+	inset: 0;
+	z-index: 1000;
+	display: flex;
+	flex-direction: column;
+	overflow: auto;
+	background: #0b1322;
+	color: #e2e8f0;
+	font-family: var(--ant-font-family, var(--sans));
+}
+
+.auth-screen__visual {
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+}
+
+.auth-screen__visual::after {
+	position: absolute;
+	inset: 0;
+	content: "";
+	pointer-events: none;
+	background:
+		linear-gradient(0deg, #0b1322f0, transparent 38%),
+		linear-gradient(90deg, #0b132218 25%, #0b132260 58%, #0b1322ed 100%);
+}
+
+.auth-screen__header {
+	position: relative;
+	z-index: 1;
+	display: flex;
+	flex: none;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	min-height: 72px;
+	padding: 18px clamp(24px, 5vw, 72px);
+	pointer-events: none;
+}
+
+.auth-screen__header > * {
+	pointer-events: auto;
+}
+
+.auth-screen__brand {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-width: 0;
+}
+
+.auth-screen__mark {
+	display: grid;
+	flex: none;
+	place-items: center;
+	width: 32px;
+	height: 32px;
+	border: 1px solid #31405a;
+	border-radius: 8px;
+	background: #19283e;
+	color: #b4cef8;
+}
+
+.auth-screen__name {
+	font-size: 16px;
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.auth-screen .auth-screen__language {
+	flex: none;
+	border-color: #31405a;
+	border-radius: 6px;
+	color: #cbd5e1;
+}
+
+.auth-screen__main {
+	position: relative;
+	display: grid;
+	flex: 1;
+	grid-template-columns: minmax(0, 1fr) 400px;
+	align-items: center;
+	gap: clamp(32px, 6vw, 88px);
+	width: 100%;
+	max-width: 1440px;
+	margin-inline: auto;
+	padding: 48px clamp(24px, 5vw, 72px) 56px;
+	pointer-events: none;
+}
+
+.auth-screen__main > * {
+	pointer-events: auto;
+}
+
+.auth-screen__intro {
+	align-self: end;
+	padding-bottom: 12px;
+}
+
+.auth-screen__eyebrow {
+	color: #9aafca;
+	font-size: 11px;
+	letter-spacing: 0.18em;
+}
+
+.auth-screen__intro h2 {
+	margin: 12px 0 10px;
+	color: #f1f5f9;
+	font-size: clamp(28px, 3vw, 40px);
+	font-weight: 600;
+	line-height: 1.3;
+}
+
+.auth-screen__intro p {
+	margin: 0;
+	color: #a5b4c9;
+	font-size: 14px;
+}
+
+.auth-screen__content {
+	width: 400px;
+	max-width: 100%;
+	min-width: 0;
+}
+
+.auth-screen__card {
+	padding: 28px;
+	border: 1px solid #8aa9cf29;
+	border-radius: 12px;
+	background: #0b1322c9;
+	backdrop-filter: blur(18px);
+}
+
+.auth-screen .auth-screen__title {
+	margin: 0 0 6px;
+	font-size: 20px;
+	line-height: 1.5;
+	font-weight: 600;
+}
+
+.auth-screen__form {
+	margin-top: 24px;
+}
+
+.auth-screen__form .ant-form-item {
+	margin-bottom: 18px;
+}
+
+.auth-screen__form .ant-form-item-label {
+	padding-bottom: 6px;
+}
+
+.auth-screen__form .ant-input,
+.auth-screen__form .ant-input-affix-wrapper {
+	min-height: 36px;
+}
+
+.auth-screen__form .ant-input-affix-wrapper .ant-input {
+	min-height: 0;
+}
+
+.auth-screen__error {
+	margin-bottom: 16px;
+	overflow-wrap: anywhere;
+}
+
+.auth-screen .auth-screen__note {
+	display: block;
+	margin-top: 16px;
+	text-align: center;
+	font-size: 12px;
+}
+
+.auth-screen__footer {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 10px 24px;
+	margin-top: 24px;
+	font-size: 12px;
+}
+
+.auth-screen__links {
+	display: flex;
+	gap: 16px;
+}
+
+.auth-screen__footer .ant-typography,
+.auth-screen__links a.ant-typography {
+	color: #9aafca;
+	font-size: inherit;
+}
+
+.auth-screen__links a.ant-typography:hover {
+	color: #fff;
+}
+
+@media (max-width: 800px) {
+	.auth-screen__main {
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		gap: 24px;
+		padding: 24px;
+	}
+
+	.auth-screen__content {
+		order: -1;
+	}
+
+	.auth-screen__intro {
+		align-self: center;
+		padding: 0;
+	}
+
+	.auth-screen__eyebrow,
+	.auth-screen__intro h2,
+	.auth-screen__intro p {
+		display: none;
+	}
+
+	.auth-screen__footer {
+		justify-content: center;
+		margin: 0;
+	}
+}
+
+@media (max-width: 575px) {
+	.auth-screen__header {
+		padding-inline: 16px;
+	}
+
+	.auth-screen__main {
+		padding: 16px 16px 24px;
+	}
+
+	.auth-screen__card {
+		padding: 24px;
+	}
+}

@@ -12,10 +12,18 @@
  * container's current state.
  */
 
-import { DeleteOutlined, GlobalOutlined, PlayCircleOutlined, PlusOutlined, ReloadOutlined, StopOutlined } from "@ant-design/icons";
+import {
+	DeleteOutlined,
+	EllipsisOutlined,
+	GlobalOutlined,
+	PlayCircleOutlined,
+	PlusOutlined,
+	ReloadOutlined,
+	StopOutlined,
+} from "@ant-design/icons";
 import { ProTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
-import { Alert, App, Badge, Button, Form, Input, Modal, Radio, Space, Tag, Tooltip, Typography } from "antd";
+import { Alert, App, Badge, Button, Dropdown, Form, Input, Modal, Radio, Space, Tag, Tooltip, Typography } from "antd";
 
 import { useState } from "react";
 import { t } from "../i18n.ts";
@@ -240,15 +248,15 @@ export function ProjectsPage({
 		{
 			title: t("操作"),
 			key: "actions",
-			width: 420,
+			width: 128,
+			align: "right",
 			render: (_, project) => {
 				const running = project.state === "running";
 				return (
-					<Space size={4}>
+					<Space size={4} wrap={false}>
 						{running ? (
 							<Button
 								size="small"
-								danger
 								type="text"
 								icon={<StopOutlined />}
 								disabled={busy || actionBusy}
@@ -260,7 +268,7 @@ export function ProjectsPage({
 						) : (
 							<Button
 								size="small"
-								type="primary"
+								type="text"
 								icon={<PlayCircleOutlined />}
 								disabled={busy || actionBusy}
 								title={stateHint(project)}
@@ -269,25 +277,35 @@ export function ProjectsPage({
 								{t("启动")}
 							</Button>
 						)}
-						<Button
-							size="small"
-							icon={<ReloadOutlined />}
+						<Dropdown
+							trigger={["click"]}
+							placement="bottomRight"
 							disabled={busy || actionBusy}
-							onClick={() => recreate(project)}
+							menu={{
+								items: [
+									{ key: "recreate", label: t("重建容器"), icon: <ReloadOutlined />, onClick: () => recreate(project) },
+									{ key: "proxy", label: t("代理设置"), icon: <GlobalOutlined />, onClick: () => setProxyFor(project) },
+									{ type: "divider" },
+									{
+										key: "delete",
+										label: t("删除项目"),
+										icon: <DeleteOutlined />,
+										danger: true,
+										onClick: () => openDelete(project),
+									},
+								],
+							}}
 						>
-							{t("重建容器")}
-						</Button>
-						<Button size="small" icon={<GlobalOutlined />} onClick={() => setProxyFor(project)}>
-							{t("代理设置")}
-						</Button>
-						<Button
-							size="small"
-							danger
-							icon={<DeleteOutlined />}
-							onClick={() => openDelete(project)}
-						>
-							{t("删除项目")}
-						</Button>
+							<Button
+								size="small"
+								type="text"
+								icon={<EllipsisOutlined />}
+								disabled={busy || actionBusy}
+								aria-label={t("{name} 的更多操作", { name: project.name })}
+								aria-haspopup="menu"
+								title={t("更多操作")}
+							/>
+						</Dropdown>
 					</Space>
 				);
 			},
@@ -315,7 +333,7 @@ export function ProjectsPage({
 					showIcon
 					closable
 					className="ui-page__alert"
-					message={error}
+					title={error}
 					onClose={() => setError(null)}
 				/>
 			) : null}
@@ -418,7 +436,7 @@ export function ProjectsPage({
 						<Alert
 							type="warning"
 							showIcon
-							message={t("删除 {name} 不可恢复", { name: deleteFor.name })}
+							title={t("删除 {name} 不可恢复", { name: deleteFor.name })}
 							description={t("会话 {sessions} 个、漏洞 {vulns} 条会随项目数据一起消失。", {
 								sessions: deleteFor.sessionCount ?? 0,
 								vulns: deleteFor.vulnCount ?? 0,

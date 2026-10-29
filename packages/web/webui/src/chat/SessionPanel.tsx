@@ -3,8 +3,15 @@
  * search, filters, and per-session actions.
  */
 
-import { DeleteOutlined, EditOutlined, MoreOutlined, PlusOutlined, SearchOutlined } from "@ant-design/icons";
-import { App, Badge, Button, ConfigProvider, Dropdown, Empty, Input, Modal, Segmented, Select, Tooltip, Typography } from "antd";
+import {
+	DeleteOutlined,
+	EditOutlined,
+	FilterOutlined,
+	MoreOutlined,
+	PlusOutlined,
+	SearchOutlined,
+} from "@ant-design/icons";
+import { App, Badge, Button, ConfigProvider, Dropdown, Empty, Input, Modal, Tooltip, Typography } from "antd";
 import type { MenuProps } from "antd";
 import { useMemo, useState } from "react";
 import { t } from "../i18n.ts";
@@ -38,7 +45,10 @@ function readSourceFilter(): SourceFilter {
 }
 
 /** The dot says what the session is doing; the menu says what the operator decided. */
-function dotStatus(session: SessionInfoView, running: boolean): "success" | "processing" | "warning" | "default" | "error" {
+function dotStatus(
+	session: SessionInfoView,
+	running: boolean,
+): "success" | "processing" | "warning" | "default" | "error" {
 	if (session.engine) {
 		switch (session.engine.taskStatus) {
 			case "running":
@@ -217,53 +227,67 @@ export function SessionPanel({
 					{t("会话")}
 				</Text>
 				<Text type="secondary" className="session-panel__count">
-					{visible.length === sessions.length
-						? sessions.length
-						: `${visible.length} / ${sessions.length}`}
+					{visible.length === sessions.length ? sessions.length : `${visible.length} / ${sessions.length}`}
 				</Text>
 				<Tooltip title={t("新建会话")}>
 					<Button type="primary" size="small" icon={<PlusOutlined />} onClick={onNew} aria-label={t("新建会话")} />
 				</Tooltip>
 			</div>
 
-			<Input
-				size="small"
-				allowClear
-				value={query}
-				onChange={(event) => setQuery(event.target.value)}
-				prefix={<SearchOutlined className="session-panel__search-icon" />}
-				placeholder={t("搜索会话")}
-				aria-label={t("搜索会话")}
-			/>
-
-			<div className="session-panel__filters">
-				<Segmented
-					size="small"
-					value={statusFilter}
-					onChange={(value) => setStatus(value as StatusFilter)}
-					options={[
-						{ label: t("全部"), value: "all" },
-						{ label: t("未完成"), value: "open" },
-					]}
+			<div className="session-panel__tools">
+				<Input
+					allowClear
+					value={query}
+					onChange={(event) => setQuery(event.target.value)}
+					prefix={<SearchOutlined className="session-panel__search-icon" />}
+					placeholder={t("搜索会话")}
+					aria-label={t("搜索会话")}
 				/>
-				<Select
-					aria-label={t("全部来源")}
-					size="small"
-					value={sourceFilter}
-					onChange={(value) => setSource(value as SourceFilter)}
-					options={[
-						{ label: t("全部来源"), value: "all" },
-						{ label: t("对话"), value: "chat" },
-						{ label: t("工程"), value: "engine" },
-					]}
-					className="session-panel__source"
-				/>
+				<Dropdown
+					trigger={["click"]}
+					menu={{
+						selectable: true,
+						selectedKeys: [`status:${statusFilter}`, `source:${sourceFilter}`],
+						items: [
+							{
+								type: "group",
+								label: t("状态"),
+								children: [
+									{ key: "status:all", label: t("全部") },
+									{ key: "status:open", label: t("未完成") },
+								],
+							},
+							{
+								type: "group",
+								label: t("来源"),
+								children: [
+									{ key: "source:all", label: t("全部来源") },
+									{ key: "source:chat", label: t("对话") },
+									{ key: "source:engine", label: t("工程") },
+								],
+							},
+						],
+						onClick: ({ key }) => {
+							if (key === "status:all" || key === "status:open") setStatus(key === "status:open" ? "open" : "all");
+							if (key === "source:all" || key === "source:chat" || key === "source:engine") {
+								setSource(key === "source:chat" ? "chat" : key === "source:engine" ? "engine" : "all");
+							}
+						},
+					}}
+				>
+					<Badge dot={statusFilter !== "all" || sourceFilter !== "all"}>
+						<Button
+							className="session-panel__filter"
+							icon={<FilterOutlined />}
+							aria-label={t("筛选会话")}
+							title={t("筛选会话")}
+						/>
+					</Badge>
+				</Dropdown>
 			</div>
 
 			<div className="session-panel__list">
-				{visible.length === 0 ? (
-					<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t("没有匹配的会话")} />
-				) : null}
+				{visible.length === 0 ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t("没有匹配的会话")} /> : null}
 				{chatSessions.length > 0 && engineGroups.length > 0 ? (
 					<div className="session-panel__section">{t("对话")}</div>
 				) : null}

@@ -1,0 +1,137 @@
+.poc-tags-cell {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	min-width: 0;
+	max-width: 100%;
+	white-space: nowrap;
+}
+
+.poc-tags-cell .poc-tags-cell__first {
+	min-width: 0;
+	max-width: 150px;
+	margin: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.poc-tags-cell .poc-tags-cell__more {
+	flex: none;
+	padding-inline: 5px;
+	color: var(--ant-color-text-secondary);
+	font-variant-numeric: tabular-nums;
+}
+
+.poc-tags-popover {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	max-width: min(360px, 75vw);
+}
+
+.poc-tags-popover .ant-tag,
+.poc-detail__tags .ant-tag {
+	max-width: 100%;
+	margin: 0;
+	white-space: normal;
+	overflow-wrap: anywhere;
+}
+
+.poc-detail {
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 18px;
+}
+
+.poc-detail__intro h2 {
+	margin: 0 0 5px;
+	font-size: 18px;
+	line-height: 1.5;
+	font-weight: 600;
+	overflow-wrap: anywhere;
+}
+
+.poc-detail__id {
+	font: 12px/1.6 var(--mono, ui-monospace, monospace);
+	overflow-wrap: anywhere;
+}
+
+.poc-detail__meta {
+	display: grid;
+	gap: 10px;
+	margin: 0;
+	padding: 0 0 18px;
+	border-bottom: 1px solid var(--ant-color-border-secondary);
+	font-size: 12px;
+}
+
+.poc-detail__meta > div {
+	display: grid;
+	grid-template-columns: 64px minmax(0, 1fr);
+	gap: 12px;
+}
+
+.poc-detail__meta dt {
+	color: var(--ant-color-text-tertiary);
+	font-weight: 400;
+}
+
+.poc-detail__meta dd {
+	min-width: 0;
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+
+.poc-detail__tags {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.poc-detail__footer,
+.poc-source__toolbar {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 12px;
+}
+
+.poc-source {
+	min-width: 0;
+	border: 1px solid var(--ant-color-border-secondary);
+	border-radius: var(--ant-border-radius, 8px);
+	overflow: hidden;
+}
+
+.poc-source__toolbar {
+	padding: 9px 12px;
+	border-bottom: 1px solid var(--ant-color-border-secondary);
+	font-weight: 500;
+}
+
+.poc-source__toolbar .ant-typography {
+	margin-left: 8px;
+	font-size: 11px;
+	font-weight: 400;
+}
+
+.poc-source__code {
+	margin: 0;
+	padding: 16px;
+	background: var(--ant-color-fill-quaternary);
+	color: var(--ant-color-text);
+	font: 12px/1.8 var(--mono, ui-monospace, monospace);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	tab-size: 2;
+}
+
+.poc-source__loading {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	padding: 32px 12px;
+}

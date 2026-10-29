@@ -2,8 +2,7 @@
  * The POC library page: the operator's Nuclei template center.
  *
  * The library is a ledger: the filters are one row, the table is the page, and
- * a template's yaml opens inside its own row instead of in a modal. That keeps
- * the reader in the list while inspecting a template.
+ * a template's yaml opens in a detail drawer beside the list.
  *
  * Import and the one-click official sync are the only write actions here, and
  * both belong to the operator. The agent never gets an import or delete tool —
@@ -15,7 +14,7 @@
 
 import { CopyOutlined, DeleteOutlined, DownloadOutlined, SearchOutlined, UploadOutlined } from "@ant-design/icons";
 import { ProTable } from "@ant-design/pro-components";
-import { Alert, Button, Drawer, Input, Popconfirm, Select, Space, Tag, Tooltip, Typography } from "antd";
+import { Alert, Button, Drawer, Input, Popconfirm, Popover, Select, Space, Spin, Tag, Tooltip, Typography } from "antd";
 import type { ProColumns } from "@ant-design/pro-components";
 import { useRef, useState } from "react";
 import { t } from "../i18n.ts";
@@ -31,6 +30,7 @@ import type {
 } from "../types.ts";
 import { SENTINEL_VULN_SEVERITIES, SENTINEL_VULN_SEVERITY_LABELS } from "../types.ts";
 import { Page } from "../ui/Page.tsx";
+import "./poc-library.css";
 
 const { Text } = Typography;
 
@@ -100,7 +100,7 @@ export function PocPage({
 	onFiltersChange(filters: SentinelPocFilters): void;
 	/** Turn to another page of the current filter. */
 	onPageChange(page: number): void;
-	/** Fetch one template's full yaml for the row being expanded. */
+	/** Fetch one template's full yaml for the detail drawer. */
 	onOpen(id: string): void;
 	onImport(files: File[]): void;
 	onDelete(id: string): void;
@@ -124,16 +124,6 @@ export function PocPage({
 			...(tag.trim() ? { tag: tag.trim() } : {}),
 			...patch,
 		});
-	};
-
-	/** Open a row: the yaml arrives asynchronously, so the row says it is loading. */
-	const toggleRow = (id: string): void => {
-		if (openId === id) {
-			setOpenId(null);
-			return;
-		}
-		setOpenId(id);
-		onOpen(id);
 	};
 
 	const columns: ProColumns<SentinelPocSummary>[] = [
@@ -172,20 +162,43 @@ export function PocPage({
 			dataIndex: "tags",
 			key: "tags",
 			width: 220,
-			render: (_, item) => (
-				<Space size={4} wrap>
-					{item.tags.slice(0, 3).map((value) => (
-						<Tag key={value} variant="filled">
-							{value}
-						</Tag>
-					))}
-					{item.tags.length > 3 ? (
-						<Tooltip title={item.tags.join(", ")}>
-							<Tag variant="filled">+{item.tags.length - 3}</Tag>
+			render: (_, item) =>
+				item.tags.length > 0 ? (
+					<div className="poc-tags-cell">
+						<Tooltip title={item.tags[0]}>
+							<Tag className="poc-tags-cell__first" variant="filled">
+								{item.tags[0]}
+							</Tag>
 						</Tooltip>
-					) : null}
-				</Space>
-			),
+						{item.tags.length > 1 ? (
+							<Popover
+								trigger="click"
+								title={t("标签")}
+								content={
+									<div className="poc-tags-popover">
+										{item.tags.map((value) => (
+											<Tag key={value} variant="filled">
+												{value}
+											</Tag>
+										))}
+									</div>
+								}
+							>
+								<Button
+									size="small"
+									type="text"
+									className="poc-tags-cell__more"
+									aria-label={t("{id} 的全部标签", { id: item.id })}
+									onClick={(event) => event.stopPropagation()}
+								>
+									+{item.tags.length - 1}
+								</Button>
+							</Popover>
+						) : null}
+					</div>
+				) : (
+					<Text type="secondary">—</Text>
+				),
 		},
 		{
 			title: "CVE",
@@ -219,7 +232,14 @@ export function PocPage({
 						onDelete(item.id);
 					}}
 				>
-					<Button type="text" size="small" danger icon={<DeleteOutlined />} aria-label={t("删除模板")} />
+					<Button
+						type="text"
+						size="small"
+						danger
+						icon={<DeleteOutlined />}
+						aria-label={t("删除模板")}
+						onClick={(event) => event.stopPropagation()}
+					/>
 				</Popconfirm>
 			),
 		},
@@ -373,6 +393,7 @@ export function PocPage({
 				size="small"
 				columns={columns}
 				dataSource={items}
+				tableLayout="fixed"
 				search={false}
 				options={false}
 				toolbar={{ title: <Space size={8}>{toolbarFilters}</Space> }}
@@ -387,7 +408,8 @@ export function PocPage({
 				}}
 				scroll={{ x: 1080 }}
 				onRow={(record) => ({
-					onClick: () => {
+					onClick: (event) => {
+						if (event.target instanceof Element && event.target.closest("button, a, .ant-popover")) return;
 						setOpenId(record.id);
 						onOpen(record.id);
 					},
@@ -401,33 +423,88 @@ export function PocPage({
 			/>
 
 			<div className="poc-summary">
-				<Text type="secondary">
-					{t("库为全局共享；模板不进容器，Agent 需自己写 yaml 后经 bash 执行 nuclei")}
-				</Text>
+				<Text type="secondary">{t("库为全局共享；模板不进容器，Agent 需自己写 yaml 后经 bash 执行 nuclei")}</Text>
 				<Text type="secondary">{totalLine}</Text>
 			</div>
 
 			<Drawer
 				open={openItem !== null}
-				width={780}
+				size="min(820px, 100vw)"
 				onClose={() => setOpenId(null)}
 				destroyOnHidden
 				className="poc-drawer"
-				title={
-					<Space size={8} wrap>
-						<Text className="table-mono">{openItem?.id ?? ""}</Text>
-						{openItem ? <Tag variant="filled">{openItem.severity}</Tag> : null}
-					</Space>
+				title={t("模板详情")}
+				extra={
+					openItem ? (
+						<Tag color={SEVERITY_COLORS[openItem.severity]} variant="filled">
+							{SENTINEL_VULN_SEVERITY_LABELS[openItem.severity]}
+						</Tag>
+					) : null
+				}
+				footer={
+					openItem ? (
+						<div className="poc-detail__footer">
+							<Popconfirm
+								title={t("删除模板")}
+								description={t("删除「{id}」？该操作不可恢复。", { id: openItem.id })}
+								okText={t("删除")}
+								okButtonProps={{ danger: true }}
+								cancelText={t("取消")}
+								onConfirm={() => {
+									setOpenId(null);
+									onDelete(openItem.id);
+								}}
+							>
+								<Button type="text" danger icon={<DeleteOutlined />}>
+									{t("删除模板")}
+								</Button>
+							</Popconfirm>
+							<Button onClick={() => setOpenId(null)}>{t("关闭")}</Button>
+						</div>
+					) : null
 				}
 			>
 				{openItem ? (
-					<div className="poc-yaml">
-						<div className="poc-yaml__head">
-							<Text type="secondary" className="poc-yaml__meta">
-								{openItem.name} · {openItem.sourceFile} · {t("导入")} {shortWhen(openItem.importedAt)}
-								{openItem.tags.length > 0 ? ` · ${openItem.tags.join(", ")}` : ""}
+					<div className="poc-detail">
+						<div className="poc-detail__intro">
+							<h2>{openItem.name}</h2>
+							<Text type="secondary" className="poc-detail__id">
+								{openItem.id}
 							</Text>
-							<Space size={4}>
+						</div>
+						<dl className="poc-detail__meta">
+							<div>
+								<dt>{t("来源文件")}</dt>
+								<dd>{openItem.sourceFile}</dd>
+							</div>
+							<div>
+								<dt>{t("导入时间")}</dt>
+								<dd>{shortWhen(openItem.importedAt)}</dd>
+							</div>
+							{openItem.tags.length > 0 ? (
+								<div>
+									<dt>{t("标签")}</dt>
+									<dd className="poc-detail__tags">
+										{openItem.tags.map((value) => (
+											<Tag key={value} variant="filled">
+												{value}
+											</Tag>
+										))}
+									</dd>
+								</div>
+							) : null}
+							{openItem.references.length > 0 ? (
+								<div>
+									<dt>{t("参考")}</dt>
+									<dd>{openItem.references.join(" · ")}</dd>
+								</div>
+							) : null}
+						</dl>
+						<section className="poc-source" aria-label={t("模板源码")}>
+							<div className="poc-source__toolbar">
+								<span>
+									{t("模板源码")} <Text type="secondary">YAML</Text>
+								</span>
 								<Button
 									size="small"
 									icon={<CopyOutlined />}
@@ -438,27 +515,18 @@ export function PocPage({
 								>
 									{t("复制全文")}
 								</Button>
-								<Popconfirm
-									title={t("删除模板")}
-									description={t("删除「{id}」？该操作不可恢复。", { id: openItem.id })}
-									okText={t("删除")}
-									okButtonProps={{ danger: true }}
-									cancelText={t("取消")}
-									onConfirm={() => {
-										const id = openItem.id;
-										setOpenId(null);
-										onDelete(id);
-									}}
-								>
-									<Button size="small" danger icon={<DeleteOutlined />}>
-										{t("删除模板")}
-									</Button>
-								</Popconfirm>
-							</Space>
-						</div>
-						<pre className="poc-yaml__code">
-							{loadedDetail ? loadedDetail.content : t("加载模板全文…")}
-						</pre>
+							</div>
+							{loadedDetail ? (
+								<pre className="poc-source__code">
+									<code>{loadedDetail.content}</code>
+								</pre>
+							) : (
+								<div className="poc-source__loading">
+									<Spin size="small" />
+									<Text type="secondary">{t("加载模板全文…")}</Text>
+								</div>
+							)}
+						</section>
 					</div>
 				) : null}
 			</Drawer>

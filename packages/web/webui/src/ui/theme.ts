@@ -78,6 +78,11 @@ export const consoleTheme: ThemeConfig = {
 		wireframe: false,
 	},
 	components: {
+		Alert: {
+			defaultPadding: "6px 10px",
+			withDescriptionPadding: "8px 10px",
+			withDescriptionIconSize: 16,
+		},
 		Layout: {
 			bodyBg: CONSOLE_COLORS.contentBg,
 			headerBg: CONSOLE_COLORS.card,
@@ -199,10 +204,37 @@ export const consoleSidebarTheme: ThemeConfig = {
 		controlItemBgActive: "rgba(59, 130, 246, 0.2)",
 	},
 	components: {
+		Menu: {
+			fontSize: 14,
+			iconSize: 18,
+			itemHeight: 38,
+			itemPaddingInline: 16,
+			itemMarginBlock: 1,
+			groupTitleFontSize: 11,
+			groupTitleColor: "#8394ac",
+			darkItemColor: "#cbd5e1",
+			darkItemHoverColor: "#ffffff",
+			darkItemSelectedColor: "#f8fafc",
+			darkItemSelectedBg: "#233c5e",
+		},
 		Segmented: {
 			trackBg: "rgba(148, 163, 184, 0.08)",
 			itemSelectedBg: "rgba(59, 130, 246, 0.2)",
 		},
 		Select: { optionSelectedBg: "rgba(59, 130, 246, 0.2)" },
+	},
+};
+
+/** Login controls use the same dark palette over the animated backdrop. */
+export const consoleAuthTheme: ThemeConfig = {
+	...consoleSidebarTheme,
+	cssVar: { key: "sentinel-auth" },
+	token: {
+		...consoleSidebarTheme.token,
+		colorBgContainerDisabled: "#182338",
+		colorTextDisabled: "#8292aa",
+	},
+	components: {
+		Form: { labelColor: "#cbd5e1" },
 	},
 };

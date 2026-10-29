@@ -1,10 +1,11 @@
 import { CheckCircleOutlined, DeleteOutlined, EditOutlined, SaveOutlined } from "@ant-design/icons";
 import { ProTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
-import { Alert, Avatar, Button, Drawer, Form, Input, InputNumber, Popconfirm, Space, Switch, Tag, Typography } from "antd";
+import { Avatar, Button, Drawer, Form, Input, InputNumber, Popconfirm, Space, Switch, Tag, Typography } from "antd";
 import { useState } from "react";
 import { getLanguage, t } from "../i18n.ts";
 import { SettingsBar, SettingsNote } from "../ui/Settings.tsx";
+import { SettingsFeedback } from "../ui/SettingsFeedback.tsx";
 import type {
 	SentinelAssetConfigView,
 	SentinelAssetPlatform,
@@ -252,9 +253,7 @@ export function AssetPanel({
 								checked={platform.enabled}
 								disabled={busy}
 								aria-label={t("启用 {label}", { label: platform.label })}
-								onChange={(checked) =>
-									onSave(platformSaveInput(platform.id, checked, undefined, platform.baseUrl))
-								}
+								onChange={(checked) => onSave(platformSaveInput(platform.id, checked, undefined, platform.baseUrl))}
 							/>
 						</span>
 					</Space>
@@ -324,12 +323,9 @@ export function AssetPanel({
 				meta={
 					<>
 						<Text>
-							{t("已挂载")} <Text strong>{config.usable}</Text> / {config.platforms.length}{" "}
-							{t("个平台")}
+							{t("已挂载")} <Text strong>{config.usable}</Text> / {config.platforms.length} {t("个平台")}
 						</Text>
-						<Text type="secondary">
-							{t("只有「已启用 + 已配置密钥 + 已验证通过」的平台才把工具挂给 Agent")}
-						</Text>
+						<Text type="secondary">{t("只有「已启用 + 已配置密钥 + 已验证通过」的平台才把工具挂给 Agent")}</Text>
 					</>
 				}
 				extra={
@@ -427,10 +423,7 @@ export function AssetPanel({
 						<Form.Item label={t("启用")}>
 							<Switch checked={enabledDraft} disabled={busy} onChange={setEnabledDraft} />
 						</Form.Item>
-						<Form.Item
-							label="API Key"
-							extra={editing.hasKey ? t("已保存，留空表示不修改") : t("未配置")}
-						>
+						<Form.Item label="API Key" extra={editing.hasKey ? t("已保存，留空表示不修改") : t("未配置")}>
 							<Input.Password
 								value={keyDraft}
 								onChange={(event) => {
@@ -464,30 +457,21 @@ export function AssetPanel({
 					</Form>
 
 					{testResult === null ? (
-						<Alert
-							type="error"
-							showIcon
-							className="ui-page__alert"
-							title={t("无响应")}
-							description={t("没有收到测试结果，请重试。")}
-						/>
+						<SettingsFeedback type="error" title={t("无响应")}>
+							{t("没有收到测试结果，请重试。")}
+						</SettingsFeedback>
 					) : testResult ? (
-						<Alert
+						<SettingsFeedback
 							type={testResult.ok ? "success" : "error"}
-							showIcon
-							className="ui-page__alert"
 							title={testResult.ok ? t("连接可用") : t("连接失败")}
-							description={
-								<>
-									{testResult.message}
-									{testResult.detail ? <pre className="assethub-detail__pre">{testResult.detail}</pre> : null}
-								</>
-							}
-						/>
-					) : null}
-
-					{editing.status.error ? (
-						<Alert type="error" showIcon title={t("上次错误")} description={editing.status.error} />
+							detail={testResult.detail}
+						>
+							{testResult.message}
+						</SettingsFeedback>
+					) : editing.status.error ? (
+						<SettingsFeedback type="error" title={t("上次错误")}>
+							{editing.status.error}
+						</SettingsFeedback>
 					) : null}
 
 					<div className="assethub-detail">

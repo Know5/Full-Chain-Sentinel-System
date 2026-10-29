@@ -10,11 +10,67 @@
 
 .console-sidebar__switch {
 	flex: none;
-	padding: 4px 10px 10px;
+	padding: 4px 12px 6px;
 }
 
 .console-sidebar__switch .ant-btn {
 	justify-content: flex-start;
+	height: 34px;
+	font-size: 13px;
+	color: #a5b4c9;
+}
+
+.console-sidebar .console-menu {
+	font-size: 14px;
+}
+
+.console-sidebar .console-menu .ant-menu-item-group-title {
+	padding: 16px 24px 6px;
+	line-height: 16px;
+}
+
+.console-sidebar .console-menu > .ant-menu-item-group:first-child > .ant-menu-item-group-title {
+	padding-top: 8px;
+}
+
+.console-sidebar .console-nav-group {
+	font-size: 11px;
+	letter-spacing: 0.02em;
+}
+
+.console-sidebar__navigation {
+	scrollbar-color: #334155 transparent;
+}
+
+.console-sidebar .ant-menu-inline-collapsed > .ant-menu-item-group > .ant-menu-item-group-title {
+	height: 12px;
+	padding: 0;
+	line-height: 0;
+}
+
+.console-sidebar .ant-menu-inline-collapsed .console-nav-group {
+	display: none;
+}
+
+.console-sidebar .console-menu .ant-menu-item,
+.console-sidebar .console-menu .ant-menu-submenu-title {
+	height: 38px;
+	margin-block: 1px;
+	line-height: 38px;
+}
+
+.console-sidebar .console-menu .ant-menu-item .ant-menu-item-icon,
+.console-sidebar .console-menu .ant-menu-submenu-title .ant-menu-item-icon {
+	font-size: 18px;
+}
+
+.console-sidebar .console-menu .ant-menu-item-selected {
+	font-weight: 500;
+}
+
+.console-sidebar .console-nav-plugin-icon {
+	width: 18px;
+	height: 18px;
 }
 
 .console-sidebar__sessions {
@@ -29,19 +85,46 @@
 	width: 100%;
 	min-width: 0;
 	padding: 8px 12px 12px;
-	gap: 12px;
+	gap: 10px;
 	border-radius: 0;
 	background: transparent;
 	color: inherit;
 }
 
-.console-sidebar .session-panel__filters {
-	flex-wrap: wrap;
-	gap: 6px;
+.console-sidebar .session-panel__head {
+	padding-inline: 8px 0;
 }
 
-.console-sidebar .session-panel__source {
-	min-width: 88px;
+.console-sidebar .session-panel__title {
+	font-size: 14px;
+}
+
+.session-panel__tools {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
+
+.session-panel__tools > .ant-input-affix-wrapper {
+	flex: 1;
+	min-width: 0;
+}
+
+.session-panel__filter.ant-btn {
+	width: 30px;
+	padding-inline: 0;
+}
+
+.console-sidebar .session-panel__section {
+	padding: 12px 8px 6px;
+	letter-spacing: 0.02em;
+}
+
+.console-sidebar .session-row {
+	min-height: 38px;
+	margin-block: 1px;
+	padding-block: 7px;
 }
 
 .console-sidebar .session-panel__section,
@@ -52,6 +135,7 @@
 
 .console-sidebar .session-row__name {
 	color: var(--ant-color-text);
+	font-size: 14px;
 }
 
 .console-sidebar .session-row:hover {
@@ -67,6 +151,12 @@
 }
 
 .console-sidebar .session-row__more {
+	opacity: 0;
+}
+
+.console-sidebar .session-row:hover .session-row__more,
+.console-sidebar .session-row.is-active .session-row__more,
+.console-sidebar .session-row:focus-within .session-row__more {
 	opacity: 1;
 }
 
@@ -91,5 +181,11 @@
 	.console-header__divider,
 	.console-header__right .ant-badge-status-text {
 		display: none;
+	}
+}
+
+@media (hover: none) {
+	.console-sidebar .session-row__more {
+		opacity: 1;
 	}
 }

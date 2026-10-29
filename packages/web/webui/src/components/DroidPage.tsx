@@ -9,22 +9,8 @@
  */
 
 import { QrcodeOutlined, ReloadOutlined } from "@ant-design/icons";
-import {
-	Badge,
-	Button,
-	Card,
-	Col,
-	Input,
-	Modal,
-	Row,
-	Select,
-	Space,
-	Steps,
-	Tag,
-	Typography,
-} from "antd";
-import QRCode from "qrcode";
-import { useEffect, useRef, useState } from "react";
+import { Badge, Button, Card, Col, Input, Modal, QRCode, Row, Select, Space, Steps, Tag, Typography } from "antd";
+import { useEffect, useState } from "react";
 import { t } from "../i18n.ts";
 import type { DroidDevice, DroidToken, SentinelClientMessage } from "../types.ts";
 import { Page } from "../ui/Page.tsx";
@@ -235,11 +221,7 @@ export function DroidPage({
 												<Button size="small" icon={<QrcodeOutlined />} onClick={() => setQrToken(token)}>
 													{t("二维码")}
 												</Button>
-												<Button
-													size="small"
-													danger
-													onClick={() => send({ type: "droid_token_delete", id: token.id })}
-												>
+												<Button size="small" danger onClick={() => send({ type: "droid_token_delete", id: token.id })}>
 													{t("删除")}
 												</Button>
 											</Space>
@@ -297,10 +279,7 @@ export function DroidPage({
 												<Tag variant="filled">id {device.id.slice(0, 8)}</Tag>
 											</Space>
 											<Space size={4} className="droidhub-device__ops">
-												<Button
-													size="small"
-													onClick={() => setRenaming({ id: device.id, name: device.name })}
-												>
+												<Button size="small" onClick={() => setRenaming({ id: device.id, name: device.name })}>
 													{t("重命名")}
 												</Button>
 												<Button
@@ -378,14 +357,7 @@ export function DroidPage({
 
 /** 每个 token 一枚二维码：内容 = 反连地址 + 该 token，DroidBridge 扫码即填入。 */
 function TokenQrModal({ token, address, onClose }: { token: DroidToken; address: string; onClose(): void }) {
-	const canvasRef = useRef<HTMLCanvasElement | null>(null);
-	useEffect(() => {
-		const canvas = canvasRef.current;
-		if (!canvas) return;
-		QRCode.toCanvas(canvas, `${address}?token=${token.token}`, { width: 220, margin: 1, errorCorrectionLevel: "M" }).catch(
-			() => undefined,
-		);
-	}, [address, token.token]);
+	const value = `${address}?token=${encodeURIComponent(token.token)}`;
 	return (
 		<Modal
 			open
@@ -396,8 +368,18 @@ function TokenQrModal({ token, address, onClose }: { token: DroidToken; address:
 			destroyOnHidden
 		>
 			<div className="droidhub-qr">
-				<canvas ref={canvasRef} />
-				<Text code copyable className="droidhub-qr__value">{`${address}?token=${token.token}`}</Text>
+				<QRCode
+					type="svg"
+					value={value}
+					size={220}
+					errorLevel="M"
+					marginSize={4}
+					bordered={false}
+					aria-label={t("二维码")}
+				/>
+				<Text code copyable className="droidhub-qr__value">
+					{value}
+				</Text>
 				<Text type="secondary">{t("手机 DroidBridge 点「扫码填入」对准即可。")}</Text>
 			</div>
 		</Modal>

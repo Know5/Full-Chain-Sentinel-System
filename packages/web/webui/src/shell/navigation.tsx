@@ -53,7 +53,7 @@ export interface PluginNavEntry {
 	disabled: boolean;
 }
 
-/** The two groups of the sider; the mode and workbench split is intentional. */
+/** Group entries by the operator's workflow, with configuration last. */
 export const NAV_GROUPS: { group: string; items: MenuEntry[] }[] = [
 	{
 		group: "工作台",
@@ -61,12 +61,22 @@ export const NAV_GROUPS: { group: string; items: MenuEntry[] }[] = [
 			{ page: "dashboard", label: t("项目概览"), icon: DashboardOutlined },
 			{ page: "chat", label: t("对话"), icon: MessageOutlined },
 			{ page: "projects", label: t("项目"), icon: AppstoreOutlined },
+		],
+	},
+	{
+		group: "资产与工具",
+		items: [
 			{ page: "vulns", label: t("漏洞"), icon: BugOutlined },
 			{ page: "assets", label: t("资产库"), icon: DatabaseOutlined },
 			{ page: "apimodels", label: t("业务建模"), icon: ApartmentOutlined },
+			{ page: "pocs", label: t("POC 库"), icon: FileSearchOutlined },
 			{ page: "droid", label: t("安卓设备"), icon: AndroidOutlined },
 			{ page: "ios", label: t("iOS 设备"), icon: AppleOutlined },
-			{ page: "pocs", label: t("POC 库"), icon: FileSearchOutlined },
+		],
+	},
+	{
+		group: "执行与审计",
+		items: [
 			{ page: "engine", label: t("工程"), icon: BuildOutlined },
 			{ page: "gates", label: t("审批"), icon: AuditOutlined },
 			{ page: "supervisor", label: t("监督"), icon: EyeOutlined },

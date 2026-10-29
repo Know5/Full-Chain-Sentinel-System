@@ -16,7 +16,22 @@ import {
 	SettingOutlined,
 	TranslationOutlined,
 } from "@ant-design/icons";
-import { Avatar, Badge, Button, ConfigProvider, Divider, Drawer, Dropdown, Flex, Grid, Layout, Menu, Tag, Tooltip, Typography } from "antd";
+import {
+	Avatar,
+	Badge,
+	Button,
+	ConfigProvider,
+	Divider,
+	Drawer,
+	Dropdown,
+	Flex,
+	Grid,
+	Layout,
+	Menu,
+	Tag,
+	Tooltip,
+	Typography,
+} from "antd";
 import type { MenuProps } from "antd";
 import { useEffect, useState, type ReactNode } from "react";
 import { CONSOLE_VERSION, PROJECT_REPOSITORY } from "../branding.ts";
@@ -26,7 +41,14 @@ import { getLanguage, t } from "../i18n.ts";
 import type { SentinelMode, SentinelPageId, SentinelProjectInfo } from "../types.ts";
 import { SENTINEL_MODE_LABELS } from "../types.ts";
 import { consoleSidebarTheme } from "../ui/theme.ts";
-import { NAV_GROUPS, PAGE_TITLES, SETTINGS_CHILDREN, navLabel, type MenuEntry, type PluginNavEntry } from "./navigation.tsx";
+import {
+	NAV_GROUPS,
+	PAGE_TITLES,
+	SETTINGS_CHILDREN,
+	navLabel,
+	type MenuEntry,
+	type PluginNavEntry,
+} from "./navigation.tsx";
 import { ProjectSwitcher } from "./ProjectSwitcher.tsx";
 import "./sidebar.css";
 
@@ -122,15 +144,25 @@ export function ConsoleShell({
 		return count > 0 ? <Badge count={count > 9 ? "9+" : count} size="small" /> : null;
 	};
 
-	const menuItems: MenuProps["items"] = [
-		{
-			type: "group",
-			key: "workbench",
-			label: <span className="console-nav-group">{t("工作台")}</span>,
-			children: [
-				...NAV_GROUPS[0].items.map((entry) => entryToItem(entry, badgeFor(entry))),
-				...pluginPages.map(
-					(plugin): NonNullable<MenuProps["items"]>[number] => ({
+	const menuItems: MenuProps["items"] = NAV_GROUPS.map((group) => ({
+		type: "group",
+		key: group.group,
+		label: <span className="console-nav-group">{t(group.group)}</span>,
+		children: [
+			...group.items.map((entry) =>
+				entry.page === "settings.model"
+					? {
+							key: "settings",
+							icon: <SettingOutlined />,
+							title: t("设置"),
+							label: t("设置"),
+							popupClassName: "console-settings-popup",
+							children: SETTINGS_CHILDREN.map((child) => entryToItem(child, null)),
+						}
+					: entryToItem(entry, badgeFor(entry)),
+			),
+			...(group.group === "资产与工具"
+				? pluginPages.map((plugin): NonNullable<MenuProps["items"]>[number] => ({
 						key: plugin.page,
 						title: plugin.title,
 						disabled: plugin.disabled,
@@ -140,32 +172,10 @@ export function ConsoleShell({
 							<SettingOutlined />
 						),
 						label: navLabel(plugin.label, null),
-					}),
-				),
-			],
-		},
-		{
-			type: "group",
-			key: "system",
-			label: <span className="console-nav-group">{t("系统")}</span>,
-			children: [
-				...NAV_GROUPS[1].items
-					.filter((entry) => entry.page === "proxies")
-					.map((entry) => entryToItem(entry, null)),
-				{
-					key: "settings",
-					icon: <SettingOutlined />,
-					title: t("设置"),
-					label: t("设置"),
-					popupClassName: "console-settings-popup",
-					children: SETTINGS_CHILDREN.map((entry) => entryToItem(entry, null)),
-				},
-				...NAV_GROUPS[1].items
-					.filter((entry) => entry.page === "about")
-					.map((entry) => entryToItem(entry, null)),
-			],
-		},
-	];
+					}))
+				: []),
+		],
+	}));
 
 	const onMenuClick: MenuProps["onClick"] = ({ key }) => {
 		setGlobalNavigation(false);
@@ -213,7 +223,12 @@ export function ConsoleShell({
 			{ key: "refresh", icon: <ReloadOutlined />, label: t("刷新当前页") },
 			{ key: "language", icon: <TranslationOutlined />, label: t("切换语言") },
 			{ key: "repo", icon: <GithubOutlined />, label: t("源码仓库") },
-			...(authUser ? [{ type: "divider" as const }, { key: "logout", icon: <LogoutOutlined />, label: t("退出登录"), danger: true }] : []),
+			...(authUser
+				? [
+						{ type: "divider" as const },
+						{ key: "logout", icon: <LogoutOutlined />, label: t("退出登录"), danger: true },
+					]
+				: []),
 		],
 		onClick: ({ key, domEvent }) => {
 			domEvent.stopPropagation();
@@ -279,10 +294,16 @@ export function ConsoleShell({
 				) : null}
 				{showConversations && !railCollapsed ? (
 					<div className="console-sidebar__settings">
-						<Button type="text" icon={<SettingOutlined />} onClick={() => {
-							onNavigate("settings.model");
-							setDrawerOpen(false);
-						}}>{t("设置")}</Button>
+						<Button
+							type="text"
+							icon={<SettingOutlined />}
+							onClick={() => {
+								onNavigate("settings.model");
+								setDrawerOpen(false);
+							}}
+						>
+							{t("设置")}
+						</Button>
 					</div>
 				) : null}
 			</Flex>
@@ -296,7 +317,7 @@ export function ConsoleShell({
 					<Button
 						type="text"
 						icon={<MenuUnfoldOutlined />}
-						onClick={() => compact ? setDrawerOpen(true) : onToggleCollapse()}
+						onClick={() => (compact ? setDrawerOpen(true) : onToggleCollapse())}
 						aria-label={t(compact ? "打开导航" : "展开侧边栏")}
 					/>
 				) : null}
@@ -309,7 +330,9 @@ export function ConsoleShell({
 					onManage={onManageProjects}
 				/>
 				<Divider orientation="vertical" className="console-header__divider" />
-				<span className="console-header__page">{page.startsWith("plugin:") ? t("插件") : (PAGE_TITLES[page] ?? t("控制台"))}</span>
+				<span className="console-header__page">
+					{page.startsWith("plugin:") ? t("插件") : (PAGE_TITLES[page] ?? t("控制台"))}
+				</span>
 				{connected ? <Tag color={MODE_COLORS[mode]}>{SENTINEL_MODE_LABELS[mode]}</Tag> : null}
 			</div>
 			<div className="console-header__right">

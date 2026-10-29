@@ -1,11 +1,17 @@
 import { CheckCircleOutlined, DeleteOutlined, EditOutlined, PlusOutlined } from "@ant-design/icons";
 import { ProTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
-import { Alert, Button, Drawer, Form, Input, InputNumber, Popconfirm, Progress, Space, Switch, Tag, Typography } from "antd";
+import { Button, Drawer, Form, Input, InputNumber, Popconfirm, Progress, Space, Switch, Tag, Typography } from "antd";
 import { useState } from "react";
 import { getLanguage, t } from "../i18n.ts";
 import { SettingsBar, SettingsEmpty, SettingsNote } from "../ui/Settings.tsx";
-import type { SentinelTestResult, SentinelWebSearchConfigView, SentinelWebSearchKeyInput, SentinelWebSearchKeyView } from "../types.ts";
+import { SettingsFeedback } from "../ui/SettingsFeedback.tsx";
+import type {
+	SentinelTestResult,
+	SentinelWebSearchConfigView,
+	SentinelWebSearchKeyInput,
+	SentinelWebSearchKeyView,
+} from "../types.ts";
 
 const { Link, Text } = Typography;
 
@@ -206,9 +212,7 @@ export function WebSearchPanel({
 								checked={entry.enabled}
 								disabled={busy}
 								title={t("启用 {label}", { label: entry.label })}
-								onChange={(checked) =>
-									onSave({ id: entry.id, label: entry.label, key: null, enabled: checked })
-								}
+								onChange={(checked) => onSave({ id: entry.id, label: entry.label, key: null, enabled: checked })}
 							/>
 						</span>
 					</Space>
@@ -385,11 +389,7 @@ export function WebSearchPanel({
 							>
 								{t("测试")}
 							</Button>
-							<Button
-								type="primary"
-								disabled={busy || (!editing && !keyDraft.trim())}
-								onClick={saveDrawer}
-							>
+							<Button type="primary" disabled={busy || (!editing && !keyDraft.trim())} onClick={saveDrawer}>
 								{t("保存")}
 							</Button>
 						</Space>
@@ -425,30 +425,21 @@ export function WebSearchPanel({
 				<SettingsNote>{t("保存后自动验证一次，通过即入池")}</SettingsNote>
 
 				{testResult === null ? (
-					<Alert
-						type="error"
-						showIcon
-						className="ui-page__alert"
-						title={t("无响应")}
-						description={t("没有收到测试结果，请重试。")}
-					/>
+					<SettingsFeedback type="error" title={t("无响应")}>
+						{t("没有收到测试结果，请重试。")}
+					</SettingsFeedback>
 				) : testResult ? (
-					<Alert
+					<SettingsFeedback
 						type={testResult.ok ? "success" : "error"}
-						showIcon
-						className="ui-page__alert"
 						title={testResult.ok ? t("连接可用") : t("连接失败")}
-						description={
-							<>
-								{testResult.message}
-								{testResult.detail ? <pre className="websearch-detail-pre">{testResult.detail}</pre> : null}
-							</>
-						}
-					/>
-				) : null}
-
-				{editing?.status.error ? (
-					<Alert type="error" showIcon title={t("上次错误")} description={editing.status.error} />
+						detail={testResult.detail}
+					>
+						{testResult.message}
+					</SettingsFeedback>
+				) : editing?.status.error ? (
+					<SettingsFeedback type="error" title={t("上次错误")}>
+						{editing.status.error}
+					</SettingsFeedback>
 				) : null}
 
 				<div className="websearch-drawer-apply">
