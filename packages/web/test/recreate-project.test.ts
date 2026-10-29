@@ -37,32 +37,37 @@ function calls(logPath: string): string[] {
 	return readFileSync(logPath, "utf-8").trim().split("\n");
 }
 
-test("rebuilding replaces the container with the stored network and keeps the project", async () => {
+test("rebuilding replaces the gateway pair in dependency order and keeps the project", async () => {
 	const { agentDir, logPath } = setup();
 	const added = await addProject(agentDir, { name: "demo" });
 	expect(added.error).toBeUndefined();
 	const project = listProjects(agentDir).projects[0];
 	if (!project) throw new Error("项目未创建");
-	// A fresh install defaults to host mode.
-	expect(calls(logPath).find((line) => line.startsWith("run"))).toContain("--network host");
+	const sidecar = `sentinel-sb-${project.id.slice(0, 12)}`;
+	expect(calls(logPath).find((line) => line.startsWith("run") && line.includes(project.container))).toContain(
+		`--network container:${sidecar}`,
+	);
 
 	writeContainerNetwork(agentDir, "bridge");
+	const before = calls(logPath).length;
 	const recreated = await recreateProject(agentDir, project.id);
 	expect(recreated.error).toBeUndefined();
 	// The registry entry is untouched: id, name and work directory survive.
 	expect(recreated.project).toEqual(project);
 	expect(listProjects(agentDir).projects).toEqual([project]);
 
-	const last = calls(logPath).slice(-3);
-	// A rebuild clears the proxy sidecar as well. A project without a proxy has
-	// none, so the call is a no-op — but doing it unconditionally is what keeps a
-	// sidecar from surviving a switch back to a direct network and then quietly
-	// serving a node the operator has moved on from.
-	expect(last[0]).toContain(`rm -f ${project.container}`);
-	expect(last[1]).toContain(`rm -f sentinel-sb-${project.id.slice(0, 12)}`);
-	expect(last[2]).toContain("--network bridge");
-	expect(last[2]).toContain("NET_ADMIN");
-	expect(last[2]).toContain(`-v ${project.workDir}:/work`);
+	const lines = calls(logPath).slice(before);
+	const removeWork = lines.indexOf(`rm -f ${project.container}`);
+	const removeGateway = lines.indexOf(`rm -f ${sidecar}`);
+	const runGateway = lines.findIndex((line) => line.startsWith("run") && line.includes(`--name ${sidecar} `));
+	const runWork = lines.findIndex((line) => line.startsWith("run") && line.includes(`--name ${project.container} `));
+	expect(removeWork).toBeGreaterThanOrEqual(0);
+	expect(removeGateway).toBeGreaterThan(removeWork);
+	expect(runGateway).toBeGreaterThan(removeGateway);
+	expect(runWork).toBeGreaterThan(runGateway);
+	expect(lines[runGateway]).toContain("NET_ADMIN");
+	expect(lines[runWork]).not.toContain("NET_ADMIN");
+	expect(lines[runWork]).toContain(`-v ${project.workDir}:/work`);
 });
 
 test("an unknown project fails before docker is invoked", async () => {

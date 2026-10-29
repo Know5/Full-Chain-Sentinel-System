@@ -24,6 +24,7 @@ import {
 	SENTINEL_IMAGE,
 	stopContainer,
 } from "./docker.ts";
+import { ensureGateway, projectGatewayDir, withGatewayLock } from "./gateway.ts";
 import { t } from "./i18n.ts";
 import type { SentinelProxySettings } from "./protocol.ts";
 import {
@@ -41,7 +42,6 @@ import {
 } from "./proxy.ts";
 import {
 	checkSidecar,
-	checkSingboxConfig,
 	ensureOpenVpnRunning,
 	ensureSingboxRunning,
 	ensureWireGuardRunning,
@@ -82,6 +82,8 @@ export interface SentinelProject {
 	proxyId?: string | null;
 	/** Which node of that profile's subscription, when this project pins one. */
 	proxyNode?: string;
+	/** Persistent isolated gateway; proxy changes keep both container identities. */
+	gateway?: boolean;
 }
 
 interface ProjectsFile {
@@ -127,7 +129,8 @@ export function projectProxySettings(agentDir: string, project: SentinelProject)
 	// A pinned node that the subscription no longer carries falls back to the
 	// profile's own choice: the node was renamed or dropped by the provider, and a
 	// project that cannot build its configuration is worse than one that moved.
-	if (!settings.nodes.some((node) => node.tag === project.proxyNode)) return settings;
+	if (project.proxyNode !== AUTO_NODE_TAG && !settings.nodes.some((node) => node.tag === project.proxyNode))
+		return settings;
 	return { ...settings, nodeTag: project.proxyNode };
 }
 
@@ -151,6 +154,12 @@ async function prepareSidecar(
 	{ ok: true; sidecar?: string; configPath?: string; resolvConfPath?: string } | { ok: false; error: string }
 > {
 	const settings = projectProxySettings(agentDir, project);
+	if (project.gateway) {
+		const ready = await ensureGateway(agentDir, project, settings);
+		return ready.ok
+			? { ok: true, sidecar: ready.sidecar, resolvConfPath: ready.resolvConfPath }
+			: { ok: false, error: ready.error ?? t("网关启动失败") };
+	}
 	if (!proxyEnabled(settings)) return { ok: true };
 	const sidecar = projectSidecarName(project);
 
@@ -221,6 +230,15 @@ async function bringProjectUp(
 	const prepared = await prepareSidecar(agentDir, project);
 	if (!prepared.ok) return { ok: false, created: false, error: prepared.error };
 	const network = readContainerNetwork(agentDir);
+	if (project.gateway && prepared.sidecar) {
+		const health = await checkSidecar(project.container, prepared.sidecar, "");
+		if (health.exists && (!health.joined || health.netnsStale)) {
+			// A restart can rejoin the namespace without destroying the writable layer.
+			const stopped = await stopContainer(project.container);
+			if (!stopped.ok) return { ok: false, created: false, error: stopped.error };
+		}
+		return ensureContainer(project.container, project.workDir, network, prepared.sidecar, prepared.resolvConfPath);
+	}
 	if (!prepared.sidecar || !prepared.configPath) {
 		return ensureContainer(project.container, project.workDir, network, undefined, prepared.resolvConfPath);
 	}
@@ -260,7 +278,14 @@ export async function addProject(
 	const id = randomUUID();
 	const container = containerNameFor(id);
 	const workDir = projectWorkDir(name);
-	const project: SentinelProject = { id, name, container, workDir, createdAt: new Date().toISOString() };
+	const project: SentinelProject = {
+		id,
+		name,
+		container,
+		workDir,
+		gateway: true,
+		createdAt: new Date().toISOString(),
+	};
 	if (input.proxyId !== undefined) project.proxyId = input.proxyId;
 	if (input.proxyNode?.trim()) project.proxyNode = input.proxyNode.trim();
 	const settings = projectProxySettings(agentDir, project);
@@ -274,33 +299,30 @@ export async function addProject(
 				error: t("代理镜像 {image} 尚未拉取，请先到「代理」页拉取镜像", { image: settings.image }),
 			};
 		}
-		const written = await writeProjectProxyConfig(agentDir, id, settings);
-		if (!written.ok) return { error: t("代理配置无法生成：{error}", { error: written.error }) };
-		// A subscription's nodes are generated here rather than pasted, so they get
-		// the same check the 代理 page runs on save: a node this sing-box refuses
-		// should surface at the rebuild, not as a sidecar that starts and exits.
-		if (settings.mode === "subscription") {
-			const checked = await checkSingboxConfig(settings.image, written.path);
-			if (!checked.ok) {
-				return { error: t("代理配置未通过 sing-box 校验：{error}", { error: checked.error ?? "" }) };
-			}
-		}
 	}
+	// The gateway validates its candidate before starting any project processes.
 	const prepared = await prepareSidecar(agentDir, project);
-	if (!prepared.ok) return { error: prepared.error };
-	const created = await createContainer(
-		container,
-		workDir,
-		readContainerNetwork(agentDir),
-		prepared.sidecar,
-		prepared.resolvConfPath,
-	);
+	const created = prepared.ok
+		? await createContainer(
+				container,
+				workDir,
+				readContainerNetwork(agentDir),
+				prepared.sidecar,
+				prepared.resolvConfPath,
+			)
+		: { ok: false, error: prepared.error };
 	if (!created.ok) {
-		if (prepared.sidecar) await removeSingboxContainer(prepared.sidecar);
+		await removeContainer(container);
+		await removeSingboxContainer(projectSidecarName(project));
+		rmSync(projectGatewayDir(agentDir, id), { recursive: true, force: true });
+		rmSync(projectResolvConfPath(agentDir, id), { force: true });
+		rmSync(projectProxyConfigPath(agentDir, id), { force: true });
 		return { error: t("容器创建失败：{error}", { error: created.error ?? "" }) };
 	}
-	file.projects.push(project);
-	writeProjects(agentDir, file);
+	// Other projects may have changed while Docker was preparing this pair.
+	const latest = readProjects(agentDir);
+	latest.projects.push(project);
+	writeProjects(agentDir, latest);
 	return { project };
 }
 
@@ -314,6 +336,13 @@ export async function addProject(
  * installed with apt or written outside /work is lost.
  */
 export async function recreateProject(
+	agentDir: string,
+	id: string,
+): Promise<{ project?: SentinelProject; error?: string }> {
+	return withGatewayLock(`${agentDir}:${id}`, () => recreateProjectUnlocked(agentDir, id));
+}
+
+async function recreateProjectUnlocked(
 	agentDir: string,
 	id: string,
 ): Promise<{ project?: SentinelProject; error?: string }> {
@@ -331,6 +360,7 @@ export async function recreateProject(
 	const sidecar = projectSidecarName(project);
 	const removedSidecar = await removeSingboxContainer(sidecar);
 	if (!removedSidecar.ok) return { error: t("代理容器删除失败：{error}", { error: removedSidecar.error ?? "" }) };
+	project.gateway = true;
 	const prepared = await prepareSidecar(agentDir, project);
 	if (!prepared.ok) return { error: prepared.error };
 	const created = await createContainer(
@@ -364,6 +394,14 @@ export async function removeProject(
 	id: string,
 	scope: ProjectRemoveScope = "data",
 ): Promise<{ removed?: SentinelProject; error?: string }> {
+	return withGatewayLock(`${agentDir}:${id}`, () => removeProjectUnlocked(agentDir, id, scope));
+}
+
+async function removeProjectUnlocked(
+	agentDir: string,
+	id: string,
+	scope: ProjectRemoveScope = "data",
+): Promise<{ removed?: SentinelProject; error?: string }> {
 	const file = readProjects(agentDir);
 	const project = file.projects.find((entry) => entry.id === id);
 	if (!project) return { error: t("项目不存在") };
@@ -391,6 +429,7 @@ export async function removeProject(
 	rmSync(projectOpenVpnAuthPath(agentDir, id), { force: true });
 	rmSync(projectOpenVpnHookPath(agentDir, id), { force: true });
 	rmSync(projectOpenVpnPushedDnsPath(agentDir, id), { force: true });
+	rmSync(projectGatewayDir(agentDir, id), { recursive: true, force: true });
 	return { removed: project };
 }
 
@@ -413,7 +452,7 @@ export function setProjectProxy(
 	if (!project) return { error: t("项目不存在") };
 	// A node only means something next to the profile that holds it, so switching
 	// away from a profile — or to one without a subscription — drops the pin.
-	const settings = proxyId ? resolveProjectProxy(agentDir, proxyId) : null;
+	const settings = resolveProjectProxy(agentDir, proxyId);
 	const node = proxyNode?.trim();
 	// `auto` is not a node but a choice: let sing-box rank the nodes on a timer.
 	if (
@@ -430,6 +469,52 @@ export function setProjectProxy(
 	else delete project.proxyNode;
 	writeProjects(agentDir, file);
 	return { project };
+}
+
+/** Apply first, then persist the choice; rejected changes do not replace it. */
+export function changeProjectProxy(
+	agentDir: string,
+	id: string,
+	proxyId: string | null | undefined,
+	proxyNode?: string,
+): Promise<{ project?: SentinelProject; error?: string; applied?: boolean }> {
+	return withGatewayLock(`${agentDir}:${id}`, async () => {
+		const project = readProjects(agentDir).projects.find((entry) => entry.id === id);
+		if (!project) return { error: t("项目不存在") };
+		const next = { ...project, proxyId, proxyNode };
+		const settings = projectProxySettings(agentDir, next);
+		if (proxyId && !resolveProjectProxy(agentDir, proxyId)) return { error: t("代理不存在") };
+		if (
+			proxyNode &&
+			proxyNode !== AUTO_NODE_TAG &&
+			settings?.mode === "subscription" &&
+			!settings.nodes.some((node) => node.tag === proxyNode)
+		)
+			return { error: t("节点不存在") };
+		if (project.gateway && !project.manualStop) {
+			const ready = await ensureGateway(agentDir, next, settings);
+			if (!ready.ok) return { error: ready.error };
+		}
+		return {
+			...setProjectProxy(agentDir, id, proxyId, proxyNode),
+			applied: Boolean(project.gateway && !project.manualStop),
+		};
+	});
+}
+
+/** Profile refreshes and default changes reach each running persistent gateway. */
+export async function refreshProjectGateways(agentDir: string): Promise<string[]> {
+	const errors: string[] = [];
+	for (const project of readProjects(agentDir).projects) {
+		if (!project.gateway || project.manualStop) continue;
+		const result = await withGatewayLock(`${agentDir}:${project.id}`, async () => {
+			const current = readProjects(agentDir).projects.find((entry) => entry.id === project.id);
+			if (!current?.gateway || current.manualStop) return { ok: true };
+			return ensureGateway(agentDir, current, projectProxySettings(agentDir, current));
+		});
+		if (!result.ok) errors.push(`${project.name}: ${result.error}`);
+	}
+	return errors;
 }
 
 /**
@@ -480,9 +565,11 @@ export type ProjectRemoveScope = "container" | "data";
  * explicit 「启动容器」, or the stop would be undone by the next click.
  */
 export async function ensureProjectReady(project: SentinelProject, agentDir: string): Promise<boolean> {
-	if (project.manualStop) return false;
-	const ready = await bringProjectUp(agentDir, project);
-	return ready.ok;
+	return withGatewayLock(`${agentDir}:${project.id}`, async () => {
+		const current = readProjects(agentDir).projects.find((entry) => entry.id === project.id) ?? project;
+		if (current.manualStop) return false;
+		return (await bringProjectUp(agentDir, current)).ok;
+	});
 }
 
 /**
@@ -497,6 +584,13 @@ export async function stopProject(
 	agentDir: string,
 	id: string,
 ): Promise<{ project?: SentinelProject; error?: string }> {
+	return withGatewayLock(`${agentDir}:${id}`, () => stopProjectUnlocked(agentDir, id));
+}
+
+async function stopProjectUnlocked(
+	agentDir: string,
+	id: string,
+): Promise<{ project?: SentinelProject; error?: string }> {
 	const file = readProjects(agentDir);
 	const project = file.projects.find((entry) => entry.id === id);
 	if (!project) return { error: t("项目不存在") };
@@ -506,7 +600,7 @@ export async function stopProject(
 	// settings rather than Docker: an inspect on every stop of every project would
 	// cost more than the edge it covers (a proxy switched off but not yet applied
 	// by a rebuild, whose sidecar is left for that rebuild or for deletion).
-	if (proxyEnabled(projectProxySettings(agentDir, project))) {
+	if (project.gateway || proxyEnabled(projectProxySettings(agentDir, project))) {
 		await stopSingboxContainer(projectSidecarName(project));
 	}
 	project.manualStop = true;
@@ -516,6 +610,13 @@ export async function stopProject(
 
 /** Start a project's container again, creating it when it no longer exists. */
 export async function startProject(
+	agentDir: string,
+	id: string,
+): Promise<{ project?: SentinelProject; created?: boolean; error?: string }> {
+	return withGatewayLock(`${agentDir}:${id}`, () => startProjectUnlocked(agentDir, id));
+}
+
+async function startProjectUnlocked(
 	agentDir: string,
 	id: string,
 ): Promise<{ project?: SentinelProject; created?: boolean; error?: string }> {

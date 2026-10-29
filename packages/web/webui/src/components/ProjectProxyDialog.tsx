@@ -8,9 +8,7 @@
  * profile, because the same subscription is often shared by projects that should
  * leave through different exits.
  *
- * Saving only records the choice. The container keeps the network it was created
- * with until it is rebuilt, which the dialog says outright rather than leaving the
- * operator to wonder why nothing changed.
+ * Persistent gateways apply the choice without replacing the work container.
  */
 
 import { Alert, Button, Descriptions, Input, Modal, Radio, Space, Steps, Typography } from "antd";
@@ -134,7 +132,7 @@ export function ProjectProxyDialogBody({ project, config, busy, onConfirm, onCan
 							<Radio value="off" className={choice.kind === "off" ? "proxydlg-card is-on" : "proxydlg-card"}>
 								<Text strong>{t("不使用代理")}</Text>
 								<Text type="secondary" className="proxydlg-card__text">
-									{t("这个项目的容器直接用宿主机或桥接网络，方便打内网、接反弹 shell。")}
+									{t("通过项目网关直连，不使用代理出口。访问宿主机请使用 host.docker.internal。")}
 								</Text>
 							</Radio>
 							{list.map((proxy) => {
@@ -263,7 +261,7 @@ export function ProjectProxyDialogBody({ project, config, busy, onConfirm, onCan
 						type="info"
 						showIcon
 						title={t(
-							"只换节点会立刻生效，不用重建容器；换档案或改网络模式才需要重建（容器内 /work 之外的文件会丢，工作目录不受影响）。",
+							"新建项目使用独立网关，切换代理或节点无需重建工作容器。已停止的项目将在下次启动时应用；旧项目需重建一次以迁移到网关结构。",
 						)}
 					/>
 				</div>

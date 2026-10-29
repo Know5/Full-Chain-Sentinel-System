@@ -16,13 +16,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, test } from "vitest";
 import { sidecarNetworkFlags } from "../src/container-network.ts";
+import { projectGatewayDir } from "../src/gateway.ts";
 import {
 	addProject,
+	changeProjectProxy,
 	listProjects,
 	projectProxySettings,
 	recreateProject,
+	refreshProjectGateways,
 	type SentinelProject,
-	setProjectProxy,
 	startProject,
 	stopProject,
 } from "../src/projects.ts";
@@ -627,8 +629,9 @@ test("an OpenVPN project starts its own sidecar and mounts the tunnel resolver",
 	expect(containerRun).toContain(`-v ${resolver}:/etc/resolv.conf:ro`);
 	expect(readFileSync(resolver, "utf-8")).toBe("nameserver 10.8.0.1\n");
 	// The credentials live in the profile, never in the pasted configuration.
-	expect(readFileSync(join(agentDir, "proxy", `${project.id}.ovpn`), "utf-8")).not.toContain("s3cret");
-	expect(readFileSync(join(agentDir, "proxy", `${project.id}.ovpn.auth`), "utf-8")).toBe("ops\ns3cret\n");
+	const candidate = join(projectGatewayDir(agentDir, project.id), "candidate");
+	expect(readFileSync(join(candidate, "client.ovpn"), "utf-8")).not.toContain("s3cret");
+	expect(readFileSync(join(candidate, "auth.txt"), "utf-8")).toBe("ops\ns3cret\n");
 
 	// The fake treats a container it never saw as running, so the sidecar's own flags
 	// are asserted after it is really created — the same shape a rebuild takes.
@@ -640,14 +643,10 @@ test("an OpenVPN project starts its own sidecar and mounts the tunnel resolver",
 		.find((line) => line.startsWith("run") && line.includes(sidecar));
 	// The tunnel is a real interface, so the sidecar is the one with NET_ADMIN.
 	expect(sidecarRun).toContain("--cap-add NET_ADMIN");
-	expect(sidecarRun).toContain(":/etc/openvpn/client/client.ovpn:ro");
-	expect(sidecarRun).toContain(":/etc/openvpn/client/auth.txt:ro");
-	// The hook is the only script the client may run, and it writes the pushed
-	// resolvers to a file the console can read.
-	expect(sidecarRun).toContain(":/etc/openvpn/client/hook.sh:ro");
-	expect(sidecarRun).toContain(":/etc/openvpn/client/pushed-dns.conf");
-	expect(sidecarRun).toContain("exec openvpn");
-	expect(sidecarRun).toContain("--auth-user-pass auth.txt");
+	expect(sidecarRun).toContain(`${projectGatewayDir(agentDir, project.id)}:/etc/sentinel-gateway:ro`);
+	expect(sidecarRun).toContain("runtime.sh init");
+	expect(sidecarRun).not.toContain("s3cret");
+	expect(readFileSync(join(candidate, "hook.sh"), "utf-8")).toContain("pushed-dns.conf");
 });
 
 test("a proxied container without a tunnel keeps Docker's own resolver", async () => {
@@ -658,7 +657,9 @@ test("a proxied container without a tunnel keeps Docker's own resolver", async (
 	if (!project) throw new Error("项目未创建");
 
 	const containerRun = calls(logPath).find((line) => line.startsWith("run") && line.includes(project.container));
-	expect(containerRun).not.toContain("resolv.conf");
+	const resolver = join(agentDir, "proxy", `${project.id}.resolv.conf`);
+	expect(containerRun).toContain(`${resolver}:/etc/resolv.conf:ro`);
+	expect(readFileSync(resolver, "utf-8")).toBe("nameserver 127.0.0.11\n");
 	expect(containerRun).not.toContain("--dns");
 });
 
@@ -670,17 +671,66 @@ test("a project can turn the proxy off without touching the default", async () =
 	const project = listProjects(agentDir).projects[0];
 	if (!project) throw new Error("项目未创建");
 
-	const saved = setProjectProxy(agentDir, project.id, null);
+	const before = calls(logPath).length;
+	const saved = await changeProjectProxy(agentDir, project.id, null);
 	expect(saved.error).toBeUndefined();
+	expect(saved.applied).toBe(true);
 	expect(readProxies(agentDir).defaultId).toBe(profile);
+	const lines = calls(logPath).slice(before);
+	expect(lines.some((line) => /^(run|rm|stop|start) /.test(line))).toBe(false);
+	expect(lines).toContain(`pause ${project.container}`);
+	expect(lines).toContain(`unpause ${project.container}`);
+	expect(readFileSync(join(projectGatewayDir(agentDir, project.id), "candidate/mode"), "utf-8")).toBe("off");
+});
 
-	const recreated = await recreateProject(agentDir, project.id);
-	expect(recreated.error).toBeUndefined();
-	const containerRun = calls(logPath)
-		.filter((line) => line.startsWith("run") && line.includes(project.container))
-		.pop();
-	expect(containerRun).toContain("--network host");
-	expect(containerRun).not.toContain("container:");
+test("a failed gateway change restores the old choice and resumes the work container", async () => {
+	const { agentDir, logPath, stateDir } = setup();
+	const first = addProfile(agentDir).id;
+	const second = addProfile(agentDir, { name: "second", simple: { server: "9.9.9.9" } }).id;
+	const { project } = await addProject(agentDir, { name: "demo", proxyId: first });
+	if (!project) throw new Error("项目未创建");
+	const sidecar = singboxContainerNameFor(project.id);
+	const activeHash = readFileSync(join(stateDir, ".meta", `${sidecar}.hash`), "utf-8");
+	writeFileSync(join(stateDir, ".meta", `${sidecar}.reject`), "rollback");
+	const before = calls(logPath).length;
+	const changed = await changeProjectProxy(agentDir, project.id, second);
+	expect(changed.error).toContain("已恢复原出口");
+	expect(listProjects(agentDir).projects[0]?.proxyId).toBe(first);
+	expect(readFileSync(join(stateDir, ".meta", `${sidecar}.hash`), "utf-8")).toBe(activeHash);
+	const lines = calls(logPath).slice(before);
+	expect(lines).toContain(`pause ${project.container}`);
+	expect(lines).toContain(`unpause ${project.container}`);
+	expect(lines.some((line) => /^(run|rm|stop|start) /.test(line))).toBe(false);
+});
+
+test("changing a stopped project is deferred until start and never wakes it", async () => {
+	const { agentDir, logPath } = setup();
+	const profile = addProfile(agentDir).id;
+	const { project } = await addProject(agentDir, { name: "demo", proxyId: null });
+	if (!project) throw new Error("项目未创建");
+	await stopProject(agentDir, project.id);
+	const before = calls(logPath).length;
+	expect(await changeProjectProxy(agentDir, project.id, profile)).toMatchObject({ applied: false });
+	expect(calls(logPath).length).toBe(before);
+	expect(await refreshProjectGateways(agentDir)).toEqual([]);
+	expect(calls(logPath).length).toBe(before);
+	expect((await startProject(agentDir, project.id)).error).toBeUndefined();
+	expect(readFileSync(join(projectGatewayDir(agentDir, project.id), "candidate/mode"), "utf-8")).toBe("simple");
+});
+
+test("default changes refresh running gateways without recreating either container", async () => {
+	const { agentDir, logPath } = setup();
+	const profile = addProfile(agentDir).id;
+	const { project } = await addProject(agentDir, { name: "demo" });
+	if (!project) throw new Error("项目未创建");
+	setDefaultProxy(agentDir, profile);
+	const before = calls(logPath).length;
+	expect(await refreshProjectGateways(agentDir)).toEqual([]);
+	const lines = calls(logPath).slice(before);
+	expect(lines.some((line) => /^(run|stop|start) /.test(line))).toBe(false);
+	expect(lines.filter((line) => line.startsWith("rm ")).every((line) => line.includes("sentinel-binary-"))).toBe(true);
+	expect(lines).toContain(`unpause ${project.container}`);
+	expect(listProjects(agentDir).projects[0]?.proxyId).toBeUndefined();
 });
 
 test("rebuilding a proxied project replaces the sidecar first and removes it after the container", async () => {
@@ -702,7 +752,7 @@ test("rebuilding a proxied project replaces the sidecar first and removes it aft
 	const lines = calls(logPath).slice(before);
 	const removeContainer = lines.findIndex((line) => line.startsWith("rm") && line.includes(project.container));
 	const removeSidecar = lines.findIndex((line) => line.startsWith("rm") && line.includes(sidecar));
-	const runSidecar = lines.findIndex((line) => line.startsWith("run") && line.includes(sidecar));
+	const runSidecar = lines.findIndex((line) => line.startsWith("run") && line.includes(`--name ${sidecar} `));
 	const runContainer = lines.findIndex((line) => line.startsWith("run") && line.includes(project.container));
 	expect(removeContainer).toBeGreaterThanOrEqual(0);
 	expect(removeSidecar).toBeGreaterThan(removeContainer);
@@ -711,7 +761,7 @@ test("rebuilding a proxied project replaces the sidecar first and removes it aft
 	expect(runContainer).toBeGreaterThan(runSidecar);
 	const sidecarRun = lines[runSidecar];
 	expect(sidecarRun).toContain("--cap-add NET_ADMIN");
-	expect(sidecarRun).toContain(":/etc/sing-box/config.json:ro");
+	expect(sidecarRun).toContain(":/etc/sentinel-gateway:ro");
 });
 
 test("stopping a proxied project stops the container before the sidecar serving it", async () => {
@@ -732,21 +782,21 @@ test("stopping a proxied project stops the container before the sidecar serving 
 	expect(stopSidecar).toBeGreaterThan(stopContainer);
 });
 
-test("a project with the proxy off never touches the sidecar", async () => {
+test("a project with the proxy off keeps a gateway ready for switching without rebuilding", async () => {
 	const { agentDir, logPath } = setup();
 	await addProject(agentDir, { name: "demo" });
 	const project = listProjects(agentDir).projects[0];
 	if (!project) throw new Error("项目未创建");
 	const sidecar = singboxContainerNameFor(project.id);
 	expect(resolveProjectProxy(agentDir, project.proxyId)).toBeNull();
-	expect(calls(logPath).some((line) => line.includes(sidecar))).toBe(false);
-	// Starting it is a plain host-network start, with no sidecar call in between.
+	expect(calls(logPath).some((line) => line.includes(`--network container:${sidecar}`))).toBe(true);
+	// An already healthy pair is inspected and reused.
 	const before = calls(logPath).length;
 	await startProject(agentDir, project.id);
 	expect(
 		calls(logPath)
 			.slice(before)
-			.some((line) => line.includes(sidecar)),
+			.some((line) => /^(run|rm|stop|start) /.test(line)),
 	).toBe(false);
 });
 
@@ -786,7 +836,7 @@ async function proxiedProject(): Promise<{
 	return { agentDir, logPath, stateDir, project, sidecar };
 }
 
-test("a container whose sidecar was restarted is rebuilt onto the new namespace", async () => {
+test("a container whose gateway restarted rejoins without deleting its writable layer", async () => {
 	const { agentDir, logPath, stateDir, project, sidecar } = await proxiedProject();
 	// The sidecar started after the container joined it: the namespace the container
 	// is attached to is gone, and nothing inside the container shows it.
@@ -796,15 +846,14 @@ test("a container whose sidecar was restarted is rebuilt onto the new namespace"
 	expect(started.error).toBeUndefined();
 
 	const lines = calls(logPath).slice(before);
-	// The container is replaced — its own layer goes, /work does not — and the
-	// sidecar is left alone because its configuration is not the problem.
-	expect(lines.some((line) => line.startsWith("rm") && line.includes(project.container))).toBe(true);
+	// Stop/start rejoins the same gateway while preserving the work layer.
+	expect(lines.some((line) => line.startsWith("rm") && line.includes(project.container))).toBe(false);
 	expect(lines.some((line) => line.startsWith("rm") && line.includes(sidecar))).toBe(false);
-	const run = lines.filter((line) => line.startsWith("run") && line.includes(project.container)).pop();
-	expect(run).toContain(`--network container:${sidecar}`);
+	expect(lines).toContain(`stop ${project.container}`);
+	expect(lines).toContain(`start ${project.container}`);
 });
 
-test("a container that is gone is rebuilt together with a sidecar serving an older configuration", async () => {
+test("a missing work container rejoins the existing gateway without replacing it", async () => {
 	const { agentDir, logPath, stateDir, project, sidecar } = await proxiedProject();
 	// The sidecar started before the configuration on disk was written, which is
 	// what editing the profile plus a container that later disappeared looks like.
@@ -816,13 +865,11 @@ test("a container that is gone is rebuilt together with a sidecar serving an old
 
 	const lines = calls(logPath).slice(before);
 	const removeSidecar = lines.findIndex((line) => line.startsWith("rm") && line.includes(sidecar));
-	const runSidecar = lines.findIndex((line) => line.startsWith("run") && line.includes(sidecar));
+	const runSidecar = lines.findIndex((line) => line.startsWith("run") && line.includes(`--name ${sidecar} `));
 	const runContainer = lines.findIndex((line) => line.startsWith("run") && line.includes(project.container));
-	// Nothing is attached to the old sidecar any more, so it is recreated: a
-	// restart is the only way it rereads its configuration.
-	expect(removeSidecar).toBeGreaterThanOrEqual(0);
-	expect(runSidecar).toBeGreaterThan(removeSidecar);
-	expect(runContainer).toBeGreaterThan(runSidecar);
+	expect(removeSidecar).toBe(-1);
+	expect(runSidecar).toBe(-1);
+	expect(runContainer).toBeGreaterThanOrEqual(0);
 	// No container layer is thrown away here: there was no container.
 	expect(lines.some((line) => line.startsWith("rm") && line.includes(project.container))).toBe(false);
 });

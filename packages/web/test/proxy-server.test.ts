@@ -34,6 +34,7 @@ let subscriptionServer: Server | undefined;
 let subscriptionUrl = "";
 /** Flipped by a test to simulate a provider that went down after a good read. */
 let subscriptionDown = false;
+let subscriptionEmpty = false;
 
 const incoming: SentinelServerMessage[] = [];
 const waiters: Array<{
@@ -169,7 +170,7 @@ beforeAll(async () => {
 			response.end("gone");
 			return;
 		}
-		if (request.url?.startsWith("/broken")) {
+		if (subscriptionEmpty || request.url?.startsWith("/broken")) {
 			response.writeHead(200, { "content-type": "text/html" });
 			response.end("<html>token expired</html>");
 			return;
@@ -382,6 +383,24 @@ test("a failed refresh keeps the nodes that already worked", async () => {
 	expect(back.proxies.find((entry) => entry.id === profile.id)?.subscription?.error).toBeNull();
 });
 
+test("an HTTP 200 error page preserves cached subscription nodes", async () => {
+	const saved = await save(input({ name: "empty-refresh", mode: "subscription", subscriptionUrl }));
+	const profile = saved.proxies.find((entry) => entry.name === "empty-refresh");
+	if (!profile) throw new Error("订阅未保存");
+	subscriptionEmpty = true;
+	try {
+		drain("proxy_config");
+		send({ type: "refresh_proxy_subscription", id: profile.id });
+		const refreshed = await config();
+		expect(refreshed.error).toContain("没有解析出任何节点");
+		const after = refreshed.proxies.find((entry) => entry.id === profile.id);
+		expect(after?.nodes).toEqual(profile.nodes);
+		expect(after?.subscription?.updatedAt).toBe(profile.subscription?.updatedAt);
+	} finally {
+		subscriptionEmpty = false;
+	}
+});
+
 test("a project can pin one node of a subscription, and only of a subscription", async () => {
 	const saved = await save(input({ name: "可钉节点的机场", mode: "subscription", subscriptionUrl }));
 	const profile = saved.proxies.find((entry) => entry.name === "可钉节点的机场");
@@ -429,8 +448,11 @@ test("switching a node records it even when no sidecar is running", async () => 
 	if (!profile) throw new Error("订阅未保存");
 	const created = await addProject("切换节点的项目", profile.id);
 
-	// The fake Docker has no sidecar listening, so nothing is applied now — but the
-	// choice is stored, which is what the next start uses.
+	// A deliberately stopped project records the choice without waking its pair.
+	send({ type: "stop_project", id: created.id });
+	await waitFor(
+		(entry) => entry.type === "projects" && entry.projects.some((row) => row.id === created.id && row.manualStop),
+	);
 	drain("project_proxy_saved");
 	send({ type: "switch_project_node", projectId: created.id, nodeTag: "tokyo" });
 	const answered = await waitFor((entry) => entry.type === "project_proxy_saved" && entry.projectId === created.id);

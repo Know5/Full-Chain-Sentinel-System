@@ -107,7 +107,11 @@ export const ASSET_PLATFORM_META: Record<SentinelAssetPlatform, AssetPlatformMet
 export function assetEndpoint(officialUrl: string, baseUrl?: string): string {
 	if (!baseUrl) return officialUrl;
 	const base = new URL(baseUrl);
-	base.pathname = `${base.pathname.replace(/\/+$/, "")}${new URL(officialUrl).pathname}`;
+	const prefix = base.pathname.split("/").filter(Boolean);
+	const path = new URL(officialUrl).pathname.split("/").filter(Boolean);
+	let overlap = Math.min(prefix.length, path.length);
+	while (overlap > 0 && prefix.slice(-overlap).join("/") !== path.slice(0, overlap).join("/")) overlap -= 1;
+	base.pathname = `/${[...prefix, ...path.slice(overlap)].join("/")}`;
 	base.search = "";
 	base.hash = "";
 	return base.toString();
@@ -436,6 +440,9 @@ function parseFofa(
 		const message = data.errmsg ?? t("FOFA 拒绝了这次查询");
 		throw new AssetPlatformError("fofa", message, isRateLimitText(message));
 	}
+	if (status < 200 || status >= 300) {
+		throw new AssetPlatformError("fofa", t("FOFA 返回 HTTP {status}", { status }), status === 429 || status >= 500);
+	}
 	if (!Array.isArray(data.results)) {
 		throw new AssetPlatformError("fofa", t("FOFA 返回结构异常：{body}", { body: body.slice(0, 120) }), false);
 	}
@@ -729,6 +736,19 @@ async function probeOnce(options: AssetProbeOptions): Promise<SentinelTestResult
 		const url = new URL(options.accountUrl ?? assetEndpoint(meta.accountUrl, options.baseUrl));
 		url.searchParams.set("key", options.key);
 		const { status, body } = await request("fofa", fetchImpl, url.toString(), { method: "GET" }, signal);
+		// Search-only FOFA relays commonly omit /info/my. Verify the search API
+		// with one record instead of leaving the tool permanently unavailable.
+		if (options.baseUrl && [404, 405, 501].includes(status)) {
+			await searchFofa({ ...options, query: 'ip="192.0.2.1"' }, 1, 1);
+			return { ok: true, message: t("FOFA 搜索接口连接正常（渠道未提供账户接口）") };
+		}
+		if (status < 200 || status >= 300) {
+			throw new AssetPlatformError(
+				"fofa",
+				t("FOFA 返回 HTTP {status}", { status }),
+				status === 429 || status >= 500,
+			);
+		}
 		const data = parseJson("fofa", body, status) as {
 			error?: boolean;
 			errmsg?: string;
@@ -736,6 +756,7 @@ async function probeOnce(options: AssetProbeOptions): Promise<SentinelTestResult
 			remain_free_point?: number;
 			isvip?: boolean;
 			vip_level?: number;
+			email?: string;
 		};
 		if (data.error)
 			throw new AssetPlatformError(
@@ -743,6 +764,9 @@ async function probeOnce(options: AssetProbeOptions): Promise<SentinelTestResult
 				data.errmsg ?? t("FOFA 拒绝了这次查询"),
 				isRateLimitText(data.errmsg ?? ""),
 			);
+		if (data.error !== false && typeof data.email !== "string" && typeof data.fofa_point !== "number") {
+			throw new AssetPlatformError("fofa", t("FOFA 账户接口返回结构异常"), false);
+		}
 		const quota = `${t("免费点 {free} · F 点 {points}", {
 			free: data.remain_free_point ?? "?",
 			points: data.fofa_point ?? "?",

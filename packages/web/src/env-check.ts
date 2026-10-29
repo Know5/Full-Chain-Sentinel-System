@@ -322,6 +322,7 @@ async function checkProjectContainers(agentDir: string | undefined): Promise<Sen
 	const wrongNetwork: string[] = [];
 	const staleNamespace: string[] = [];
 	const staleConfig: string[] = [];
+	const unhealthyGateways: string[] = [];
 	let proxied = 0;
 	for (const project of projects) {
 		const settings = resolveProjectProxy(agentDir, project.proxyId);
@@ -338,8 +339,18 @@ async function checkProjectContainers(agentDir: string | undefined): Promise<Sen
 		}
 		if (status !== "running") stale.push(t("{name}（{status}）", { name: project.name, status }));
 		const actual = networkKind(mode);
-		if (actual && actual !== (wantsProxy ? "proxy" : wanted)) wrongNetwork.push(project.name);
-		if (wantsProxy && actual === "proxy") {
+		if (actual && actual !== (project.gateway || wantsProxy ? "proxy" : wanted)) wrongNetwork.push(project.name);
+		if (project.gateway && actual === "proxy") {
+			const health = await checkSidecar(project.container, projectSidecarName(project), "");
+			if (health.netnsStale) staleNamespace.push(project.name);
+			if (status === "running" && !project.manualStop) {
+				const probe = await runDocker(
+					["exec", projectSidecarName(project), "sh", "/etc/sentinel-gateway/runtime.sh", "status"],
+					{ timeoutMs: 15000 },
+				);
+				if (probe.code !== 0) unhealthyGateways.push(project.name);
+			}
+		} else if (wantsProxy && actual === "proxy") {
 			// A tunnel profile writes its own configuration instead of the JSON one, and
 			// the staleness rule is the same: the file moved on after the sidecar
 			// started, so a rebuild is what applies it.
@@ -356,13 +367,23 @@ async function checkProjectContainers(agentDir: string | undefined): Promise<Sen
 			else if (health.configStale) staleConfig.push(project.name);
 		}
 	}
-	if (stale.length > 0 || wrongNetwork.length > 0 || staleNamespace.length > 0 || staleConfig.length > 0) {
+	if (
+		stale.length > 0 ||
+		wrongNetwork.length > 0 ||
+		staleNamespace.length > 0 ||
+		staleConfig.length > 0 ||
+		unhealthyGateways.length > 0
+	) {
 		// All four can be true at once (a stopped project, a container built under
 		// the old network, one whose sidecar was restarted, and one still serving a
 		// configuration the operator has replaced), and each has its own fix, so
 		// report them together.
 		const parts: string[] = [];
 		const hints: string[] = [];
+		if (unhealthyGateways.length > 0) {
+			parts.push(t("网关出口未就绪：{names}", { names: unhealthyGateways.join(t("、")) }));
+			hints.push(t("重新保存项目代理设置，或启动项目以恢复网关出口，无需重建工作容器"));
+		}
 		if (stale.length > 0) {
 			parts.push(
 				t("{stale}/{total} 个未运行：{names}", {
@@ -390,7 +411,7 @@ async function checkProjectContainers(agentDir: string | undefined): Promise<Sen
 					names: staleNamespace.join(t("、")),
 				}),
 			);
-			hints.push(t("代理容器被重启过，容器已经连不上网；在「项目」页重建这些项目的容器即可恢复"));
+			hints.push(t("代理容器被重启过；独立网关项目可停止后启动恢复，旧项目需重建容器"));
 		}
 		if (staleConfig.length > 0) {
 			parts.push(
@@ -413,7 +434,10 @@ async function checkProjectContainers(agentDir: string | undefined): Promise<Sen
 		t("项目容器"),
 		proxied > 0
 			? t("全部运行中（{count} 个，其中 {proxied} 个走代理）", { count: projects.length, proxied })
-			: t("全部运行中（{count} 个，网络 {network}）", { count: projects.length, network: wanted }),
+			: t("全部运行中（{count} 个，网络 {network}）", {
+					count: projects.length,
+					network: projects.some((project) => project.gateway) ? t("独立网关") : wanted,
+				}),
 	);
 }
 
@@ -459,7 +483,9 @@ async function checkProxySidecars(agentDir: string | undefined): Promise<Sentine
 		return skipped("proxy-containers", GROUP_CONTAINER, t("代理容器"), t("未配置配置目录"));
 	}
 	const { projects } = listProjects(agentDir);
-	const proxied = projects.filter((project) => proxyEnabled(resolveProjectProxy(agentDir, project.proxyId)));
+	const proxied = projects.filter(
+		(project) => project.gateway || proxyEnabled(resolveProjectProxy(agentDir, project.proxyId)),
+	);
 	if (proxied.length === 0) {
 		return passed(
 			"proxy-containers",
@@ -480,7 +506,7 @@ async function checkProxySidecars(agentDir: string | undefined): Promise<Sentine
 			"proxy-containers",
 			GROUP_CONTAINER,
 			t("代理容器"),
-			t("{count} 个项目使用代理，sidecar 全部运行中", { count: proxied.length }),
+			t("{count} 个项目的网关或代理容器全部运行中", { count: proxied.length }),
 		);
 	}
 	const parts: string[] = [];

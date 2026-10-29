@@ -127,6 +127,38 @@ test("clampPage keeps a page at 1 or more and a size within the ceiling", () => 
 	expect(clampPage(2.9, 10.4)).toEqual({ page: 2, size: 10 });
 });
 
+test("API-root base URLs do not duplicate API path segments", () => {
+	expect(assetEndpoint("https://fofa.info/api/v1/search/all", "https://relay.example/fofa/api/v1/")).toBe(
+		"https://relay.example/fofa/api/v1/search/all",
+	);
+});
+
+test("search-only FOFA relays verify through a minimal search and remain callable", async () => {
+	reset({
+		"/relay/api/v1/info/my": [{ status: 404, body: "not supported" }],
+		"/relay/api/v1/search/all": [{ body: json({ error: false, size: 0, results: [] }) }],
+	});
+	const result = await probeAssetPlatform({ platform: "fofa", key: "k", baseUrl: `${base}/relay/api/v1` });
+	expect(result.ok).toBe(true);
+	expect(queryOf(seen[1]).get("size")).toBe("1");
+	expect(queryOf(seen[1]).get("key")).toBe("k");
+	await searchAssets({ platform: "fofa", key: "k", query: 'domain="example.com"', baseUrl: `${base}/relay` });
+	expect(seen).toHaveLength(3);
+});
+
+test("FOFA fallback rejects invalid credentials and malformed search responses", async () => {
+	for (const body of [json({ error: true, errmsg: "invalid key" }), json({})]) {
+		reset({
+			"/relay/api/v1/info/my": [{ status: 405, body: "not supported" }],
+			"/relay/api/v1/search/all": [{ body }],
+		});
+		await expect(probeAssetPlatform({ platform: "fofa", key: "bad", baseUrl: `${base}/relay` })).rejects.toThrow();
+	}
+	reset({ "/relay/api/v1/info/my": [{ status: 401, body: json({ error: true, errmsg: "invalid key" }) }] });
+	await expect(probeAssetPlatform({ platform: "fofa", key: "bad", baseUrl: `${base}/relay` })).rejects.toThrow();
+	expect(seen).toHaveLength(1);
+});
+
 test("hunterPageSize rounds up to a size Hunter accepts", () => {
 	// Verified against the live API: page_size=5 answers 400 页大小不合法.
 	expect(HUNTER_PAGE_SIZES).toEqual([1, 10, 20, 50, 100]);

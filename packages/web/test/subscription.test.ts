@@ -12,7 +12,22 @@
  */
 import { expect, test } from "vitest";
 import { decodeBase64, parseShareLink, uniqueTag } from "../src/share-link.ts";
-import { parseSubscription } from "../src/subscription.ts";
+import { parseSubscription, subscriptionUserAgent } from "../src/subscription.ts";
+
+test("subscription dialect migrates the built-in UA and preserves custom values", () => {
+	expect(subscriptionUserAgent("")).toBe("clash.meta");
+	expect(subscriptionUserAgent("sing-box/1.13.15")).toBe("clash.meta");
+	expect(subscriptionUserAgent("custom-client/2")).toBe("custom-client/2");
+});
+
+test("Clash Trojan implies TLS and VLESS preserves the provider's certificate option", () => {
+	const parsed = parseSubscription(`proxies:
+  - {name: trojan, type: trojan, server: t.example.com, port: 443, password: pw, sni: s.example.com}
+  - {name: vless, type: vless, server: v.example.com, port: 443, uuid: u, tls: true, skip-cert-verify: true}
+`);
+	expect(parsed.nodes[0]?.outbound.tls).toEqual({ enabled: true, server_name: "s.example.com" });
+	expect(parsed.nodes[1]?.outbound.tls).toMatchObject({ enabled: true, insecure: true });
+});
 
 /** The outbound a link produced, failing the test when it produced none. */
 function outboundOf(uri: string): Record<string, unknown> {

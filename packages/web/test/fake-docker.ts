@@ -51,6 +51,11 @@ last_arg() {
 cmd="$1"
 shift
 case "$cmd" in
+	create) printf 'fake-donor\\n'; exit 0 ;;
+	cp)
+		case "$1" in *:/usr/local/bin/sing-box) printf '#!/bin/sh\\nexit 0\\n' > "$2"; chmod +x "$2" ;; esac
+		exit 0 ;;
+	pause|unpause) exit 0 ;;
 	image|build) exit 0 ;;
 	run)
 		# docker run -d --name <name> --network <mode> ...: remember the new container
@@ -59,13 +64,22 @@ case "$cmd" in
 		name=""
 		network=""
 		prev=""
+		gateway_dir=""
+		resolver=""
 		for arg in "$@"; do
 			[ "$prev" = "--name" ] && name="$arg"
 			[ "$prev" = "--network" ] && network="$arg"
+			case "$arg" in *:/etc/sentinel-gateway:ro) gateway_dir="\${arg%:/etc/sentinel-gateway:ro}" ;; esac
+			case "$arg" in *:/etc/resolv.conf) resolver="\${arg%:/etc/resolv.conf}" ;; esac
 			prev="$arg"
 		done
 		if [ -n "$name" ]; then
 			mark running "$name"
+			if [ -n "$gateway_dir" ]; then
+				printf '%s' "$gateway_dir" > "$meta/$name.gateway"
+				printf '%s' "$resolver" > "$meta/$name.resolver"
+				rm -f "$meta/$name.hash"
+			fi
 			if [ -n "$network" ]; then
 				mkdir -p "$meta"
 				printf '%s' "$network" > "$meta/$name.network"
@@ -80,6 +94,7 @@ case "$cmd" in
 		target="$(last_arg "$@")"
 		state=""
 		[ -n "$state_dir" ] && [ -f "$state_dir/$target" ] && state=$(cat "$state_dir/$target")
+		case "$target:$state" in *-sb-*: ) echo "no such gateway" >&2; exit 1 ;; esac
 		format=""
 		for arg in "$@"; do
 			case "$arg" in *"{{"*) format="$arg" ;; esac
@@ -128,7 +143,9 @@ case "$cmd" in
 				;;
 		esac
 		case "$state" in
-			running) echo "true"; exit 0 ;;
+			running)
+				case "$format" in *State.Paused*) echo "true false" ;; *) echo "true" ;; esac
+				exit 0 ;;
 			stopped) echo "false"; exit 0 ;;
 			removed) echo "Error: No such container: $target" >&2; exit 1 ;;
 			*) echo "true"; exit 0 ;;
@@ -149,6 +166,24 @@ case "$cmd" in
 		exit 0
 		;;
 	exec)
+		# Gateway scripts contain network administration: never execute them on the
+		# test host. Model their applied hash separately from container lifecycle.
+		case "$*" in
+			*/etc/sentinel-gateway/*|*/run/sentinel-gateway/*)
+				[ "$1" = "-i" ] && shift
+				gateway="$1"
+				directory=""
+				[ -f "$meta/$gateway.gateway" ] && directory=$(cat "$meta/$gateway.gateway")
+				case "$*" in
+					*"runtime.sh status"*) [ -f "$meta/$gateway.hash" ] && cat "$meta/$gateway.hash"; exit 0 ;;
+					*"runtime.sh apply"*)
+						if [ -f "$meta/$gateway.reject" ]; then cat "$meta/$gateway.reject" >&2; exit 1; fi
+						[ -n "$directory" ] && cp "$directory/candidate/hash" "$meta/$gateway.hash"
+						if [ -f "$meta/$gateway.resolver" ]; then cp "$directory/candidate/resolv.conf" "$(cat "$meta/$gateway.resolver")"; fi
+						exit 0 ;;
+				esac
+				exit 0 ;;
+		esac
 		# The profile test fetches a URL from inside a tunnel container with curl;
 		# answer like a healthy exit so the probe's own bookkeeping is what is tested.
 		if [ "$2" = "curl" ]; then

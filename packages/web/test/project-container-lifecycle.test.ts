@@ -20,6 +20,7 @@ import {
 	addProject,
 	ensureProjectReady,
 	listProjects,
+	projectSidecarName,
 	removeProject,
 	startProject,
 	stopProject,
@@ -58,7 +59,7 @@ test("a deliberate stop is remembered and never started again implicitly", async
 	const stopped = await stopProject(agentDir, project.id);
 	expect(stopped.error).toBeUndefined();
 	expect(stopped.project?.manualStop).toBe(true);
-	expect(calls(logPath).at(-1)).toBe(`stop ${project.container}`);
+	expect(calls(logPath).slice(-2)).toEqual([`stop ${project.container}`, `stop ${projectSidecarName(project)}`]);
 	// The state survives a reload, which is what makes readiness refuse to start it.
 	expect(listProjects(agentDir).projects[0]?.manualStop).toBe(true);
 
@@ -81,7 +82,7 @@ test("starting clears the stop and recreates a container that is gone", async ()
 	const started = await startProject(agentDir, project.id);
 	expect(started.error).toBeUndefined();
 	expect(started.created).toBe(false);
-	expect(calls(logPath).at(-1)).toBe(`start ${project.container}`);
+	expect(calls(logPath)).toContain(`start ${project.container}`);
 	expect(listProjects(agentDir).projects[0]?.manualStop).toBeUndefined();
 	expect(await ensureProjectReady({ ...project, manualStop: undefined }, agentDir)).toBe(true);
 

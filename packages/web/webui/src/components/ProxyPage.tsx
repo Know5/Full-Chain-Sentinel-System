@@ -385,7 +385,7 @@ export function ProxyEditorBody({
 							<span>{t("User-Agent")}</span>
 							<Input
 								value={draft.subscriptionUserAgent}
-								placeholder="sing-box/1.13.15"
+								placeholder="clash.meta"
 								spellCheck={false}
 								onChange={(event) => patch({ subscriptionUserAgent: event.target.value })}
 							/>
@@ -574,7 +574,7 @@ export function ProxyNodeDialogBody({
 				{proxy.subscription?.error ? ` · ${proxy.subscription.error}` : ""}
 			</p>
 			<p className="settings-hint">
-				{t("换节点或刷新后，用到这个代理的项目要重建容器才会走新的节点。")}
+				{t("换节点或刷新后，运行中的网关项目立即应用；已停止的项目在下次启动时应用。旧项目需重建一次迁移到网关。")}
 			</p>
 			<label className="proxy-test-url">
 				<span>{t("测速地址")}</span>
@@ -1100,7 +1100,7 @@ export function ProxyPage({
 			/>
 
 			<Text type="secondary" className="proxyhub-note">
-				{t("项目只记住代理的名字；在这里改一次，用到它的项目下次重建容器就会生效。")}
+				{t("项目按档案共享代理配置，运行中的网关会自动应用更改，无需重建工作容器。")}
 			</Text>
 
 			{editing ? (
@@ -1165,7 +1165,7 @@ export function ProxyPage({
 				onCancel={() => setDeleting(null)}
 			>
 				<Text>
-					{t("删除后，用到它的项目会回到「跟随默认」；已经在跑的容器不受影响，下次重建时才换网络。")}
+					{t("删除后，用到它的项目会回到「跟随默认」；运行中的网关立即切换出口，已有连接可能中断。")}
 					{uses.get(deleting?.id ?? "") ? ` ${t("当前有 {count} 个项目用它。", { count: uses.get(deleting?.id ?? "") ?? 0 })}` : ""}
 				</Text>
 			</Modal>

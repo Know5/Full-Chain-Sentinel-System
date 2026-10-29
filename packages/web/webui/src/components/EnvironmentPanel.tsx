@@ -193,9 +193,7 @@ function NetworkAndProxyForm({
 		<SettingsSection
 			className="settings-panel"
 			title={t("容器网络与代理")}
-			description={
-				dirty ? t("有未保存的修改") : savedAt !== null ? t("已保存，重建容器后生效") : undefined
-			}
+			description={dirty ? t("有未保存的修改") : savedAt !== null ? t("已保存") : undefined}
 			extra={
 				<Space size={8} wrap>
 					<Tag color={config?.imagePresent ? "green" : "orange"} variant="filled">
@@ -208,9 +206,10 @@ function NetworkAndProxyForm({
 			}
 		>
 			<SettingsNote>
-				{t("新建项目和重建的容器用这里的设置；已经在跑的容器保持原样，要到「项目」页点「重建容器」才会切换（下面「项目容器」那一项会写明它们现在用的是哪个）。")}
+				{t("新项目使用独立网关，代理与节点更改立即应用，无需重建工作容器。旧项目保留原网络方式；重建一次后迁移到网关。网关使用 Docker 隔离网络，访问宿主机用 host.docker.internal，监听端口不会自动对外发布。")}
 			</SettingsNote>
 
+			<Text type="secondary">{t("旧项目直连网络（仅适用于尚未迁移到网关的项目）")}</Text>
 			<Radio.Group
 				className="envhub-network"
 				value={network}
@@ -230,7 +229,7 @@ function NetworkAndProxyForm({
 			</Radio.Group>
 
 			<SettingsNote>
-				{t("没有单独选过代理的项目跟这里选的走；新建项目时也可以单独指定。选「不使用」时容器直接用宿主机的网络。")}
+				{t("未单独指定代理的项目跟随默认。选「不使用」时，网关直接连接外网；已停止的项目在下次启动时应用。")}
 			</SettingsNote>
 
 			<Row gutter={[12, 12]} align="bottom">
@@ -250,7 +249,7 @@ function NetworkAndProxyForm({
 				</Col>
 				<Col xs={24} md={10}>
 					<div className="settings-field">
-						<span className="settings-field__label">{t("sidecar 镜像")}</span>
+						<span className="settings-field__label">{t("sing-box 镜像")}</span>
 						<Input value={image} spellCheck={false} onChange={(event) => setImage(event.target.value)} />
 					</div>
 				</Col>

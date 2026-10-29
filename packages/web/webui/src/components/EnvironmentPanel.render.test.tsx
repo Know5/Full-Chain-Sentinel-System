@@ -81,7 +81,7 @@ test("the network mode and the proxy defaults live in one card with one save", (
 	const end = html.indexOf("envhub-buildlog");
 	const card = html.slice(start, end === -1 ? undefined : end);
 	expect(card).toContain("默认代理");
-	expect(card).toContain("sidecar 镜像");
+	expect(card).toContain("sing-box 镜像");
 	expect(card).toContain("香港节点");
 	// One primary button: the single 保存 that commits the whole card.
 	expect(card.match(/ant-btn-primary/g) ?? []).toHaveLength(1);

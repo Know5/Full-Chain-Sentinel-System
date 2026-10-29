@@ -520,7 +520,7 @@ export function clashProxyToNode(entry: Record<string, unknown>, name: string): 
 		...tlsOptions,
 		enabled: entry.tls === true || str("tls") === "true" || Object.keys(reality).length > 0,
 	});
-	// hysteria2 and tuic are TLS by definition: Clash leaves the flag out, and
+	// Trojan, hysteria2 and tuic use TLS: Clash leaves the flag out, and
 	// sing-box refuses an outbound of those types without it.
 	const tlsRequired = tlsBlock({ ...tlsOptions, enabled: true });
 
@@ -582,7 +582,7 @@ export function clashProxyToNode(entry: Record<string, unknown>, name: string): 
 					tag: "",
 					name,
 					protocol: "trojan",
-					outbound: clean({ ...common, type: "trojan", password: str("password"), tls, transport }),
+					outbound: clean({ ...common, type: "trojan", password: str("password"), tls: tlsRequired, transport }),
 				},
 			};
 		case "hysteria2":

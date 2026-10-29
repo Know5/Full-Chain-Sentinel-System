@@ -55,10 +55,12 @@ import {
 } from "./presets.ts";
 import {
 	addProject,
+	changeProjectProxy,
 	clearProxyFromProjects,
 	ensureProjectReady,
 	listProjects,
 	recreateProject,
+	refreshProjectGateways,
 	removeProject,
 	resolveStartupProject,
 	setLastActiveProject,
@@ -490,6 +492,9 @@ export async function startSentinelServer(
 	const subscriptionScheduler = agentDir
 		? new SubscriptionScheduler(agentDir, () => {
 				void proxyView().then((config) => broadcast({ type: "proxy_config", config, push: true }));
+				void afterProxyChange().catch((error: unknown) => {
+					broadcast({ type: "error", message: error instanceof Error ? error.message : String(error) });
+				});
 			})
 		: undefined;
 	subscriptionScheduler?.start();
@@ -813,6 +818,10 @@ export async function startSentinelServer(
 
 	/** Everything a proxy change touches: the page, the project rows, the checks. */
 	async function afterProxyChange(): Promise<void> {
+		if (agentDir) {
+			const errors = await refreshProjectGateways(agentDir);
+			if (errors.length > 0) broadcast({ type: "error", message: errors.join("\n") });
+		}
 		await broadcastProjects();
 		await ensureEnvironment(true);
 		broadcastEnvironment();
@@ -1923,12 +1932,16 @@ export async function startSentinelServer(
 					// The switch is what makes this different from `set_project_proxy`: it
 					// talks to the running sidecar, so it takes effect now. The choice is
 					// recorded either way, so a rebuild starts on the same node.
-					const switched = await switchProjectNode(agentDir, target, message.nodeTag);
+					const switched = target.gateway
+						? await changeProjectProxy(agentDir, target.id, target.proxyId, message.nodeTag)
+						: await switchProjectNode(agentDir, target, message.nodeTag);
 					if (switched.error) {
 						sendError(socket, switched.error);
 						return;
 					}
-					const stored = setProjectProxy(agentDir, message.projectId, target.proxyId, message.nodeTag);
+					const stored = target.gateway
+						? switched
+						: setProjectProxy(agentDir, message.projectId, target.proxyId, message.nodeTag);
 					if (stored.error) {
 						sendError(socket, stored.error);
 						return;
@@ -1991,7 +2004,7 @@ export async function startSentinelServer(
 						sendError(socket, t("未配置配置目录，无法保存项目代理"));
 						return;
 					}
-					const saved = setProjectProxy(agentDir, message.projectId, message.proxyId, message.proxyNode);
+					const saved = await changeProjectProxy(agentDir, message.projectId, message.proxyId, message.proxyNode);
 					if (saved.error) {
 						sendError(socket, saved.error);
 						return;
@@ -1999,6 +2012,7 @@ export async function startSentinelServer(
 					sendTo(socket, {
 						type: "project_proxy_saved",
 						projectId: message.projectId,
+						applied: saved.applied,
 					} satisfies SentinelServerMessage);
 					await broadcastProjects();
 					await ensureEnvironment(true);

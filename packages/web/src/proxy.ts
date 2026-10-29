@@ -32,7 +32,7 @@ import type {
 	SentinelSimpleProxy,
 	SentinelWireGuard,
 } from "./protocol.ts";
-import { DEFAULT_SUBSCRIPTION_USER_AGENT, downloadSubscription, parseSubscription } from "./subscription.ts";
+import { downloadSubscription, parseSubscription, subscriptionUserAgent } from "./subscription.ts";
 import { normalizeIntervalHours } from "./subscription-scheduler.ts";
 
 /** Pinned so a console upgrade does not silently change tunnel behaviour. */
@@ -286,7 +286,7 @@ function normalizeSubscription(value: unknown): SentinelProxySubscription | null
 	if (!url) return null;
 	return {
 		url,
-		userAgent: asString(input.userAgent).trim() || DEFAULT_SUBSCRIPTION_USER_AGENT,
+		userAgent: subscriptionUserAgent(asString(input.userAgent)),
 		updatedAt: typeof input.updatedAt === "number" && Number.isFinite(input.updatedAt) ? input.updatedAt : 0,
 		error: asString(input.error).trim() || null,
 		intervalHours: normalizeIntervalHours(input.intervalHours),
@@ -380,7 +380,7 @@ function proxyInput(value: SentinelProxyInput): SentinelProxyInput {
 		wireguard: normalizeWireGuard(input.wireguard),
 		openvpn: normalizeOpenVpn(input.openvpn),
 		subscriptionUrl: asString(input.subscriptionUrl).trim(),
-		subscriptionUserAgent: asString(input.subscriptionUserAgent).trim() || DEFAULT_SUBSCRIPTION_USER_AGENT,
+		subscriptionUserAgent: subscriptionUserAgent(asString(input.subscriptionUserAgent)),
 		subscriptionIntervalHours: normalizeIntervalHours(input.subscriptionIntervalHours),
 		nodeTag: asString(input.nodeTag).trim(),
 		routePrivateDirect: asBool(input.routePrivateDirect, true),
@@ -468,7 +468,7 @@ export async function refreshProxySubscription(
 	}
 	const downloaded = await downloadSubscription(proxy.subscription.url, proxy.subscription.userAgent);
 	const parsed = downloaded.text === undefined ? undefined : parseSubscription(downloaded.text);
-	const nodes = parsed?.nodes ?? proxy.nodes;
+	const nodes = parsed?.nodes.length ? parsed.nodes : proxy.nodes;
 	// A read that produced nothing is a failure even when the HTTP call succeeded:
 	// an HTML error page is a 200 with no nodes in it.
 	const error = downloaded.error ?? (parsed && parsed.nodes.length === 0 ? t("订阅里没有解析出任何节点") : null);

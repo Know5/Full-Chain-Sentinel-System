@@ -23,8 +23,14 @@ export const MAX_SUBSCRIPTION_BYTES = 2 * 1024 * 1024;
 /** Generous, because providers are often slow and this is a one-off. */
 const FETCH_TIMEOUT_MS = 20000;
 
-/** Panels switch format on this; `sing-box` is the one that yields JSON most often. */
-export const DEFAULT_SUBSCRIPTION_USER_AGENT = "sing-box/1.13.15";
+/** Prefer Clash Meta: some panels omit TLS options in their sing-box response. */
+export const DEFAULT_SUBSCRIPTION_USER_AGENT = "clash.meta";
+
+/** Move the previous built-in default to the corrected dialect; keep custom UAs. */
+export function subscriptionUserAgent(value: string): string {
+	const ua = value.trim();
+	return !ua || ua === "sing-box/1.13.15" ? DEFAULT_SUBSCRIPTION_USER_AGENT : ua;
+}
 
 /** One node that could not be turned into an outbound, and why. */
 export interface SkippedNode {
@@ -51,7 +57,7 @@ export async function downloadSubscription(url: string, userAgent: string): Prom
 	const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 	try {
 		const response = await fetch(trimmed, {
-			headers: { "user-agent": userAgent.trim() || DEFAULT_SUBSCRIPTION_USER_AGENT },
+			headers: { "user-agent": subscriptionUserAgent(userAgent) },
 			redirect: "follow",
 			signal: controller.signal,
 		});
