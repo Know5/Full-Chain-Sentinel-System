@@ -1,234 +1,100 @@
 # 全链哨兵 Full Chain Sentinel System
 
-**简体中文** | [English](README.en.md)
+**简体中文** | [English](README.en.md) · **版本 2.2.7**
 
-知攻善防实验室，基于 [pi](https://github.com/earendil-works/pi) agent harness 改造的**授权渗透测试 Agent**，带中英文 Web 控制台（默认中文）与容器化作业环境。
+知攻善防实验室出品，基于 [pi](https://github.com/earendil-works/pi) 的授权渗透测试 Agent。通过中英文 Web 控制台，统一管理 Web、小程序与移动端测试、项目环境、审批和证据。
 
-## 授权使用声明
+> **仅用于已获得书面授权的目标。** 自动执行模式可运行任意命令，使用者须自行承担操作后果。使用前请阅读[授权声明与安全边界](docs/security.md)。
 
-本项目是攻击性安全工具，**只能用于你已获得书面授权的目标**。
+[快速开始](#quick-start) · [核心能力](#capabilities) · [文档导航](#documentation) · [社区](#community) · [许可](#license)
 
-- 未经授权对他人系统做渗透测试、漏洞扫描、口令破解或入侵，在中国大陆及多数司法辖区属于违法行为（参见《网络安全法》第二十七条，《刑法》第二百八十五条、第二百八十六条、第二百八十七条之二；本段不构成法律意见）。
-- 首次进入控制台必须勾选「我承诺只用于授权合法的渗透测试」，承诺与声明的哈希保存在本机配置目录，声明更新或换账号会重新确认。
-- Agent 的行为难以完全管控：自动执行模式下模型可以运行任意命令。**因使用本项目造成的业务中断、数据损坏、越权访问或其他后果，由使用者自行承担**，作者与贡献者不承担任何责任。
-- 请在授权范围内、隔离环境中使用；对生产系统测试前先取得书面授权并约定时间窗。
+---
 
-本项目以 MIT 许可发布，不附带任何担保。
-
-## 功能
-
-- **方法论驱动的渗透流程**：侦察 → 枚举 → 漏洞映射 → 验证 → 利用 → 后渗透 → 报告，系统提示强调授权范围、证据留痕与最小侵入。
-- **中英文 Web 控制台**（[packages/web](packages/web/README.md)）：默认中文，可在侧栏、登录页与授权承诺页切换英文；服务端提示、错误和报告同步英文化。流式对话与思考过程、工具执行卡片、会话树、文件与子代理弹窗、项目选择。
-- **三档执行模式**：审批模式（默认，每条 bash 命令可编辑后放行或拒绝）、自动执行、AI 审批（守门模型逐条判定 `ALLOW` / `BLOCK`，判定失败或超时一律放行）。审批链覆盖 bash、安卓 shell 命令（`droid_shell`）与 iOS shell（`ios_shell`）；frida、抓包、APK 分析与文件面板直接调用容器，不过审批门。
-- **容器化作业环境**：每个项目一个 Kali 容器，内置侦察、枚举、Web 利用、口令与内网工具；容器网络模式在「设置 → 环境」切换（默认 host）。
-- **自定义代理**（侧栏「代理」页管理档案，新建项目或侧栏项目选择器里按项目选）：让项目容器的出站流量走自己的代理。代理是命名档案：一个 SOCKS5 / HTTP 地址，或**订阅链接**（保存时拉取一次，认 base64 分享链接 / Clash YAML / sing-box JSON，解析出多个节点后选一个；节点缓存进档案，起容器时绝不联网）；另有 **WireGuard 与 OpenVPN 档案**（真隧道：`wg-quick` 或 openvpn 客户端建网卡与默认路由，连 ping 都走隧道，代价是需要重建一次工具镜像；OpenVPN 支持内联证书的 `.ovpn`、单独的账号密码、服务器推送的 DNS 自动用上，以及同一份证书被多个项目共用时的警告）；订阅支持定时更新、批量测速（每个节点真实访问一个可自定义的 URL，取往返毫秒数）与**运行时切换节点**（走 sidecar 的 Clash API，立即生效、不重建容器，另有每 3 分钟自检的「自动择优」）；普通代理、WireGuard 与 OpenVPN 档案还可以行内「测试」——起一个一次性容器，用档案自己的出站或隧道真实访问一个可改的 URL，成功毫秒数或失败原因存进档案并显示在行里，隧道档案被运行中的项目使用时先警告证书/密钥共用可能造成短暂中断；默认代理与 sidecar 镜像在「设置 → 环境」，与容器网络并列。每个项目可以钉住订阅里的具体某个节点，同一个订阅的多个项目就能走不同出口。开启后容器挂到**该项目自己的 sing-box sidecar** 上（`--network container:<sidecar>`），容器里所有出站都进隧道；**节点凭据只挂在 sidecar 里，Agent 在作业容器里读不到**，内网与回环默认直连，域名解析走 Docker 内嵌 DNS、不穿过隧道。代价是容器失去 host 网络的入站能力（目标连不回反向 shell），所以每个项目可以单独选「不使用代理」或单独指定一个档案。详见 [packages/web/README.md](packages/web/README.md)。
-- **漏洞中枢**：`vuln_submit` 提交已验证漏洞，必填 CVSS 分数，原始数据包逐字保存，操作员复核留时间线，可按项目导出 Markdown 报告。
-- **文件夹打包下载**：对话「文件」面板的当前目录与每个目录行都能「下载」，后台用容器 `tar` 打包成 `.tar.gz`，进度与取消走 WebSocket，完成后经带登录态的 HTTP 路由流式下载；不跟随符号链接、包含隐藏文件、不设大小上限，临时包在下载完成或 10 分钟后删除。
-- **资产库**：Agent 用 `asset_report` / `asset_note` 主动上报实际接触过的域名、IP、IP:端口服务与 URL，同一资产按项目自动合并，测试结论按时间线累积；控制台可筛选、改状态与标签、加记录、批量删除与导出 Markdown；漏洞提交时可选关联资产，资产与漏洞详情可互相跳转。
-- **业务建模与 POC 库**：把目标站点还原成 OpenAPI 3.0 文档；Nuclei POC 订阅、检索与引用。
-- **安卓设备插件**：root 测试机安装自研 DroidBridge APK 主动反连，提供 shell、文件上下行、截屏、logcat、tcpdump 抓包、frida 动态调试与 APK 静态分析。
-- **iOS 设备插件**：rootless/rootful 越狱设备安装 `SentinelBridge` deb 后反连，本地控制页填 wss 地址和 token；提供 shell、文件拉取/推送、应用清单、HTTP 日志、抓包、frida、砸壳与 IPA 拉取。
-- **资产测绘平台插件**（设置 → 资产测绘）：接入 **FOFA**、**360 Quake**、**奇安信 Hunter**，Agent 用 `fofa_search` / `quake_search` / `hunter_search` 三个工具按各平台自己的查询语法测绘公网资产（域名、IP、端口、标题、服务、指纹），原始响应落到项目 `evidence/asset/`，每次查询记一条流水。三家都支持**自定义 BaseURL**（可填反向代理前缀，留空使用官方地址；控制台自动拼接 API 路径，保存后按新地址重新验证，失败则不挂载）。**只有「已启用 + 已配置密钥 + 验证通过」的平台才会挂载工具**，没配置或密钥不可用时 Agent 根本看不到该工具；查询由控制台进程直接发起，密钥不进容器、不进 bash 审计，也不进守门模型判定。
-- **Web 搜索插件**（设置 → Web 搜索）：接入 **Tavily**，Agent 用 `web_search`（公网搜索）与 `web_extract`（页面正文抓取）做目标情报收集（泄露文档、公开报告、技术文章）。支持多 Key 号池，控制台按各 Key 剩余额度自动轮换，额度耗尽自动切换；查询流水入 `websearch.db`，原始响应落项目 `evidence/search/`。只有「权限 → Web 搜索」开关打开且号池里有已验证的 Key 时才会挂载工具；密钥明文存本机 `websearch.json`（0600），不进容器、不进 bash 审计。
-- **自定义 MCP 插件**（设置 → MCP）：在控制台里增删改查 MCP 服务器（`http`、`sse` 或 `stdio`）并逐个测试连接，工具以 `mcp__<服务器>__<工具>` 挂给 Agent，仍受「权限 → MCP」总开关约束，且该开关下可逐个服务器放开或关掉。配置由哨兵自己拥有（`mcp-servers.json`，0600），**不读 pi 原生的 `mcp.json`**，所以列表里没有的服务器 Agent 看不到。**stdio 服务器在控制台宿主机上直接执行**（不在容器内、不过 bash 审批），必须逐条勾选风险确认才能保存。
-
-- **社区插件中心**（设置 → 插件）：插件以 Docker 镜像交付，可以跑在本机，也可以跑在用户自己的 VPS 上。控制台主动出站连接插件主机，所以本地部署没有公网 IP 也能用，不需要反向隧道。每个插件就是一个 MCP server，工具沿用 `mcp__<插件>__<工具>` 命名，受「权限 → MCP」总开关约束。安装时展示 manifest 声明的网络模式与 capabilities，`host` 网络和 `privileged` 必须单独确认；工具调用不逐条拦截，只写审计，插件页可一键停用。插件包是一个 zip（根目录或一层子目录里有 `plugin.json`、Dockerfile 与构建上下文），在「设置 → 插件」上传后由插件主机本地构建并运行，不需要镜像仓库；`source` 必须公开。详见 [docs/plugin-center.md](docs/plugin-center.md) 与 [docs/plugin-authoring.md](docs/plugin-authoring.md)。插件还可以自带前端（`ui.entry`）：在插件抽屉点「打开界面」，控制台以 `sandbox="allow-scripts"` 的 iframe 全屏加载镜像里的 `/ui/`，通过 postMessage 桥调用该插件自己的工具、读产物、读写配置与插件级 storage；iframe 是 opaque origin，读不到控制台 Cookie 与 DOM。见 [docs/plugin-ui.md](docs/plugin-ui.md)。
-- **发包重放与界面截图插件**（控制台会话默认挂载，无开关）：每个项目容器里常驻一个 `replayd`（[MITM_Fuzz_Render](MITM_Fuzz_Render) 的 Go 单二进制，控制台首次使用时下发并校验 sha256）。工具只有两个，且只为**报告留证**服务：`replay_capture` 把一次请求 + 响应 + 北京时间取证面板整窗截成 PNG（可指定要高亮的文本片段，并要求模型在 `purpose` 里写明这张图证明什么，该说明会出现在审批卡与审计里），`replay_flows` 回查抓包历史。**日常发包不给专用工具**：Agent 用 bash 里的 curl 发即可，反正同一条审批链，少一个工具；代价是 curl 无法字节保真（畸形 `Content-Length`、手工 chunked、精确 header 顺序），需要那种保真度时走 bash 的 `nc`/python。截图走审批链（人工放行时可先改包），查历史不过门。**不给 Agent 渲染任意 URL 的能力**：replayd 本身有 `POST /api/render`（无头浏览器渲染任意页面），但那是通用抓取工具，不属于数据包工具，只留给操作员在自己的界面里用。数据落在项目目录 `.sentinel/replayd/`（SQLite 历史 + 内容寻址产物），容器重建不丢。
-- **OpenAI 兼容端点**：支持 vLLM、one-api、new-api 等自建端点，界面直接配置。
-- **会话即审计**：复用 pi 的 JSONL 会话树，命令、输出与模型决策完整留痕。
+<a id="quick-start"></a>
 
 ## 快速开始
 
-### Releases
+### 1. 下载并启动
 
-你需要提前安装好 Docker，怎么安装 Docker，在此就不赘述
+先安装并启动 Docker，再从 [Releases](https://github.com/zgsfsec/Full-Chain-Sentinel-System/releases) 选择与你的系统和架构匹配的压缩包。
 
-```sh
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh --mirror Aliyun
-```
-
+Linux x64 示例：
 
 ```sh
-root@VM-0-11-ubuntu:~# tar -xzvf sentinel-web-linux-x64.tar.gz 
-sentinel-web/
-sentinel-web/sentinel-web
-
-root@VM-0-11-ubuntu:~# cd sentinel-web/
-
-root@VM-0-11-ubuntu:~/sentinel-web# ls
-sentinel-web
-
-root@VM-0-11-ubuntu:~/sentinel-web# chmod +x sentinel-web 
-root@VM-0-11-ubuntu:~/sentinel-web# ./sentinel-web 
-
-```
-Windows（需要 Docker Desktop，PowerShell 中运行）：
-
-在 Releases 下载 `sentinel-web-windows-x64.zip`。解压后目录里是控制台 `sentinel-web.exe` 加一个 `replayd/` 文件夹（发布资产名带平台后缀，包内的可执行文件叫 `sentinel-web.exe`）：
-
-```powershell
-.\sentinel-web.exe
+tar -xzf sentinel-web-linux-x64.tar.gz
+cd sentinel-web
+chmod +x sentinel-web
+./sentinel-web
 ```
 
-`replayd/` 里是发包重放服务给容器用的 Linux 二进制：控制台首次在项目容器里用到「发包」时会把它下发进容器，所以要放在可执行文件旁边（把 exe 单独拷到别处时，用 `SENTINEL_REPLAYD_DIR` 指向 `replayd/` 所在目录即可）。Windows 不再单独发布裸 `.exe`：它只是这个 zip 的内容，缺了 `replayd/` 会在第一次「发包」时才报错。
+Windows 解压 `sentinel-web-windows-x64.zip` 后，在 PowerShell 运行 `.\sentinel-web.exe`。请保留程序旁的 `replayd/` 目录。
 
-该文件未签名，SmartScreen 可能拦一次，选择「更多信息 → 仍要运行」即可。Windows 默认没有 `openssl`，首次启动会回退到明文 HTTP 并在日志里提示；要保留 HTTPS，安装 OpenSSL，或用 `--tls-cert/--tls-key` 指定证书。容器默认用 host 网络，如果本机 Docker Desktop 不支持 host 网络，在「设置 → 环境」切到桥接后重建容器。
+### 2. 完成初始化
 
-控制台的 Release 资产：`sentinel-web-linux-x64.tar.gz`、`sentinel-web-linux-arm64.tar.gz`、`sentinel-web-darwin-arm64.tar.gz`、`sentinel-web-darwin-x64.tar.gz`、`sentinel-web-windows-x64.zip`，另有 DroidBridge APK。五个归档都带 `replayd/`（linux amd64/arm64），供容器内发包重放使用。
+打开启动日志中的**完整入口地址**，设置账号密码并确认授权声明。在「设置 → 环境」准备工具镜像，在「模型设置」填写 Base URL、API Key 和模型 ID，然后创建项目。
 
-首次运行访问需要设置账号密码
+新项目包含工作容器与常驻网关，切换代理无需重建工作容器。
 
-![](images/Pasted%20image%2020261017122835.png)
-请确保你的所有测试在本地，或者有正规合法的渗透测试授权，并且同意AI 生成式风险，否则无法进入平台。
+### 3. 开始测试
 
-进入平台后请先部署好容器：
-![](images/Pasted%20image%2020261017123006.png)
-等待即可
-![](images/Pasted%20image%2020261017123905.png)
+在对话中描述授权范围和目标，默认使用审批模式。移动端测试需先接入设备，再启用当前会话的对应工具。
 
-全链哨兵（PCSS）是以项目为隔离，为了安全考虑，每个项目一个 kali 容器。
-建议开 host 模式，否则公网环境无法进行监听操作。
+[安装部署与启动参数](docs/deployment.md) · [源码运行](docs/deployment.md#section-3) · [使用指南](docs/usage.md) · [设备接入](docs/mobile.md)
 
-## Windows注意事项
+---
 
-不建议使用 Windows 运行“全链哨兵”。需要提前安装 [Win32OpenSSL](https://slproweb.com/products/Win32OpenSSL.html)，并把 `C:\Program Files\Git\usr\bin\` 加入系统环境变量，否则无法正常通过 HTTPS 访问。
+<a id="capabilities"></a>
 
-### 从源码运行
+## 核心能力
 
-要求 Node.js >= 22.19.0。
-
-```bash
-npm install --ignore-scripts
-npm run build:offline  # 后端各包与 coding-agent（不联网，模型目录已入库）
-npm run build:web      # Web 控制台与前端资源
-npm run start:web
-```
-
-`npm run build` 只构建后端各包，控制台需要额外的 `npm run build:web`。
-
-启动后日志里会打印本次的入口地址，形如 `https://<地址>:<端口>/<随机串>`。默认监听 `0.0.0.0`，随机入口串与 cookie 校验用于挡扫描器：没有入口串的请求一律返回普通 404，入口串每次启动都变。请在日志里取完整地址访问。
-
-默认使用自签 HTTPS：首次启动用本机 openssl 生成证书（存于配置目录 `tls/`，SAN 覆盖 localhost 与当前所有网卡 IP），之后复用。浏览器首次访问会提示证书不受信任，选择「高级 → 继续前往」即可，也可把 `tls/cert.pem` 导入系统信任。换网络后局域网 IP 变化导致证书域名不匹配时用 `--tls-regen` 重签。
-
-首次访问的流程：
-
-1. 设置控制台密码（scrypt 哈希，保存在本机配置目录）。
-2. 阅读并勾选授权使用承诺。
-3. 在左侧「模型设置」配置端点（Base URL / API Key / 模型 ID）。
-
-启动参数与环境变量：
-
-| 参数 | 环境变量 | 说明 |
-| --- | --- | --- |
-| `--host <地址>` | `SENTINEL_HOST` | 监听地址，默认 `0.0.0.0` |
-| `--port <端口>` | `SENTINEL_PORT` | 监听端口，默认 `7777` |
-| `--cwd <目录>` | `SENTINEL_CWD` | 工作目录，默认当前目录 |
-| `--gate-token <串>` | `SENTINEL_GATE_TOKEN` | 固定入口串，默认每次启动随机 |
-| `--no-gate` | — | 关闭随机入口，直接以 `/` 提供服务（仅本机调试） |
-| `--no-tls` | `SENTINEL_TLS=0` | 关闭 HTTPS，退回明文 HTTP（默认自签 HTTPS） |
-| `--tls-cert` / `--tls-key` | — | 使用指定证书与私钥（成对使用，优先于自动生成） |
-| `--tls-regen` | — | 重新生成自签证书（本机 IP 变化、浏览器报域名不匹配时用） |
-| `--no-consent` | — | 跳过首次授权承诺（自动化环境） |
-| `--check` | — | 只做启动前自检并打印报告，不启动服务 |
-
-插件主机是同一个二进制的子命令，参数与主服务分开：
-
-```sh
-./sentinel-web plugin-host --local                    # 默认，127.0.0.1 随机端口，控制台自动发现
-./sentinel-web plugin-host --listen 0.0.0.0:7800      # 对外监听，自动按 remote 模式运行
-```
-
-| 参数 | 环境变量 | 说明 |
-| --- | --- | --- |
-| `--local` | — | 只监听回环地址（默认） |
-| `--listen <地址:端口>` | — | 监听地址，例如 `0.0.0.0:7800`；非回环地址自动判定为 remote |
-| `--mode <local\|remote>` | — | 覆盖 locality 判定 |
-| `--data-dir <目录>` | `SENTINEL_PLUGIN_HOST_DIR` | 数据目录，默认 `~/.sentinel/plugin-host` |
-| `--tls-cert <pem>` / `--tls-key <pem>` | — | 直接提供 HTTPS 证书（成对使用；本地模式不允许） |
-| `--rotate-token` | — | 重新生成访问 token，旧 token 立即失效 |
-
-说明：
-
-- 启动时会打印 token 与数据目录；token 存在数据目录的 `host.json`（0600），控制台添加远端主机时填它。
-- 插件主机自身只提供 HTTP；控制台拒绝非回环的 `http://` 地址，公网部署要放在 Caddy/nginx 的 HTTPS 反代后面。
-- `--local` 只是默认值；一旦给了 `--listen`，就按 `--listen` 的地址监听并据此推断模式。
-- 插件主机与主控制台可以同机，也可以分开；远端主机不能安装 `locality: local-only` 的插件。
-
-## 目录结构
-
-本仓库沿用上游 pi monorepo 的分包结构（包名仍是上游的 `@earendil-works/*`，改名单独进行）：
-
-| 包 | 说明 |
+| 能力 | 说明 |
 | --- | --- |
-| [packages/web](packages/web) | 全链哨兵 Web 控制台：HTTP + WebSocket 服务与前端 |
-| [packages/coding-agent](packages/coding-agent) | Agent CLI 与运行时 |
-| [packages/agent](packages/agent) | 工具调用与状态管理 |
-| [packages/ai](packages/ai) | 多 provider LLM API |
-| [packages/tui](packages/tui) | 终端 UI 库 |
-| [packages/durable](packages/durable) | 会话、任务与文档运行时 |
-| [packages/mcp](packages/mcp) · [packages/protocol](packages/protocol) | MCP 与协议层 |
-| [packages/droid-apk](packages/droid-apk) | 安卓 DroidBridge APK（Kotlin） |
-| [packages/web/ios](packages/web/ios) | iOS SentinelBridge deb（Swift）与 Sileo 源 |
-| [MITM_Fuzz_Render](MITM_Fuzz_Render) | 容器内发包重放与渲染截图服务（`replayd`，Go 单二进制） |
-| [docker](docker) | 作业容器镜像（Kali + 工具链） |
+| 对话与工程 | 流式对话、会话分叉、工具过程、子代理与批量任务编排 |
+| 项目与网络 | Kali 工作容器、常驻网关、SOCKS5/HTTP、订阅、WireGuard、OpenVPN 与出口热切换 |
+| 审批与审计 | 人工审批、自动执行、AI 审批，调用流水与会话记录 |
+| 资产与漏洞 | 资产库、漏洞中枢、CVSS、证据留存与 Markdown 报告 |
+| 建模与 POC | OpenAPI 业务建模、Nuclei POC 订阅、检索与引用 |
+| 移动端 | 安卓 DroidBridge 与 iOS SentinelBridge，设备反连、抓包与动态分析 |
+| 情报与插件 | FOFA、Quake、Hunter、Tavily、MCP 与本地 / 远端插件主机 |
+| 发包与取证 | 请求重放、历史查询、截图留证与文件打包下载 |
 
-## 开发
+配置条件、工具范围与限制见[功能详解](docs/features.md)。
 
-```bash
-./test.sh                   # 全部非 e2e 测试
-npm run check               # biome + 依赖/导入/入口图检查 + tsc + webui + 浏览器冒烟
-npm run build:offline       # 全量构建，不联网、不重生成模型目录
-```
+<details>
+<summary>查看控制台示例</summary>
 
-本仓库不跑 CI（只保留发布流程）：提交前请自己跑 `npm run check` 和 `./test.sh`。
+![项目与对话界面](images/Pasted%20image%2020261017124047.png)
 
-单测从包根目录跑：
+更多操作截图见[使用指南](docs/usage.md)。截图仅供流程参考，以当前版本界面为准。
 
-```bash
-node "$(git rev-parse --show-toplevel)/node_modules/vitest/dist/cli.js" --run test/<name>.test.ts
-```
+</details>
 
-`packages/ai/src/providers/data/` 是 `generate-models` 的产物，已固定在版本库里：模型 id 的类型联合体直接由它推导，固定它之后 `tsc` 和测试不会随厂商轮换模型而漂移（全新克隆也能离线做类型检查）。要更新目录时跑 `npm run generate:models`（需联网）并提交改动——刷新会改到 `.manifest.json` 的 `generatedAt` 时间戳，属正常。发布流程仍会实时刷新，发布产物里的目录是最新的。
+---
 
-作业容器（镜像里带 Chromium 与中文字体，供发包截图使用）：
+<a id="documentation"></a>
 
-```bash
-docker build -t sentinel:latest docker/
-```
+## 文档导航
 
-发包服务（`replayd`）：控制台首次在项目容器里用到它时会自动下发，二进制从仓库检出（`MITM_Fuzz_Render/dist/replayd_linux_{amd64,arm64}`）或发布包同级的 `replayd/` 目录读取，也可以用 `SENTINEL_REPLAYD_DIR` 指定。本地没构建过就先跑一次：
+| 我想了解 | 文档 |
+| --- | --- |
+| 安装、HTTPS、启动参数、常驻运行 | [安装部署](docs/deployment.md) |
+| 完整功能与配置条件 | [功能详解](docs/features.md) |
+| 创建项目、Web / 小程序、工程、审批与 POC | [使用指南](docs/usage.md) |
+| 安卓与 iOS 设备接入 | [移动端指南](docs/mobile.md) |
+| 代理切换、网关与旧项目迁移 | [项目网关](packages/web/docs/project-gateway.md) |
+| 资产上报、关联漏洞与导出 | [资产库](docs/asset-library.md) |
+| 安装本地 / 远端插件 | [插件中心](docs/plugin-center.md) |
+| 开发插件与插件前端 | [插件开发](docs/plugin-authoring.md) · [插件前端](docs/plugin-ui.md) |
+| 仓库结构、构建与测试 | [开发指南](docs/development.md) |
+| 授权、审批范围与数据边界 | [授权声明与安全边界](docs/security.md) |
 
-```bash
-cd MITM_Fuzz_Render && make dist   # 产出 dist/replayd_linux_{amd64,arm64}
-```
+<a id="community"></a>
 
-基础镜像与 apt/pip/npm/go 软件源可在控制台「设置 → 环境」配置，也可以在命令行用 `--build-arg` 覆盖。
+## 社区
 
-## 安全边界
+加入交流群请在打招呼内容中备注「全链哨兵」。[查看群二维码与致谢](docs/community.md)。
 
-**控制台**：Docker 是硬依赖。每个项目一个 Kali 容器（`sentinel:latest`），Agent 的 bash 命令**在容器内执行**（`docker exec`），项目目录 bind mount 进 `/work`，容器**以 root 运行**。容器网络默认 **host**（容器直接用宿主机网络栈，反向 shell、payload 服务、本地靶场、内网与 VPN 才是真实的），可在「设置 → 环境 → 容器网络」切到 **bridge**；两种模式都保留 `NET_RAW`，`NET_ADMIN` 只在 bridge 模式授予。**代理档案**（侧栏「代理」页）被项目选中后，容器既不用 host 也不用 bridge，而是共享该项目 sing-box sidecar 的网络命名空间：出站全部进隧道，sidecar 才有 `NET_ADMIN` 与 tun 设备，作业容器仍只有 `NET_RAW`，节点配置只读挂进 sidecar、不进作业容器。Docker 检查有阻断项时控制台拒绝 `prompt`、`compact` 与持续目标。
-
-**但容器只约束命令，不是整体沙箱**：控制台与 Agent 进程本身以启动者的用户身份跑在宿主机上，只有命令进容器。
-
-- 审批链只覆盖 bash、安卓 shell（`droid_shell`）与 iOS shell（`ios_shell`），子代理的 bash 走同一条链；**read/edit/write、文件面板、MCP 工具、codemode，以及 frida、抓包、APK 分析等直接调用容器的工具都不过门**。工程任务的 bash 另有一套正则黑名单、20 秒超时与 40 条预算，同样不走审批门。
-- `read/edit/write` 直接读写宿主机文件系统，项目目录只是相对路径的基准，绝对路径不受限制；MCP 的 stdio 服务器是宿主机子进程。
-- AI 审批（守门模型）只判六类破坏性操作，判定失败、超时或无法解析一律放行（fail-open），**不是沙箱、也不做数据防泄漏**。
-- 容器以 root 运行，没有资源上限，也没有 cap-drop / seccomp / read-only；同一项目的所有会话与并发任务共用一个容器。
-- 控制台会加载项目目录下的 `settings.json`、`.pi/extensions`、`AGENTS.md`，且没有项目信任确认步骤——不要把来源不可信的工作目录设为项目。MCP 服务器不在此列：它们只来自「设置 → MCP」，项目目录里的 `.pi/mcp.json` 与配置目录里的 `mcp.json` 都不读。
-- **自定义 MCP 的 stdio 服务器在控制台宿主机上直接执行**：不在容器内，也不经过 bash 审批与守门模型，因此必须逐条勾选风险确认才能保存。需要 OAuth 登录的 HTTP 服务器请在终端执行 `sentinel mcp login`。
-- **Web 搜索会把搜索关键词与 API Key 发送给 Tavily**：请求在控制台进程里直接 HTTPS 发出，不过审批门、也不经过容器；搜索内容对 Tavily 可见。多 Key 明文存本机 `websearch.json`（权限 0600），前端不回显；流水与原始响应留在本机（`websearch.db` 与项目 `evidence/search/`）。
-- **文件夹打包会读取整个 /work 子树**：打包在项目容器内以 root 执行，隐藏文件与点目录都会进入压缩包；符号链接按链接本身打包、不跟随，避免把 `/work` 外的文件带进包。不设大小上限，超大目录会占用服务器临时磁盘与 CPU；临时 `.tar.gz` 写在配置目录的 `downloads/`（0600），下载完成或 10 分钟后删除，服务重启时清理残留。
-- **资产库只写本机**：Agent 上报的资产与测试记录写入控制台本机的 `asset-library.db`，工具不发起任何外部请求；资产数与记录数不设上限，列表分页，导出为全量。导出的 Markdown 可能包含内部域名与 URL query 中的令牌，按敏感材料处理；删项目时一并删除。
-- **资产测绘会把查询内容与 API Key 发送给第三方平台**（FOFA / 360 Quake / 奇安信 Hunter）：查询在控制台进程里直接 HTTPS 发出，不过审批门、也不经过容器，但目标域名、IP 等查询内容对这些平台可见。密钥明文存在本机配置目录的 `assets.json`（权限 0600），前端不回显；查询流水与原始响应留在本机（`assets.db` 与项目 `evidence/asset/`）。若配置了自定义 BaseURL，API Key 与查询内容会发送到该地址，只应填写可信的反向代理。
-- **容器代理把出站流量交给第三方，并放弃容器的入站能力**：开了代理的项目，容器里的一切出站都从操作员配置的出口走，流量内容与目标地址对代理运营方可见，只应使用自己信任的节点。节点凭据（含订阅里的账号信息）生成的配置只以只读方式挂进 sidecar，作业容器里的 Agent 读不到，删项目时一并删除；但两者共享 `127.0.0.1`，**不要给 sing-box 开 `clash_api` 之类的回环管理接口**——容器里的 root 能连到它。代理模式下容器不再接受入站（目标连不回反向 shell、`127.0.0.1` 不再是宿主机），需要时对该项目选「不使用代理」。**不要单独重启 sidecar 容器**：重启会换掉网络命名空间，正在运行的作业容器仍然是 `Up` 但已失去全部网卡，只有重建容器能恢复。
-
-完整边界与配置见 [packages/web/README.md](packages/web/README.md#安全提示)。
-
-- **发包重放（replayd）在容器内运行，控制台用 `docker exec` 调用它**：服务只监听容器内回环 `127.0.0.1`（端口按容器名推导，被占用时自动换），控制台通过容器内 `curl` 调它的 REST，因此不发布端口、不改容器创建参数，host 与 bridge 两种网络模式都可用；访问 token 由 replayd 自己生成在挂载的数据目录里，由容器内读取，不经过 `docker exec` 的命令行参数。`replay_capture` 会真的打到目标，因此和 bash 一样过审批链（人工可改包后放行），`replay_flows` 只读历史、不过门。截图截的是 replayd 自己的 Repeater 窗口，内容是你放行过的那次请求的响应。截图依赖容器镜像里的 Chromium：镜像没装浏览器时截图会明确报错并给出补装方式（控制台下发的是 replayd 二进制，不是浏览器）。数据目录 `.sentinel/replayd/` 在项目工作目录内，容器里的命令与文件面板都能读写它。
-自动执行模式下模型可运行任意命令，持续目标在自动执行下也没有危险命令黑名单，请仅在**授权目标与隔离环境**中使用；需要无人值守又不愿全放行时用 AI 审批。控制台的登录、随机入口串与授权承诺只用于防误用与防扫描，不构成隔离。
-
-安全问题请通过仓库 Issue 反馈，不要在公开 Issue 里附可直接利用的细节。
+<a id="license"></a>
 
 ## 上游与许可
 
@@ -239,160 +105,3 @@ cd MITM_Fuzz_Render && make dist   # 产出 dist/replayd_linux_{amd64,arm64}
 - 上游仓库：https://github.com/earendil-works/pi
 - 本项目新增部分的版权归本项目作者，同样以 MIT 发布。
 - 例外：[packages/coding-agent/examples/extensions/doom-overlay/doom/](packages/coding-agent/examples/extensions/doom-overlay/doom/) 是 GPLv2 的 DOOM 编译产物及其对应源码，不属于 MIT，详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
-
-## 何为全链路？
-
-渗透测试场景在安全服务工作中，通常分为三种
-
-**1.Web 渗透 2.小程序渗透 3.APP 渗透**
-
-至此，我们全链路打通，一个平台畅游所有任务
-
-三端是怎么打通的呢？
-我们要知道我们渗透测试测的是什么？很多人都不明白道理，我们渗透测试过程，90% 的针对服务器后端进行测试的，后端想给我们前端展示，所以想打通三端也只是不同载体的问题。
-比如：
-
-**Web** 前端载体就是浏览器，
-
-**小程序**的前端载体就是小程序容器
-
-**APP** 的前端载体就是一些 UI 框架
-
-所以，本质上 Web、小程序、APP，都是一样的。
-
-## 使用
-
-使用前必须创建项目，否则无法使用
-![](images/Pasted%20image%2020261017124002.png)
-
-![](images/Pasted%20image%2020261017124018.png)
-
-
-简单说几个场景怎么用吧，
-1.**Web 测试**
-直接输入框使用即可
-
-2.**小程序**
-选择预设 Agent 然后自己在 Tscan 这类工具中把微信小程序反编译，点击左下角“附件”上传即可。
-
-3.**APP**
-在左侧安卓设备中配置好你的安卓机器，然后在你的安卓里面安装好对应 APP，然后在对话框中选择“安卓”即可
-
-![](images/Pasted%20image%2020261017124047.png)
-
-因为本人想法是更少的工具和上下文，所以，你如果不开“安卓”这个按钮的话，他是不会插入安卓相关的工具调用的、也不会插入相关 prompt 
-
-## 关于安卓配置
-
-你需要有一台 root 后的设备（虚拟机亦可），并且安装配套的 app 即可
-
-![](images/Pasted%20image%2020261017124555.png)
-
-
-关于手机 root，这里就不再讲解，有兴趣可以去酷安社区逛逛,安卓机为反连主平台，所以你可以将主程序部署在公网服务器。
-
-<img src="images/Pasted%20image%2020261017124518.png" width="295" alt="Pasted image 20261017124518.png" />
-
-## 关于 iOS 安全
-
-首先如果你没有一些 iOS 安全相关的基础知识，不建议使用这个功能。该功能还在开发测试阶段，欢迎提交 issue。
-
-首先需要一台越狱后的机器，并安装 Sileo。
-
-添加软件源（必须使用小写仓库地址）：
-
-```text
-https://zgsfsec.github.io/sentinel-ios-repo/
-```
-
-<img src="images/IMG_0002.png" width="298" alt="Sileo 添加 SentinelBridge 源" />
-
-<img src="images/IMG_0003.png" width="294" alt="Sileo 安装 SentinelBridge" />
-
-然后在 iPhone 的 Safari 打开：
-
-```text
-http://127.0.0.1:9945/setup
-```
-
-在控制台「iOS 设备」页创建 token，填入控制台 wss 地址、token，检测并核对证书指纹后保存。控制页会常驻，可随时连接、停止和重载。
-
-<img src="images/IMG_0004.png" width="304" alt="SentinelBridge 本地控制页" />
-
-
-## 工程模式
-
-适用于批量测试环节，指挥官架构，适用于多任务指挥，这个还是测试阶段，自行玩一玩吧。
-
-![](images/Pasted%20image%2020261017124651.png)
-
-## 审批
-
-建议在设置->模型里面再配置一个小模型，比如 qwen,Hook所有 Bash 调用过程，建议用千问的 API 按量付费，不可以用 CodingPlan 模型，因为 CodingPlan 会有速率限制。
-
-https://www.qianwenai.com/models/qwen-flash
-
-采用小模型监管大模型，最大程度上尽量避免对生产环境造成影响。
-
-侧边栏「审批」有两个标签页：「AI 审批」是守门模型的判定流水（判定值、理由、耗时、模型）；「自动审批」是没有人判定的调用流水——自动执行模式、审批模式的人工放行与人工拦截、以及守门没覆盖的工具（read / edit / write、MCP 开关关闭时），每次 bash、MCP 与插件调用都会留一条。两个标签页合起来覆盖每一次调用且只记一次，支持按项目、会话、来源、时间、关键字筛选。
-
-![](images/Pasted%20image%2020261017125228.png)
-
-## 关于 POC 订阅
-
-你可以做一些自己的 Nuclei 的 POC 订阅服务，放进“设置->POC订阅”里面，这种应用场景主要是打 nday ，本来没打算加 Nuclei 固定 POC 的功能的，但是考虑到像 jeecg boot 、若依这种开发框架，的 api 路由自定义功能，还是加了吧。
-
-你只需要在你的远程服务器上定时的把Nuclei 的所有 POC 打包成 zip，然后远程同步即可。
-
-也可以直接同步 Nuclei 官方的 POC
-
-![](images/Pasted%20image%2020261017125244.png)
-
-## 插件中心
-
-### 如何使用？
-
-“全链哨兵”抽象出一个“插件概念”可以从不同主机运行不同的插件。
-
-比如你是本机部署的“全链哨兵”，你希望“全链哨兵”有公网能力，比如你想拥有公网的 msf，那么你可以复制一份“全链哨兵”到你的 VPS，并且执行：
-
-```
-./sentinel-web plugin-host --listen 0.0.0.0:7800
-```
-
-在设置->插件,添加即可。
-
-<img src="images/Pasted%20image%2020261017233410.png" alt="插件中心" width="900" />
-
-### 如何开发插件？
-
-再开发文档页面，复制全文，直接复制给 AI，然后提需求即可。
-
-<img src="images/Pasted%20image%2020261017233500.png" alt="插件开发文档" width="900" />
-
-亦可直接参考仓库里面提供的测试插件“memshell-party”
-
-## 如何持久化运行？
-
-建议使用 screen -R sentinel
-
-![](images/Pasted%20image%2020261017133338.png)
-
-然后 ctrl +a ,键入 d 即可，更多用法自行学习 screen
-
-## 全链哨兵交流群
-
-加群的，一定要在“打招呼内容”备注“全链哨兵”。
-
-<img src="images/Pasted%20image%2020261017125335.png" width="294" alt="Pasted image 20261017125335.png" />
-
-<img src="images/Pasted%20image%2020261017125351.png" width="340" alt="Pasted image 20261017125351.png" />
-
-
-## 致谢
-
-https://github.com/earendil-works/pi
-
-https://github.com/ReaJason/MemShellParty
-
-https://github.com/vulhub/java-chains
