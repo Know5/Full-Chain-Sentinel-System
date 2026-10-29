@@ -8,7 +8,7 @@
    ============================================================ */
 
 :root {
-	--console-sider: #0b1322;
+	--console-sider: #101b2e;
 	--console-bg: #f4f6f8;
 	--console-border: #e4e7ec;
 	--console-text: #101828;
@@ -76,14 +76,14 @@ body {
 	align-items: center;
 	gap: 10px;
 	height: 56px;
-	padding: 0 14px;
+	padding: 0 16px;
 	flex: none;
 }
 
 .console-brand__mark {
-	width: 30px;
-	height: 30px;
-	border-radius: 9px;
+	width: 32px;
+	height: 32px;
+	border-radius: 10px;
 	display: grid;
 	place-items: center;
 	flex: none;
@@ -115,7 +115,7 @@ body {
 	min-height: 0;
 	overflow-y: auto;
 	overflow-x: hidden;
-	padding: 2px 0 10px;
+	padding: 4px 0 12px;
 }
 
 .console-menu {
@@ -170,7 +170,7 @@ body {
 .console-sider-footer {
 	flex: none;
 	border-top: 1px solid rgba(255, 255, 255, 0.08);
-	padding: 12px 16px;
+	padding: 14px 16px;
 }
 
 .console-sider-footer__row {
