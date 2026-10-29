@@ -513,6 +513,7 @@ export function App() {
 	/** Engineering mode: engines, doctrines, and mirrored event logs. */
 	const [engines, setEngines] = useState<SentinelEngine[]>([]);
 	const [doctrines, setDoctrines] = useState<SentinelDoctrineView[]>([]);
+	const doctrineSaveResolverRef = useRef<((error: string | null) => void) | null>(null);
 	/** Preset agents: null until the first list arrives, which the settings page shows. */
 	const [presets, setPresets] = useState<SentinelPresetView[] | null>(null);
 	/** The last 导入 reply, kept until the next one replaces it. */
@@ -1080,6 +1081,9 @@ export function App() {
 					setDoctrines(message.doctrines);
 					break;
 				case "doctrine_saved": {
+					const resolve = doctrineSaveResolverRef.current;
+					doctrineSaveResolverRef.current = null;
+					resolve?.(message.error ?? null);
 					if (message.error) {
 						pushError(t("思路保存失败：{error}", { error: message.error }));
 						return;
@@ -1442,6 +1446,8 @@ export function App() {
 					break;
 				}
 				case "error":
+					doctrineSaveResolverRef.current?.(message.message);
+					doctrineSaveResolverRef.current = null;
 					pendingInstallRef.current = null;
 					// A protocol error naming a message this server does not know means
 					// the page is newer than the process serving it: the browser keeps the
@@ -3192,6 +3198,16 @@ export function App() {
 									: engines
 							}
 							doctrines={doctrines}
+							project={snapshot?.project ?? null}
+							onSaveDoctrine={(input) => new Promise<string | null>((resolve) => {
+								doctrineSaveResolverRef.current = resolve;
+								send({ type: "save_doctrine", input });
+								window.setTimeout(() => {
+									if (doctrineSaveResolverRef.current !== resolve) return;
+									doctrineSaveResolverRef.current = null;
+									resolve(getLanguage() === "en" ? "Save timed out. Try again." : "保存超时，请重试。");
+								}, 15000);
+							})}
 							presets={presets ?? []}
 							onSend={(message) => send(message as SentinelClientMessage)}
 							onError={pushError}

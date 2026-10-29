@@ -11,10 +11,19 @@
 }
 
 .doctrine-manager__layout {
-	display: grid;
-	grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
-	align-items: start;
-	gap: 20px;
+	min-width: 0;
+}
+
+.doctrine-manager__toolbar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	flex-wrap: wrap;
+	gap: 12px;
+}
+
+.doctrine-manager__toolbar .ant-input-search {
+	width: min(100%, 300px);
 }
 
 .doctrine-manager__library,
@@ -29,6 +38,7 @@
 
 .doctrine-manager__list .ant-collapse-title {
 	min-width: 0;
+	flex: 1;
 }
 
 .doctrine-manager__list .ant-collapse-header {
@@ -59,13 +69,83 @@
 	overflow-wrap: anywhere;
 }
 
-.doctrine-manager__form {
+.engine-target-files {
+	min-width: 0;
+	margin-top: 12px;
+}
+
+.engine-target-files__hint {
+	display: block;
+	margin-top: 8px;
+	font-size: 12px;
+	line-height: 1.6;
+}
+
+.engine-target-files .ant-upload-list-item-name {
 	min-width: 0;
 }
 
-@media (max-width: 1000px) {
-	.doctrine-manager__layout {
-		grid-template-columns: minmax(0, 1fr);
-		gap: 16px;
-	}
+.engine-target-files .ant-alert {
+	margin-top: 8px;
+}
+
+.enginewiz-agent-entry {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	margin-top: 16px;
+	padding-top: 12px;
+	border-top: 1px solid var(--console-border);
+}
+
+.enginewiz-agent-entry__summary {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 4px 12px;
+	min-width: 0;
+}
+
+.enginewiz-agent-entry__summary > .ant-typography-secondary {
+	font-size: 12px;
+}
+
+.enginewiz-agent-drawer__content {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	min-width: 0;
+}
+
+.enginewiz-agent-drawer__list {
+	display: flex;
+	flex-direction: column;
+}
+
+.enginewiz-agent-option {
+	align-items: flex-start;
+	width: 100%;
+	padding: 12px 0;
+	border-bottom: 1px solid var(--console-border);
+}
+
+.enginewiz-agent-option > span:last-child {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.enginewiz-agent-drawer .enginewiz-agent-option .ant-checkbox {
+	align-self: flex-start;
+	margin-top: 3px;
+}
+
+.enginewiz-agent-drawer__policy {
+	padding-top: 4px;
+}
+
+.enginewiz-agent-drawer__footer {
+	display: flex;
+	justify-content: space-between;
+	gap: 12px;
 }

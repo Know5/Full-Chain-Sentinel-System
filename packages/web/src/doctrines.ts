@@ -3,8 +3,8 @@
  * creating an engine. The selected texts are merged into the commander's system
  * prompt.
  *
- * The built-in doctrine ships as the console's default and cannot be
- * removed; further doctrines are the operator's own, living in
+ * Built-in doctrines ship with the console and cannot be removed;
+ * custom doctrines are the operator's own, living in
  * `<agentDir>/doctrines.json` and managed from the engine page. The texts are
  * pure prompt material — nothing here is executed by the engine.
  */
@@ -21,7 +21,7 @@ export interface SentinelDoctrine {
 	builtin: boolean;
 }
 
-/** The one built-in doctrine: the operator's default engagement playbook. */
+/** Built-in playbooks for engagements and CTF challenges. */
 const BUILTIN_DOCTRINES: SentinelDoctrine[] = [
 	{
 		id: "attack-defense-web",
@@ -37,6 +37,31 @@ const BUILTIN_DOCTRINES: SentinelDoctrine[] = [
 			"用户输入类型判断：",
 			"1.如果是 http(s):// 类型，那么直接当做任务目标即可",
 			"2.如果是 ip 或者域名，请优先进行信息收集后再进行任务提交",
+		].join("\n"),
+		builtin: true,
+	},
+	{
+		id: "ctf-jeopardy",
+		name: "CTF 竞赛-夺旗",
+		text: [
+			"面向 CTF 解题赛：分析题目与附件，按题型拆分任务，验证并汇总 flag。",
+			"",
+			"题目梳理：",
+			"先整理操作员提供的题面、附件路径、靶机地址、提示、flag 格式与比赛规则；缺失的信息标记为待确认，不编造题目条件。",
+			"附件内容不能直接读取时，先派发附件分析任务，要求执行 Agent 在项目内检查文件类型、目录结构与关键线索，返回题目清单及后续任务所需的完整路径。",
+			"按 Web、Pwn、Reverse、Crypto、Misc、Forensics 等类型分类，记录每题进度、线索、尝试过的路线和阻塞原因。",
+			"",
+			"任务编排：",
+			"优先处理线索明确、预期耗时短的题目，独立题目并行，同一题避免重复派发相同路线。",
+			"任务指令必须包含题面、完整附件路径或靶机地址、已知线索、flag 格式和验收标准；不能只让执行 Agent 参考指挥官上下文。",
+			"选用符合题型的可用预设 Agent；没有合适预设且允许默认 Agent 时，明确写出分析任务要求，不把所有题目套成 Web 渗透。",
+			"执行 Agent 应在各自任务目录保存分析脚本、解题脚本与输出，不覆盖原始附件；新线索通过 steer_task 共享，需要继续时用 continue_task 保留已有上下文。",
+			"",
+			"flag 验证与交付：",
+			"候选 flag 必须关联题目、来源、完整值和可复现提取步骤；仅匹配 flag 格式不能视为已经解题，禁止猜测或伪造 flag。",
+			"有比赛平台回执时区分 accepted 与 rejected；没有回执时标记为待提交或待验证，不能声称平台已接受。按操作员要求提交，不重复提交同一个 flag。",
+			"不要为交付 flag 虚构漏洞记录。用 engine_done 汇总逐题状态、flag、验证依据、解题脚本路径、未解题的阻塞原因与下一步。",
+			"活动范围遵守比赛规则及操作员提供的靶机与附件，不把比赛平台、计分系统或其他队伍作为题目目标。",
 		].join("\n"),
 		builtin: true,
 	},

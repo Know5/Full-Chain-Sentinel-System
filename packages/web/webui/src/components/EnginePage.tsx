@@ -9,7 +9,7 @@
  * a vulnerability-style modal, and the create form is a full page.
  */
 
-import { PlusOutlined, ReadOutlined } from "@ant-design/icons";
+import { PlusOutlined, ReadOutlined, SettingOutlined } from "@ant-design/icons";
 import { ProTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
 import {
@@ -20,6 +20,7 @@ import {
 	Col,
 	Collapse,
 	Descriptions,
+	Drawer,
 	Empty,
 	Form,
 	Input,
@@ -36,8 +37,12 @@ import {
 	Typography,
 } from "antd";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { t } from "../i18n.ts";
+import type { UploadFile } from "antd";
+import { engineTargetText } from "../engine-targets.ts";
+import { getLanguage, t } from "../i18n.ts";
+import type { UploadedFile } from "../uploads.ts";
 import { Page } from "../ui/Page.tsx";
+import { EngineTargetFiles } from "./EngineTargetFiles.tsx";
 import type {
 	SentinelDoctrineView,
 	SentinelEngine,
@@ -49,6 +54,7 @@ import type {
 	SentinelEngineTask,
 	SentinelEngineTaskStatus,
 	SentinelPresetView,
+	SentinelProjectInfo,
 	SentinelSubagentEvent,
 } from "../types.ts";
 import "./doctrine-manager.css";
@@ -290,6 +296,8 @@ export interface EnginePageProps {
 	onOpenTaskEvents: (taskId: string) => void;
 	onOpenCommanderEvents: (engineId: string) => void;
 	hasProject: boolean;
+	project: SentinelProjectInfo | null;
+	onSaveDoctrine(input: { name: string; text: string }): Promise<string | null>;
 	/** Whether a judge endpoint resolves, so the create form can offer AI 裁判. */
 	judgeAvailable: boolean;
 }
@@ -333,9 +341,11 @@ export function EnginePage(props: EnginePageProps) {
 		return (
 			<div className="ui-page enginewiz-page">
 				<CreateEngineForm
+					key={props.project?.id ?? "no-project"}
 					doctrines={props.doctrines}
 					presets={props.presets}
 					hasProject={props.hasProject}
+					project={props.project}
 					judgeAvailable={props.judgeAvailable}
 					onCancel={() => setView("list")}
 					onSubmit={(input) => {
@@ -352,7 +362,7 @@ export function EnginePage(props: EnginePageProps) {
 			<DoctrineManager
 				doctrines={props.doctrines}
 				onClose={() => setView("list")}
-				onSave={(input) => send({ type: "save_doctrine", input })}
+				onSave={props.onSaveDoctrine}
 				onDelete={(id) => send({ type: "delete_doctrine", id })}
 			/>
 		);
@@ -1439,6 +1449,7 @@ function CreateEngineForm(props: {
 	doctrines: SentinelDoctrineView[];
 	presets: SentinelPresetView[];
 	hasProject: boolean;
+	project: SentinelProjectInfo | null;
 	/** Whether a judge endpoint resolves; `ai` is only offered when it does. */
 	judgeAvailable: boolean;
 	onCancel(): void;
@@ -1457,9 +1468,12 @@ function CreateEngineForm(props: {
 	const [step, setStep] = useState<WizardStep>(1);
 	const [name, setName] = useState("");
 	const [targets, setTargets] = useState("");
-	const [selected, setSelected] = useState<string[]>(props.doctrines.length === 1 ? [props.doctrines[0].id] : []);
+	const [files, setFiles] = useState<UploadFile<UploadedFile>[]>([]);
+	const [selected, setSelected] = useState<string[]>(props.doctrines.some((doctrine) => doctrine.id === "attack-defense-web") ? ["attack-defense-web"] : []);
 	/** Preset whitelist; empty means "no restriction" and is the default. */
 	const [selectedPresets, setSelectedPresets] = useState<string[]>([]);
+	const [presetsOpen, setPresetsOpen] = useState(false);
+	const [presetQuery, setPresetQuery] = useState("");
 	/** A task may run without a preset; allowing it is the default. */
 	const [presetOptional, setPresetOptional] = useState(true);
 	const [concurrency, setConcurrency] = useState(3);
@@ -1473,10 +1487,16 @@ function CreateEngineForm(props: {
 	const [formError, setFormError] = useState<string | null>(null);
 
 	const enabledPresets = props.presets.filter((preset) => preset.enabled);
+	const visiblePresets = enabledPresets.filter((preset) =>
+		`${preset.name}\n${preset.description}`.toLocaleLowerCase().includes(presetQuery.trim().toLocaleLowerCase()),
+	);
+	const uploading = files.some((file) => file.status === "uploading");
+	const failedUploads = files.some((file) => file.status !== "uploading" && (file.status !== "done" || !file.response));
+	const attachments = files.flatMap((file) => file.status === "done" && file.response ? [file.response] : []);
 	const stepMeta = [
-		{ step: 1 as const, title: t("目标"), hint: t("范围与名称") },
-		{ step: 2 as const, title: t("指挥"), hint: t("思路与 Agent") },
-		{ step: 3 as const, title: t("执行"), hint: t("时间与上限") },
+		{ step: 1 as const, title: t("指挥思路"), hint: t("思路与 Agent") },
+		{ step: 2 as const, title: t("目标"), hint: t("范围与名称") },
+		{ step: 3 as const, title: getLanguage() === "en" ? "Run settings" : "执行配置", hint: t("时间与上限") },
 	];
 	const selectedPresetLabel =
 		selectedPresets.length === 0
@@ -1486,12 +1506,16 @@ function CreateEngineForm(props: {
 	/** Validation is per step so "下一步" never skips a blocking field. */
 	function validateStep(target: WizardStep): string | null {
 		if (target === 1) {
-			if (!name.trim()) return t("请填写工程名称");
-			if (targets.trim() === "") return t("请至少填写一个目标");
+			if (selected.length === 0) return t("请至少选择一个指挥思路");
 			return null;
 		}
 		if (target === 2) {
-			if (selected.length === 0) return t("请至少选择一个指挥思路");
+			if (!name.trim()) return t("请填写工程名称");
+			if (!props.project) return t("请先选择项目");
+			if (uploading) return getLanguage() === "en" ? "Wait for uploads to finish." : "请等待文件上传完成。";
+			if (failedUploads) return getLanguage() === "en" ? "Remove or upload failed files again." : "请移除上传失败的文件，或重新上传。";
+			if (attachments.some((file) => file.projectId !== props.project?.id)) return getLanguage() === "en" ? "Project changed; upload the files again." : "项目已切换，请重新上传文件。";
+			if (targets.trim() === "" && attachments.length === 0) return getLanguage() === "en" ? "Describe the targets or attach a file." : "请填写目标描述或上传附件。";
 			return null;
 		}
 		if (startMode === "scheduled") {
@@ -1533,7 +1557,7 @@ function CreateEngineForm(props: {
 		setFormError(null);
 		props.onSubmit({
 			name: name.trim(),
-			targets,
+			targets: engineTargetText(targets, attachments, props.project?.id ?? ""),
 			doctrines: selected,
 			presetIds: selectedPresets,
 			presetOptional,
@@ -1565,7 +1589,7 @@ function CreateEngineForm(props: {
 
 	const nextLabel =
 		step === 1
-			? t("下一步：指挥设置 →")
+			? (getLanguage() === "en" ? "Next: targets →" : "下一步：目标 →")
 			: step === 2
 				? t("下一步：执行配置 →")
 				: startMode === "scheduled"
@@ -1579,7 +1603,9 @@ function CreateEngineForm(props: {
 					<Title level={4} className="enginewiz-title">
 						{t("新建工程")}
 					</Title>
-					<Text type="secondary">{t("把目标、指挥和执行拆开，完成一步再走一步。")}</Text>
+					<Text type="secondary">
+						{getLanguage() === "en" ? "Choose command doctrines, add targets, then configure execution." : "先选择指挥思路，再添加目标，最后配置执行。"}
+					</Text>
 				</div>
 				<Button onClick={props.onCancel}>{t("取消")}</Button>
 			</div>
@@ -1602,54 +1628,16 @@ function CreateEngineForm(props: {
 						size="small"
 						title={
 							step === 1
-								? t("第 1 步 · 目标")
+								? (getLanguage() === "en" ? "Step 1 · Command doctrines" : "第 1 步 · 指挥思路")
 								: step === 2
-									? t("第 2 步 · 指挥")
-									: t("第 3 步 · 执行")
+									? (getLanguage() === "en" ? "Step 2 · Targets" : "第 2 步 · 目标")
+									: (getLanguage() === "en" ? "Step 3 · Run settings" : "第 3 步 · 执行配置")
 						}
 					>
 						{formError ? <Alert type="error" showIcon className="ui-page__alert" title={formError} /> : null}
 
 						{step === 1 ? (
-							<Form layout="vertical" requiredMark={false}>
-								<Form.Item label={t("工程名称")} required>
-									<Input
-										value={name}
-										onChange={(event) => {
-											setName(event.target.value);
-											setFormError(null);
-										}}
-										placeholder={t("如：内网一批 Web 目标")}
-									/>
-								</Form.Item>
-								<Form.Item
-									label={t("目标清单")}
-									required
-									extra={t("一行一个：目标 + 可选备注 · 支持 IP / 域名 / URL")}
-								>
-									<Input.TextArea
-										value={targets}
-										onChange={(event) => {
-											setTargets(event.target.value);
-											setFormError(null);
-										}}
-										autoSize={{ minRows: 8, maxRows: 18 }}
-										placeholder={t(
-											"10.0.0.1 这台是 Web 服务器\n10.0.0.2\nhttp://target.example.com 只测登录功能",
-										)}
-									/>
-								</Form.Item>
-								<Text type="secondary">
-									{t("目标越具体，指挥官拆出来的任务越稳。备注只给指挥官看，不会被当作命令。")}
-								</Text>
-							</Form>
-						) : null}
-
-						{step === 2 ? (
 							<>
-								<Text strong className="enginewiz-section">
-									{t("指挥思路")}
-								</Text>
 								{props.doctrines.length === 0 ? (
 									<Alert
 										type="warning"
@@ -1690,52 +1678,55 @@ function CreateEngineForm(props: {
 									</Space>
 								)}
 
-								<Text strong className="enginewiz-section">
-									{t("Agent 白名单")}
-								</Text>
-								<Text type="secondary">{t("不勾选 = 不限制，可使用全部已启用预设")}</Text>
-								{enabledPresets.length === 0 ? (
-									<Alert
-										type="info"
-										showIcon
-										className="ui-page__alert"
-										title={t("还没有启用的预设 Agent，可到「设置 → 预设 Agent」创建。")}
-									/>
-								) : (
-									<Space orientation="vertical" size={8} className="enginewiz-list">
-										{enabledPresets.map((preset) => {
-											const checked = selectedPresets.includes(preset.id);
-											return (
-												<Checkbox
-													key={preset.id}
-													checked={checked}
-													className={checked ? "enginewiz-card is-on" : "enginewiz-card"}
-													title={preset.description || undefined}
-													onChange={() =>
-														setSelectedPresets((prev) =>
-															prev.includes(preset.id)
-																? prev.filter((id) => id !== preset.id)
-																: [...prev, preset.id],
-														)
-													}
-												>
-													<Text strong>{preset.name}</Text>
-													<Text type="secondary" className="enginewiz-card__text">
-														{preset.description || `${formatUsage(preset.tokens)} tokens`}
-													</Text>
-												</Checkbox>
-											);
-										})}
-									</Space>
-								)}
-								<Checkbox
-									checked={presetOptional}
-									className="enginewiz-optional"
-									onChange={(event) => setPresetOptional(event.target.checked)}
-								>
-									{t("允许任务不指定预设，没有合适预设时退回默认 Agent")}
-								</Checkbox>
+								<div className="enginewiz-agent-entry">
+									<div className="enginewiz-agent-entry__summary">
+										<Text>{t("Agent 白名单")}</Text>
+										<Text type="secondary">
+											{selectedPresetLabel} · {presetOptional
+												? (getLanguage() === "en" ? "Default agent allowed" : "允许默认 Agent")
+												: (getLanguage() === "en" ? "Preset required" : "必须指定预设")}
+										</Text>
+									</div>
+									<Button size="small" type="link" icon={<SettingOutlined />} onClick={() => setPresetsOpen(true)}>
+										{t("配置")}
+									</Button>
+								</div>
 							</>
+						) : null}
+
+						{step === 2 ? (
+							<Form layout="vertical" requiredMark={false}>
+								<Form.Item label={t("工程名称")} required>
+									<Input
+										value={name}
+										onChange={(event) => {
+											setName(event.target.value);
+											setFormError(null);
+										}}
+										placeholder={t("如：内网一批 Web 目标")}
+									/>
+								</Form.Item>
+								<Form.Item
+									label={t("目标清单")}
+									required
+								>
+									<Input.TextArea
+										value={targets}
+										onChange={(event) => {
+											setTargets(event.target.value);
+											setFormError(null);
+										}}
+										autoSize={{ minRows: 8, maxRows: 18 }}
+										placeholder={t(
+											"10.0.0.1 这台是 Web 服务器\n10.0.0.2\nhttp://target.example.com 只测登录功能",
+										)}
+									/>
+									<EngineTargetFiles project={props.project} files={files} onChange={setFiles} />
+								</Form.Item>
+								<Text type="secondary">
+									{t("目标越具体，指挥官拆出来的任务越稳。备注只给指挥官看，不会被当作命令。")}
+								</Text>
+							</Form>
 						) : null}
 
 						{step === 3 ? (
@@ -1884,7 +1875,7 @@ function CreateEngineForm(props: {
 							<Button disabled={step === 1} onClick={() => goToStep((step - 1) as WizardStep)}>
 								{t("上一步")}
 							</Button>
-							<Button type="primary" onClick={next}>
+							<Button type="primary" onClick={next} disabled={uploading}>
 								{nextLabel}
 							</Button>
 							<Text type="secondary">{step} / 3</Text>
@@ -1898,6 +1889,7 @@ function CreateEngineForm(props: {
 						<Text type="secondary">
 							{t("{doctrines} 条思路", { doctrines: selected.length })} · {selectedPresetLabel}
 						</Text>
+						{files.length > 0 ? <Text type="secondary">{getLanguage() === "en" ? `${attachments.length} attachments uploaded` : `已上传 ${attachments.length} 个附件`}</Text> : null}
 					</Card>
 					<Card size="small" title={t("提示")} className="enginewiz-tips">
 						<Space orientation="vertical" size={10}>
@@ -1923,6 +1915,61 @@ function CreateEngineForm(props: {
 					</Card>
 				</Col>
 			</Row>
+			<Drawer
+				title={t("Agent 白名单")}
+				placement="right"
+				size={480}
+				open={presetsOpen}
+				onClose={() => setPresetsOpen(false)}
+				className="enginewiz-agent-drawer"
+				styles={{ wrapper: { maxWidth: "100vw" } }}
+				footer={
+					<div className="enginewiz-agent-drawer__footer">
+						<Button disabled={selectedPresets.length === 0} onClick={() => setSelectedPresets([])}>
+							{getLanguage() === "en" ? "Clear selection" : "清空选择"}
+						</Button>
+						<Button type="primary" onClick={() => setPresetsOpen(false)}>{t("完成")}</Button>
+					</div>
+				}
+			>
+				<div className="enginewiz-agent-drawer__content">
+					<Text type="secondary">{t("不勾选 = 不限制，可使用全部已启用预设")}</Text>
+					<div className="enginewiz-agent-drawer__policy">
+						<Checkbox checked={presetOptional} onChange={(event) => setPresetOptional(event.target.checked)}>
+							{t("允许任务不指定预设，没有合适预设时退回默认 Agent")}
+						</Checkbox>
+					</div>
+					<Input.Search
+						allowClear
+						value={presetQuery}
+						onChange={(event) => setPresetQuery(event.target.value)}
+						placeholder={getLanguage() === "en" ? "Search agents" : "搜索 Agent"}
+					/>
+					{enabledPresets.length === 0 ? (
+						<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t("还没有启用的预设 Agent，可到「设置 → 预设 Agent」创建。")} />
+					) : visiblePresets.length === 0 ? (
+						<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={getLanguage() === "en" ? "No matching agents" : "没有匹配的 Agent"} />
+					) : (
+						<div className="enginewiz-agent-drawer__list">
+							{visiblePresets.map((preset) => (
+								<Checkbox
+									key={preset.id}
+									checked={selectedPresets.includes(preset.id)}
+									className="enginewiz-agent-option"
+									onChange={(event) => setSelectedPresets((previous) =>
+										event.target.checked ? [...previous, preset.id] : previous.filter((id) => id !== preset.id),
+									)}
+								>
+									<Text strong>{preset.name}</Text>
+									<Text type="secondary" className="enginewiz-card__text">
+										{preset.description || `${formatUsage(preset.tokens)} tokens`}
+									</Text>
+								</Checkbox>
+							))}
+						</div>
+					)}
+				</div>
+			</Drawer>
 		</div>
 	);
 }
@@ -1931,35 +1978,62 @@ function CreateEngineForm(props: {
 function DoctrineManager(props: {
 	doctrines: SentinelDoctrineView[];
 	onClose(): void;
-	onSave(input: { id?: string; name: string; text: string }): void;
+	onSave(input: { name: string; text: string }): Promise<string | null>;
 	onDelete(id: string): void;
 }) {
 	const [name, setName] = useState("");
 	const [text, setText] = useState("");
-	const submit = () => {
-		if (!name.trim() || !text.trim()) return;
-		props.onSave({ name: name.trim(), text: text.trim() });
-		setName("");
-		setText("");
+	const [creating, setCreating] = useState(false);
+	const [saving, setSaving] = useState(false);
+	const [error, setError] = useState<string | null>(null);
+	const [query, setQuery] = useState("");
+	const visible = props.doctrines.filter((doctrine) => `${doctrine.name}\n${doctrine.text}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
+	const createLabel = getLanguage() === "en" ? "Add command doctrine" : "新增指挥思路";
+	const submit = async () => {
+		if (!name.trim() || !text.trim() || saving) return;
+		setSaving(true);
+		setError(null);
+		try {
+			const message = await props.onSave({ name: name.trim(), text: text.trim() });
+			if (message) {
+				setError(message);
+				return;
+			}
+			setCreating(false);
+			setName("");
+			setText("");
+		} catch (cause) {
+			setError(cause instanceof Error ? cause.message : String(cause));
+		} finally {
+			setSaving(false);
+		}
 	};
 	return (
 		<Page
 			className="doctrine-manager"
 			title={t("指挥思路")}
 			description={t("命名的文本模板，创建工程时多选叠加注入指挥官")}
-			extra={<Button onClick={props.onClose}>{t("返回")}</Button>}
+			extra={
+				<Space size={8} wrap>
+					<Button onClick={props.onClose}>{t("返回")}</Button>
+					<Button type="primary" icon={<PlusOutlined />} onClick={() => { setError(null); setCreating(true); }}>
+						{createLabel}
+					</Button>
+				</Space>
+			}
 		>
 			<div className="doctrine-manager__layout">
 				<section className="doctrine-manager__library">
-					<Text strong>
-						{t("指挥思路")} <Text type="secondary">{props.doctrines.length}</Text>
-					</Text>
-					{props.doctrines.length === 0 ? (
-						<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t("还没有指挥思路")} />
+					<div className="doctrine-manager__toolbar">
+						<Text type="secondary">{t("{count} 条思路", { count: props.doctrines.length })}</Text>
+						<Input.Search allowClear value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("搜索")} />
+					</div>
+					{visible.length === 0 ? (
+						<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={query.trim() ? (getLanguage() === "en" ? "No matching doctrines" : "没有匹配的指挥思路") : t("还没有指挥思路")} />
 					) : (
 						<Collapse
 							className="doctrine-manager__list"
-							items={props.doctrines.map((doctrine) => ({
+							items={visible.map((doctrine) => ({
 								key: doctrine.id,
 								label: (
 									<div className="doctrine-manager__label">
@@ -1991,20 +2065,32 @@ function DoctrineManager(props: {
 						/>
 					)}
 				</section>
-				<Card className="doctrine-manager__form" size="small" title={t("新增思路")}>
-					<Form layout="vertical" requiredMark={false} onFinish={submit}>
+			</div>
+			<Modal
+				open={creating}
+				title={createLabel}
+				width={720}
+				okText={t("保存")}
+				cancelText={t("取消")}
+				confirmLoading={saving}
+				okButtonProps={{ disabled: !name.trim() || !text.trim() }}
+				cancelButtonProps={{ disabled: saving }}
+				closable={!saving}
+				mask={{ closable: !saving }}
+				keyboard={!saving}
+				onCancel={() => setCreating(false)}
+				onOk={() => void submit()}
+			>
+					{error ? <Alert type="error" showIcon title={error} className="ui-page__alert" /> : null}
+					<Form layout="vertical" requiredMark={false} disabled={saving} onFinish={() => void submit()}>
 						<Form.Item label={t("思路名称")} required>
 							<Input value={name} onChange={(event) => setName(event.target.value)} placeholder={t("思路名称")} />
 						</Form.Item>
 						<Form.Item label={t("思路内容（纯文本，注入指挥官系统指令）")} required>
-							<Input.TextArea rows={6} value={text} onChange={(event) => setText(event.target.value)} />
+							<Input.TextArea autoSize={{ minRows: 10, maxRows: 18 }} value={text} onChange={(event) => setText(event.target.value)} />
 						</Form.Item>
-						<Button type="primary" htmlType="submit" disabled={!name.trim() || !text.trim()}>
-							{t("保存")}
-						</Button>
 					</Form>
-				</Card>
-			</div>
+			</Modal>
 		</Page>
 	);
 }
