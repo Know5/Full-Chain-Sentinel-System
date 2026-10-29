@@ -5,9 +5,10 @@
  * not about the agent conversation) and logs every other session out. Logout
  * lives in the sider footer; the server refuses tokens issued before it.
  */
-import { Alert, Button, Card, Col, Form, Input, Row, Typography } from "antd";
+import { Alert, Button, Form, Input, Typography } from "antd";
 import { useState } from "react";
 import { t } from "../i18n.ts";
+import { SettingsNote, SettingsSection } from "../ui/Settings.tsx";
 
 const { Text } = Typography;
 
@@ -49,64 +50,49 @@ export function SecurityPanel({ username }: { username: string | null }) {
 	};
 
 	return (
-		<Row gutter={[16, 16]}>
-			<Col xs={24} lg={14}>
-				<Card size="small" title={t("修改密码")}>
-					<Text type="secondary" className="security-hint">
-						{t("至少 8 个字符。修改后其他已登录的会话（包括别的浏览器）会全部退出。")}
-					</Text>
-					<Form layout="vertical" className="security-form" onFinish={() => void submit()} requiredMark={false}>
-						<Form.Item label={t("当前密码")} required>
-							<Input.Password
-								value={current}
-								autoComplete="current-password"
-								onChange={(event) => setCurrent(event.target.value)}
-							/>
-						</Form.Item>
-						<Form.Item label={t("新密码")} required>
-							<Input.Password
-								value={next}
-								autoComplete="new-password"
-								onChange={(event) => setNext(event.target.value)}
-							/>
-						</Form.Item>
-						<Form.Item label={t("确认新密码")} required>
-							<Input.Password
-								value={confirm}
-								autoComplete="new-password"
-								onChange={(event) => setConfirm(event.target.value)}
-								onPressEnter={() => void submit()}
-							/>
-						</Form.Item>
+		<div className="settings-columns security-columns">
+			<SettingsSection title={t("修改密码")}>
+				<SettingsNote>
+					{t("至少 8 个字符。修改后其他已登录的会话（包括别的浏览器）会全部退出。")}
+				</SettingsNote>
+				<Form layout="vertical" className="security-form" onFinish={() => void submit()} requiredMark={false}>
+					<Form.Item label={t("当前密码")} required>
+						<Input.Password
+							value={current}
+							autoComplete="current-password"
+							onChange={(event) => setCurrent(event.target.value)}
+						/>
+					</Form.Item>
+					<Form.Item label={t("新密码")} required>
+						<Input.Password
+							value={next}
+							autoComplete="new-password"
+							onChange={(event) => setNext(event.target.value)}
+						/>
+					</Form.Item>
+					<Form.Item label={t("确认新密码")} required>
+						<Input.Password
+							value={confirm}
+							autoComplete="new-password"
+							onChange={(event) => setConfirm(event.target.value)}
+							onPressEnter={() => void submit()}
+						/>
+					</Form.Item>
 
-						{error ? <Alert type="error" showIcon title={error} className="ui-page__alert" /> : null}
-						{saved ? (
-							<Alert type="success" showIcon title={t("密码已修改。")} className="ui-page__alert" />
-						) : null}
+					{error ? <Alert type="error" showIcon title={error} className="ui-page__alert" /> : null}
+					{saved ? <Alert type="success" showIcon title={t("密码已修改。")} className="ui-page__alert" /> : null}
 
-						<Button
-							type="primary"
-							htmlType="submit"
-							loading={busy}
-							disabled={!current || !next}
-						>
-							{busy ? t("保存中…") : t("修改密码")}
-						</Button>
-					</Form>
-				</Card>
-			</Col>
-			<Col xs={24} lg={10}>
-				<Card size="small" title={t("当前登录")}>
-					<Text strong className="security-account__name">
-						{username ?? t("未知")}
-					</Text>
-					<Text type="secondary">
-						{t("当前登录：{user}。退出登录在侧栏底部；修改后其他已登录的会话（包括别的浏览器）会全部退出。", {
-							user: username ?? t("未知"),
-						})}
-					</Text>
-				</Card>
-			</Col>
-		</Row>
+					<Button type="primary" htmlType="submit" loading={busy} disabled={!current || !next}>
+						{busy ? t("保存中…") : t("修改密码")}
+					</Button>
+				</Form>
+			</SettingsSection>
+			<SettingsSection title={t("当前登录")} description={username ?? t("未知")}>
+				<SettingsNote>
+					{t("退出登录在侧栏底部；修改密码后其他已登录的会话（包括别的浏览器）会全部退出。")}
+				</SettingsNote>
+				<SettingsNote>{t("密码只以哈希存在本机，从不保存明文。")}</SettingsNote>
+			</SettingsSection>
+		</div>
 	);
 }

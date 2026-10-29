@@ -1,7 +1,7 @@
 import { DeleteOutlined, EditOutlined, PlusOutlined } from "@ant-design/icons";
 import { ProTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
-import { Alert, Button, Checkbox, Form, Input, Modal, Popconfirm, Select, Space, Switch, Tag, Typography } from "antd";
+import { Alert, Button, Checkbox, Drawer, Form, Input, Popconfirm, Select, Space, Switch, Tag, Tooltip, Typography } from "antd";
 import { useState } from "react";
 import type {
 	SentinelMcpConfigView,
@@ -12,6 +12,7 @@ import type {
 	SentinelMcpTransport,
 } from "../types.ts";
 import { getLanguage, t } from "../i18n.ts";
+import { SettingsBar, SettingsEmpty, SettingsNote } from "../ui/Settings.tsx";
 
 const { Text } = Typography;
 
@@ -229,8 +230,8 @@ function formatWhen(at: number | null): string {
  *
  * stdio servers run their command on the console host — not in the project's
  * Kali container and not through the bash approval gate — so an stdio entry
- * needs an explicit acknowledgment before it can be saved, and the page says so
- * in the notice rather than only in the checkbox label.
+ * needs an explicit acknowledgment before it can be saved; the checkbox in the
+ * editor is the gate.
  */
 export function McpPanel({
 	config,
@@ -280,13 +281,11 @@ export function McpPanel({
 		{
 			title: t("服务器"),
 			key: "name",
+			width: 200,
 			render: (_, server) => (
-				<div className="mcphub-name">
-					<Text strong>{server.name}</Text>
-					<Text type="secondary" title={server.target}>
-						{server.target || t("（未填写）")}
-					</Text>
-				</div>
+				<Text strong ellipsis title={server.name}>
+					{server.name}
+				</Text>
 			),
 		},
 		{
@@ -296,17 +295,32 @@ export function McpPanel({
 			render: (_, server) => <Tag variant="filled">{TRANSPORT_LABELS[server.transport]}</Tag>,
 		},
 		{
+			title: t("目标"),
+			key: "target",
+			render: (_, server) => (
+				<Text type="secondary" ellipsis title={server.target}>
+					{server.target || t("（未填写）")}
+				</Text>
+			),
+		},
+		{
 			title: t("状态"),
 			key: "state",
-			width: 260,
+			width: 190,
 			render: (_, server) => {
 				const state = mcpServerState(server);
 				return (
-					<div className="mcphub-state">
-						<Space size={8}>
-							<Tag color={state === "mounted" ? "green" : state === "disabled" ? "default" : "red"} variant="filled">
+					<Space size={8}>
+						<Tooltip title={t("{reason}。", { reason: mountReason(server) })}>
+							<Tag
+								color={state === "mounted" ? "green" : state === "disabled" ? "default" : "red"}
+								variant="filled"
+								aria-label={mountReason(server)}
+							>
 								{STATE_LABELS[state]}
 							</Tag>
+						</Tooltip>
+						<span className="settings-row-switch" onClick={(event) => event.stopPropagation()}>
 							<Switch
 								size="small"
 								checked={server.enabled}
@@ -314,49 +328,52 @@ export function McpPanel({
 								aria-label={t("启用 {name}", { name: server.name })}
 								onChange={(checked) => onSave({ ...draftToInput(draftOf(server)), enabled: checked })}
 							/>
-						</Space>
-						<Text type="secondary" className="mcphub-state__reason">
-							{t("{reason}。", { reason: mountReason(server) })}
-						</Text>
-					</div>
+						</span>
+					</Space>
 				);
 			},
 		},
 		{
 			title: t("最近测试"),
 			key: "status",
-			width: 170,
-			render: (_, server) => (
-				<Text type="secondary" title={server.status.error ?? ""}>
-					{formatWhen(server.status.at)}
-					{server.status.at === null
-						? ""
-						: server.status.ok
-							? t(" · 成功{tools}", {
-									tools:
-										server.status.tools === undefined
-											? ""
-											: t(" · {count} 工具", { count: server.status.tools }),
-								})
-							: t(" · 失败")}
-				</Text>
-			),
+			width: 190,
+			render: (_, server) => {
+				const note =
+					server.status.error ??
+					(server.status.tools === undefined ? "" : t("{count} 个工具", { count: server.status.tools }));
+				return (
+					<Text type="secondary" ellipsis title={note}>
+						{formatWhen(server.status.at)}
+						{server.status.at === null
+							? ""
+							: server.status.ok
+								? t(" · 成功{tools}", {
+										tools:
+											server.status.tools === undefined
+												? ""
+												: t(" · {count} 工具", { count: server.status.tools }),
+									})
+								: t(" · 失败")}
+					</Text>
+				);
+			},
 		},
 		{
 			title: t("操作"),
 			key: "actions",
-			width: 200,
+			width: 160,
 			render: (_, server) => (
 				<Space size={4}>
 					<Button
 						size="small"
 						type="link"
-						loading={testing === server.name}
-						onClick={() => void runTest(server.name, server.name)}
+						icon={<EditOutlined />}
+						disabled={busy}
+						onClick={(event) => {
+							event.stopPropagation();
+							setDraft(draftOf(server));
+						}}
 					>
-						{t("测试")}
-					</Button>
-					<Button size="small" type="link" icon={<EditOutlined />} disabled={busy} onClick={() => setDraft(draftOf(server))}>
 						{t("编辑")}
 					</Button>
 					<Popconfirm
@@ -367,7 +384,14 @@ export function McpPanel({
 						cancelText={t("取消")}
 						onConfirm={() => onDelete(server.name)}
 					>
-						<Button size="small" type="link" danger icon={<DeleteOutlined />} disabled={busy}>
+						<Button
+							size="small"
+							type="link"
+							danger
+							icon={<DeleteOutlined />}
+							disabled={busy}
+							onClick={(event) => event.stopPropagation()}
+						>
 							{t("删除")}
 						</Button>
 					</Popconfirm>
@@ -378,16 +402,6 @@ export function McpPanel({
 
 	return (
 		<>
-			<Alert
-				type="warning"
-				showIcon
-				className="ui-page__alert"
-				title={t("stdio 服务器在宿主机上执行")}
-				description={t(
-					"stdio 类型的 MCP 服务器由控制台进程直接 spawn（不在项目容器内，也不经过 bash 审批与守门模型），等于把宿主机命令执行权交给该服务器。只添加你信任的来源；需要容器内执行的工具请让 Agent 用 bash 在容器里跑。",
-				)}
-			/>
-
 			{config.permissionOn ? null : (
 				<Alert
 					type="warning"
@@ -407,15 +421,28 @@ export function McpPanel({
 				/>
 			)}
 
-			<div className="mcphub-toolbar">
-				<Text>
-					{t("已挂载")} <Text strong>{config.mounted}</Text> / {config.servers.length} {t("个服务器")}
-					<Text type="secondary"> · {t("只有「已启用 +（stdio 已确认）」的服务器会连接")}</Text>
-				</Text>
-				<Button type="primary" icon={<PlusOutlined />} disabled={busy} onClick={() => setDraft({ ...EMPTY_MCP_DRAFT })}>
-					{t("添加服务器")}
-				</Button>
-			</div>
+			<SettingsBar
+				title={t("自定义 MCP 服务器")}
+				meta={
+					<>
+						<Text>
+							{t("已挂载")} <Text strong>{config.mounted}</Text> / {config.servers.length}{" "}
+							{t("个服务器")}
+						</Text>
+						<Text type="secondary">{t("只有「已启用 +（stdio 已确认）」的服务器会连接")}</Text>
+					</>
+				}
+				extra={
+					<Button
+						type="primary"
+						icon={<PlusOutlined />}
+						disabled={busy}
+						onClick={() => setDraft({ ...EMPTY_MCP_DRAFT })}
+					>
+						{t("添加服务器")}
+					</Button>
+				}
+			/>
 
 			<ProTable<SentinelMcpServerView>
 				rowKey="name"
@@ -425,96 +452,65 @@ export function McpPanel({
 				search={false}
 				options={false}
 				pagination={false}
+				tableLayout="fixed"
 				scroll={{ x: 1000 }}
-				expandable={{
-					rowExpandable: (server) => Boolean(results[server.name] || server.status.error),
-					expandedRowRender: (server) => {
-						const result = results[server.name];
-						return (
-							<div className="mcphub-detail">
-								{result ? (
-									<Alert
-										type={result.ok ? "success" : "error"}
-										showIcon
-										title={result.message}
-										description={
-											<>
-												{result.instructions ? <div>{result.instructions}</div> : null}
-												{result.tools.length > 0 ? (
-													<pre className="mcphub-detail__pre">{result.tools.join("\n")}</pre>
-												) : result.detail ? (
-													<pre className="mcphub-detail__pre">{result.detail}</pre>
-												) : null}
-											</>
-										}
-									/>
-								) : null}
-								{server.status.error ? (
-									<Alert type="error" showIcon title={t("上次失败原因")} description={server.status.error} />
-								) : null}
-								<div>
-									<Text strong>{t("暴露方式")}</Text>
-									<Text type="secondary" className="mcphub-detail__note">
-										{EXPOSURE_OPTIONS.find((option) => option.value === server.exposure)?.hint ?? ""}
-									</Text>
-								</div>
-								{server.description ? (
-									<div>
-										<Text strong>{t("给模型的描述")}</Text>
-										<Text type="secondary" className="mcphub-detail__note">
-											{server.description}
-										</Text>
-									</div>
-								) : null}
-							</div>
-						);
-					},
-				}}
+				onRow={(server) => ({
+					onClick: () => setDraft(draftOf(server)),
+					style: { cursor: "pointer" },
+				})}
 				locale={{
 					emptyText: (
-						<Text type="secondary">
-							{t("还没有自定义 MCP 服务器。添加一个之后，它的工具会以")}{" "}
-							<Text code>mcp__&lt;{t("服务器")}&gt;__&lt;{t("工具")}&gt;</Text>{" "}
-							{t("的名字挂给 Agent（默认在 codemode 脚本里调用）。")}
-						</Text>
+						<SettingsEmpty
+							title={t("还没有自定义 MCP 服务器")}
+							hint={
+								<>
+									{t("添加一个之后，它的工具会以")}{" "}
+									<Text code>mcp__&lt;{t("服务器")}&gt;__&lt;{t("工具")}&gt;</Text>{" "}
+									{t("的名字挂给 Agent（默认在 codemode 脚本里调用）。")}
+								</>
+							}
+						/>
 					),
 				}}
 			/>
 
-			<Text type="secondary" className="mcphub-footnote">
+			<SettingsNote>
 				{t("存放位置：{path}（0600）。请求头与环境变量保存在这里，由控制台读取，不写入项目容器。", {
 					path: config.path,
 				})}
-			</Text>
-			<Text type="secondary" className="mcphub-footnote">
+			</SettingsNote>
+			<SettingsNote>
 				{t("保存与删除会重建活动会话（先中止正在运行的会话），新增的工具要等会话重建后才会出现。连接由会话内的 MCP 扩展在启动时完成，本页不显示实时连接状态。")}
-			</Text>
+			</SettingsNote>
 
-			<Modal
+			<Drawer
 				title={draft?.original ? t("编辑 {name}", { name: draft.original }) : t("添加 MCP 服务器")}
 				open={draft !== null}
-				width={720}
-				okText={t("保存")}
-				cancelText={t("取消")}
-				okButtonProps={{ disabled: busy || !draftValid }}
-				onOk={submit}
-				onCancel={() => setDraft(null)}
+				width={640}
+				onClose={() => setDraft(null)}
 				destroyOnHidden
-				footer={(_, { OkBtn, CancelBtn }) => (
-					<Space size={8}>
-						<Button
-							onClick={() => {
-								if (!draft) return;
-								void runTest(draftKey, draft.name.trim(), draftToInput(draft));
-							}}
-							loading={testing === draftKey}
-						>
-							{testing === draftKey ? t("测试中…") : t("测试连接")}
-						</Button>
-						<CancelBtn />
-						<OkBtn />
-					</Space>
-				)}
+				extra={draft ? <Tag variant="filled">{TRANSPORT_LABELS[draft.transport]}</Tag> : null}
+				footer={
+					<div className="settings-drawer-foot">
+						<span />
+						<Space size={8} wrap>
+							<Button
+								onClick={() => {
+									if (!draft) return;
+									void runTest(draftKey, draft.name.trim(), draftToInput(draft));
+								}}
+								loading={testing === draftKey}
+								disabled={busy}
+							>
+								{testing === draftKey ? t("测试中…") : t("测试连接")}
+							</Button>
+							<Button onClick={() => setDraft(null)}>{t("取消")}</Button>
+							<Button type="primary" loading={busy} disabled={busy || !draftValid} onClick={submit}>
+								{t("保存")}
+							</Button>
+						</Space>
+					</div>
+				}
 			>
 				{draft ? (
 					<Form layout="vertical" requiredMark={false}>
@@ -671,12 +667,12 @@ export function McpPanel({
 							/>
 						) : null}
 
-						<Text type="secondary" className="mcphub-footnote">
+						<SettingsNote>
 							{t("「测试连接」只做一次连接并读取工具列表，不会保存，也不影响正在运行的会话；stdio 服务器在测试时同样会在宿主机上启动进程。")}
-						</Text>
+						</SettingsNote>
 					</Form>
 				) : null}
-			</Modal>
+			</Drawer>
 		</>
 	);
 }

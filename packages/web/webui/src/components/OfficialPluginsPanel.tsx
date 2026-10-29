@@ -57,6 +57,7 @@ export function OfficialPluginsPanel({
 				search={false}
 				options={false}
 				pagination={false}
+				tableLayout="fixed"
 				scroll={{ x: 860 }}
 				toolbar={{
 					title: (

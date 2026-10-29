@@ -1,3 +1,4 @@
+import { PlusOutlined } from "@ant-design/icons";
 import {
 	Alert,
 	Button,
@@ -39,6 +40,7 @@ import type {
 	SentinelPluginsView,
 } from "../types.ts";
 import { t } from "../i18n.ts";
+import { SettingsBar, SettingsEmpty, SettingsNote } from "../ui/Settings.tsx";
 
 const { Text } = Typography;
 
@@ -542,37 +544,46 @@ export function PluginPanel({
 
 	return (
 		<div className="mcp-page plugin-page">
-			<div className="pluginhub-head">
-				<Segmented
-					value={activeTab}
-					onChange={(value) => {
-						const next = value as "plugins" | "official" | "docs";
-						setActiveTab(next);
-						if (next !== "plugins") closeDrawer();
-					}}
-					options={[
-						{ value: "plugins", label: `${t("已安装")} ${view.plugins.length}` },
-						{ value: "official", label: `${t("官方插件")} ${officialPlugins.length}` },
-						{ value: "docs", label: t("开发文档") },
-					]}
-				/>
-				<Space size={8}>
-					<Button disabled={busy} onClick={onRefresh}>
-						{t("刷新")}
-					</Button>
-					<Button type="primary" disabled={busy} onClick={() => fileInput.current?.click()}>
-						{t("＋ 上传插件包")}
-					</Button>
-					<input
-						ref={fileInput}
-						type="file"
-						accept=".zip"
-						hidden
-						onChange={choosePackage}
-						aria-label={t("插件包文件")}
+			<SettingsBar
+				meta={
+					<Segmented
+						value={activeTab}
+						onChange={(value) => {
+							const next = value as "plugins" | "official" | "docs";
+							setActiveTab(next);
+							if (next !== "plugins") closeDrawer();
+						}}
+						options={[
+							{ value: "plugins", label: `${t("已安装")} ${view.plugins.length}` },
+							{ value: "official", label: `${t("官方插件")} ${officialPlugins.length}` },
+							{ value: "docs", label: t("开发文档") },
+						]}
 					/>
-				</Space>
-			</div>
+				}
+				extra={
+					<>
+						<Button disabled={busy} onClick={onRefresh}>
+							{t("刷新")}
+						</Button>
+						<Button
+							type="primary"
+							icon={<PlusOutlined />}
+							disabled={busy}
+							onClick={() => fileInput.current?.click()}
+						>
+							{t("上传插件包")}
+						</Button>
+						<input
+							ref={fileInput}
+							type="file"
+							accept=".zip"
+							hidden
+							onChange={choosePackage}
+							aria-label={t("插件包文件")}
+						/>
+					</>
+				}
+			/>
 
 			{activeTab === "docs" ? (
 				<PluginDevDocs />
@@ -674,11 +685,11 @@ export function PluginPanel({
 			</div>
 
 			{localHostDown ? (
-				<p className="plugin-host-hint">
-					{t("本机还没有可用的插件主机。在终端运行")} <code>sentinel-web plugin-host --local</code>{t("，或")}
-					<code>npm run plugin-host -- --local</code>
+				<SettingsNote>
+					{t("本机还没有可用的插件主机。在终端运行")} <code>sentinel-web plugin-host --local</code>
+					{t("，或")} <code>npm run plugin-host -- --local</code>
 					{t("，控制台会自动发现它。")}
-				</p>
+				</SettingsNote>
 			) : null}
 
 			<ProTable<SentinelPluginView>
@@ -689,6 +700,7 @@ export function PluginPanel({
 				search={false}
 				options={false}
 				pagination={false}
+				tableLayout="fixed"
 				scroll={{ x: 900 }}
 				rowClassName={(plugin) => (selectedKey === pluginKeyOf(plugin) ? "is-selected" : "")}
 				onRow={(plugin) => ({
@@ -698,8 +710,9 @@ export function PluginPanel({
 				toolbar={{
 					title: (
 						<Space size={8} wrap className="plugin-toolbar">
-				<input
-					className="plugin-search"
+				<Input
+					allowClear
+					style={{ width: 220 }}
 					value={query}
 					onChange={(event) => setQuery(event.target.value)}
 					placeholder={t("搜索插件名、id、工具名")}
@@ -707,7 +720,6 @@ export function PluginPanel({
 					aria-label={t("搜索插件")}
 				/>
 				<Select
-					size="small"
 					style={{ width: 160 }}
 					value={hostFilter}
 					onChange={setHostFilter}
@@ -717,7 +729,6 @@ export function PluginPanel({
 					]}
 				/>
 				<Select
-					size="small"
 					style={{ width: 130 }}
 					value={stateFilter}
 					onChange={setStateFilter}
@@ -836,15 +847,21 @@ export function PluginPanel({
 					]}
 					locale={{
 						emptyText:
-							view.plugins.length === 0
-								? t("还没有安装插件。点右上角「上传插件包」开始。")
-								: t("没有匹配的插件，换个关键字或筛选条件。"),
+							view.plugins.length === 0 ? (
+								<SettingsEmpty
+									title={t("还没有安装插件")}
+									hint={t("点右上角「上传插件包」开始。")}
+								/>
+							) : (
+								<SettingsEmpty title={t("没有匹配的插件")} hint={t("换个关键字或筛选条件。")} />
+							),
 					}}
 				/>
 
-			<p className="mcp-footnote">
-				{t("工具调用不逐条拦截，只记审计；管理操作写入")} <code>plugin-audit.jsonl</code>{t("。启用开关只影响挂载，不会停止容器；卸载默认保留数据目录。")}
-			</p>
+			<SettingsNote>
+				{t("工具调用不逐条拦截，只记审计；管理操作写入")} <code>plugin-audit.jsonl</code>
+				{t("。启用开关只影响挂载，不会停止容器；卸载默认保留数据目录。")}
+			</SettingsNote>
 				</>
 			)}
 

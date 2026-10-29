@@ -13,6 +13,7 @@ import type { ProColumns } from "@ant-design/pro-components";
 import { Alert, Button, Form, Input, Modal, Popconfirm, Space, Switch, Tag, Typography } from "antd";
 import { useRef, useState } from "react";
 import { t } from "../i18n.ts";
+import { SettingsEmpty, SettingsNote } from "../ui/Settings.tsx";
 import type { SentinelClientMessage, SentinelPresetView } from "../types.ts";
 
 const { Text } = Typography;
@@ -99,7 +100,7 @@ export function PresetPanel({
 	};
 
 	if (!presets) {
-		return <Text type="secondary">{t("正在读取预设 Agent…")}</Text>;
+		return <SettingsNote>{t("正在读取预设 Agent…")}</SettingsNote>;
 	}
 
 	const columns: ProColumns<SentinelPresetView>[] = [
@@ -250,6 +251,7 @@ export function PresetPanel({
 				search={false}
 				options={false}
 				pagination={false}
+				tableLayout="fixed"
 				scroll={{ x: 1000 }}
 				toolbar={{
 					title: (
@@ -270,8 +272,11 @@ export function PresetPanel({
 					],
 				}}
 				locale={{
-					emptyText: t(
-						"还没有预设 Agent。点「新建预设」写入一段系统提示即可；不创建也不影响使用，会话会跑默认 Agent。",
+					emptyText: (
+						<SettingsEmpty
+							title={t("还没有预设 Agent")}
+							hint={t("点「新建预设」写入一段系统提示即可；不创建也不影响使用，会话会跑默认 Agent。")}
+						/>
 					),
 				}}
 			/>

@@ -2113,6 +2113,12 @@ export function App() {
 		loadPlugins();
 	}, [page, connected, loadPlugins]);
 
+	/** Subscription sources are host state with no push either, so opening the page reads them. */
+	useEffect(() => {
+		if (page !== "settings.pocs" || !connected) return;
+		send({ type: "list_poc_sources" });
+	}, [page, connected, send]);
+
 	// Pinned plugin pages live in the sidebar, so the plugin list has to load on
 	// connect rather than only when the plugin settings page is opened.
 	useEffect(() => {
@@ -3375,7 +3381,7 @@ export function App() {
 							)}
 						</SettingsPage>
 					) : page === "settings.environment" ? (
-						<SettingsPage page={page} status={envReport ? (envReport.ok ? t("可用") : t("不可用")) : t("检查中")}>
+						<SettingsPage page={page}>
 							<EnvironmentPanel
 								report={envReport}
 								building={imageBuilding}

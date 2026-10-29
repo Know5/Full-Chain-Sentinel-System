@@ -429,6 +429,14 @@ body {
 	flex: 0 0 auto;
 }
 
+/* Settings pages mix sections and tables. A table that is not the whole page
+   must keep its natural height — `flex: 1; min-height: 0` shrank it to zero and
+   let the next section overlap its toolbar. The page body scrolls instead. */
+.settings-page__content > :is(.ant-table-wrapper, .ant-pro-table) {
+	flex: 0 0 auto;
+	min-height: auto;
+}
+
 /* Wrapper divs around a table (the plugin list, the official catalog) have to
    pass the height through, and their own intro text must not stretch. */
 :is(.ui-page__body, .settings-page__content) > :is(.plugin-table-wrap, .op) > :not(.ant-table-wrapper) {
@@ -2452,9 +2460,246 @@ body {
 .settings-page__content {
 	display: flex;
 	flex-direction: column;
-	gap: 16px;
-	max-width: 1120px;
+	gap: 14px;
+	max-width: 1180px;
 	width: 100%;
+}
+
+/* The settings pages still carry a few selectors from the legacy stylesheet.
+   Scoping the old variables to the page maps them onto the console palette, so
+   those pieces (plugin host chips, inline search fields) stop looking like a
+   different product without rewriting every legacy rule. */
+.settings-page {
+	--border: var(--console-border);
+	--border-strong: #d0d5dd;
+	--raised: #f8fafc;
+	--text: var(--console-text);
+	--text-bright: var(--console-text);
+	--dim: #667085;
+	--faint: #98a2b3;
+	--accent: #2563eb;
+	--accent-hover: #3b82f6;
+	--accent-dim: #eff4ff;
+	--accent-border: #bfdbfe;
+	--accent-ring: rgba(37, 99, 235, 0.12);
+	--danger: #dc2626;
+	--danger-dim: #fef2f2;
+	--ok: #16a34a;
+	--ok-dim: #f0fdf4;
+	--warn: #d97706;
+	--warn-dim: #fffbeb;
+	--info: #2563eb;
+	--info-dim: #eff4ff;
+	--blue: #2563eb;
+	--disabled: #d0d5dd;
+	--radius: 8px;
+}
+
+/* ---------- Settings blocks ---------- */
+
+.settings-bar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	flex-wrap: wrap;
+	min-height: 30px;
+}
+
+.settings-bar__main {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+	min-width: 0;
+}
+
+.settings-bar__title {
+	font-size: 13px;
+	font-weight: 600;
+	color: #101828;
+}
+
+.settings-bar__meta {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 12px;
+	color: #667085;
+}
+
+.settings-bar__extra {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+	margin-left: auto;
+}
+
+.settings-section {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	min-width: 0;
+}
+
+.settings-section__head {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px;
+	padding-bottom: 8px;
+	border-bottom: 1px solid var(--console-border);
+}
+
+.settings-section__heading {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.settings-section__title {
+	font-size: 13px;
+	font-weight: 600;
+	color: #101828;
+}
+
+.settings-section__desc {
+	font-size: 12px;
+	color: #667085;
+}
+
+.settings-section__extra {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+	flex: none;
+}
+
+.settings-section__body {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	min-width: 0;
+}
+
+/* A page that mixes several unrelated blocks (model roles, the library, the
+   gatekeeper) gets one framed panel per block: tinted header, body padding and a
+   border make the boundaries obvious without turning every row into a card. */
+.settings-panel {
+	border: 1px solid var(--console-border);
+	border-radius: 10px;
+	background: #fff;
+	overflow: hidden;
+}
+
+.settings-panel .settings-section__head {
+	padding: 10px 14px;
+	background: #f8fafc;
+	border-bottom: 1px solid var(--console-border);
+}
+
+.settings-panel .settings-section__body {
+	padding: 14px;
+}
+
+/* Tables inside a section should not try to fill the page: the section is a
+   block in a form, not the page body. */
+.settings-section__body > .ant-pro-table,
+.settings-section__body > .ant-table-wrapper {
+	flex: none;
+	min-height: 0;
+}
+
+.settings-note {
+	display: block;
+	max-width: 820px;
+	font-size: 12px;
+	line-height: 1.7;
+	color: #667085;
+}
+
+.settings-empty {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 4px;
+	padding: 14px 0;
+}
+
+.settings-empty .ant-typography:first-child {
+	font-size: 13px;
+}
+
+/* A set of choices, not a section: bordered like the project summary tiles so
+   the boundary says "pick one" rather than "another sheet". */
+.settings-tile {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	min-width: 0;
+	padding: 12px;
+	border: 1px solid var(--console-border);
+	border-radius: 10px;
+	background: #fff;
+}
+
+.settings-tile__head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	min-width: 0;
+}
+
+.settings-columns {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+	gap: 16px;
+	align-items: start;
+}
+
+.security-columns {
+	grid-template-columns: minmax(0, 1.4fr) minmax(260px, 1fr);
+}
+
+@media (max-width: 900px) {
+	.security-columns {
+		grid-template-columns: 1fr;
+	}
+}
+
+.settings-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 12px 16px;
+}
+
+.settings-field {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	min-width: 0;
+}
+
+.settings-field__label {
+	font-size: 12.5px;
+	font-weight: 600;
+	color: #344054;
+}
+
+.settings-field__hint {
+	font-size: 12px;
+	line-height: 1.6;
+	color: #667085;
+}
+
+@media (max-width: 720px) {
+	.settings-grid {
+		grid-template-columns: 1fr;
+	}
 }
 
 .security-hint {
@@ -2494,66 +2739,39 @@ body {
 
 /* ---------- Web search panel ---------- */
 
-.websearch-toolbar {
+.websearch-key-cell {
+	max-width: 100%;
+	min-width: 0;
+}
+
+.websearch-key-cell .ant-typography {
+	min-width: 0;
+}
+
+.websearch-quota-inline {
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
-	gap: 12px;
-	flex-wrap: wrap;
+	gap: 6px;
+	min-width: 0;
 }
 
-.websearch-limit {
-	flex-wrap: wrap;
-}
-
-.websearch-add {
-	display: flex;
-	gap: 8px;
-	flex-wrap: wrap;
-}
-
-.websearch-add__label {
-	width: 220px;
-}
-
-.websearch-add__key {
-	flex: 1;
-	min-width: 260px;
-}
-
-.websearch-key {
-	display: flex;
-	flex-direction: column;
-	gap: 2px;
-}
-
-.websearch-quota {
-	display: flex;
-	flex-direction: column;
-	gap: 2px;
-}
-
-.websearch-quota .ant-progress {
+.websearch-quota-inline .ant-progress {
+	flex: none;
 	margin: 0;
 }
 
-.websearch-detail {
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
-	padding: 4px 0;
-}
-
-.websearch-detail pre {
+.websearch-detail-pre {
 	margin: 0;
 	max-height: 200px;
 	overflow: auto;
 	font-size: 12px;
 }
 
-.websearch-footnote {
-	display: block;
-	font-size: 12px;
+.websearch-drawer-apply {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	margin-top: 12px;
 }
 
 /* ---------- POC sources panel ---------- */
@@ -2607,23 +2825,109 @@ body {
 
 /* ---------- Permissions panel ---------- */
 
-.permhub-toolbar {
-	display: flex;
-	align-items: center;
-	flex-wrap: wrap;
-	gap: 10px;
-}
-
 .permhub-dirty {
 	font-size: 12px;
 }
 
-.permhub-toolbar__right {
-	margin-left: auto;
+/* Three fixed-size, independently scrolling panels. The tool inventory can be
+   arbitrarily long and the MCP rows grow with the server list, so the boxes
+   hold their size and each body scrolls instead of stretching the page. */
+.permhub-grid {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 16px;
+	align-items: stretch;
 }
 
-.permhub-card .ant-card-body {
-	padding: 8px 12px;
+.permhub-panel {
+	box-sizing: border-box;
+	height: 480px;
+	padding: 12px;
+	border: 1px solid var(--console-border);
+	border-radius: 10px;
+	background: #fff;
+	overflow: hidden;
+}
+
+.permhub-panel .settings-section__head {
+	flex: none;
+	min-height: 48px;
+}
+
+.permhub-panel .settings-section__body {
+	flex: 1;
+	min-height: 0;
+	overflow-x: hidden;
+	overflow-y: auto;
+	scrollbar-gutter: stable;
+	overscroll-behavior: contain;
+	padding-right: 4px;
+}
+
+.permhub-panel .settings-section__body::-webkit-scrollbar {
+	width: 8px;
+}
+
+.permhub-panel .settings-section__body::-webkit-scrollbar-thumb {
+	border-radius: 8px;
+	background: #d0d5dd;
+}
+
+.permhub-panel .settings-section__body::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+.permhub-panel .permhub-row:first-child {
+	padding-top: 0;
+}
+
+.permhub-panel .ant-list-item {
+	align-items: flex-start;
+	padding: 8px 0;
+	border-bottom: 1px solid #f2f4f7;
+}
+
+.permhub-panel .ant-list-item:last-child {
+	border-bottom: 0;
+}
+
+.permhub-panel .permhub-row__name,
+.permhub-panel .permhub-row__hint,
+.permhub-tool .ant-typography {
+	overflow-wrap: anywhere;
+}
+
+.permhub-panel .permhub-row > :not(.permhub-row__text) {
+	flex: none;
+}
+
+.permhub-tool .ant-space {
+	max-width: 100%;
+	row-gap: 2px;
+}
+
+.permhub-tool .ant-space-item {
+	min-width: 0;
+	max-width: 100%;
+}
+
+.permhub-panel__empty {
+	display: flex;
+	flex: 1;
+	align-items: center;
+	justify-content: center;
+	padding: 24px 12px;
+	text-align: center;
+}
+
+@media (max-width: 1100px) {
+	.permhub-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.permhub-panel {
+		height: 420px;
+	}
 }
 
 .permhub-list {
@@ -2738,6 +3042,10 @@ body {
 	flex-direction: column;
 }
 
+.notifyhub-card {
+	height: 100%;
+}
+
 .notifyhub-title .ant-typography:last-child {
 	font-size: 12px;
 }
@@ -2772,9 +3080,15 @@ body {
 }
 
 .notifyhub-kinds {
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 8px 24px;
+}
+
+@media (max-width: 760px) {
+	.notifyhub-kinds {
+		grid-template-columns: 1fr;
+	}
 }
 
 .notifyhub-kind {
@@ -2817,7 +3131,7 @@ body {
 	font-size: 12px;
 }
 
-.notifyhub-last .ant-card-body {
+.notifyhub-last {
 	display: flex;
 	align-items: flex-start;
 	justify-content: space-between;
@@ -2833,24 +3147,7 @@ body {
 
 /* ---------- Environment panel ---------- */
 
-.envhub-head {
-	display: flex;
-	align-items: center;
-	gap: 12px;
-	flex-wrap: wrap;
-}
-
-.envhub-head__actions {
-	margin-left: auto;
-}
-
 .envhub-verdict {
-	font-size: 12px;
-}
-
-.envhub-note {
-	display: block;
-	margin: 4px 0 12px;
 	font-size: 12px;
 }
 
@@ -2864,17 +3161,16 @@ body {
 	grid-column: 1 / -1;
 }
 
-.envhub-actions {
-	display: flex;
-	justify-content: flex-end;
-	gap: 8px;
-	margin-top: 4px;
-}
-
 .envhub-network {
 	display: block;
 	width: 100%;
 	margin-bottom: 8px;
+}
+
+.envhub-network-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 8px;
 }
 
 .envhub-network__option {
@@ -2909,6 +3205,23 @@ body {
 	font-size: 12px;
 }
 
+.envhub-check-group {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding-top: 14px;
+	border-top: 1px solid var(--console-border);
+}
+
+.envhub-check-group:first-child {
+	padding-top: 0;
+	border-top: 0;
+}
+
+.envhub-check-group__title {
+	font-size: 12.5px;
+}
+
 .envhub-list {
 	display: flex;
 	flex-direction: column;
@@ -2939,6 +3252,12 @@ body {
 .envhub-diag {
 	font-family: var(--mono, ui-monospace, monospace);
 	font-size: 12px;
+}
+
+@media (max-width: 1100px) {
+	.envhub-network-grid {
+		grid-template-columns: 1fr;
+	}
 }
 
 @media (max-width: 720px) {
@@ -2979,6 +3298,12 @@ body {
 	margin-top: 16px;
 	padding-top: 14px;
 	border-top: 1px solid var(--console-border);
+}
+
+.settings-section .superset-section:first-of-type {
+	margin-top: 4px;
+	padding-top: 0;
+	border-top: 0;
 }
 
 .superset-strategies {
@@ -3046,26 +3371,62 @@ body {
 	font-size: 13px;
 }
 
-.assethub-plat {
-	display: flex;
-	flex-direction: column;
+.assethub-platline {
+	flex-wrap: nowrap;
+	min-width: 0;
 }
 
-.assethub-plat .ant-typography:last-child {
-	font-size: 12px;
+.assethub-platline .ant-typography {
+	white-space: nowrap;
 }
 
-.assethub-key {
+.settings-row-switch {
+	display: inline-flex;
+	flex: none;
+}
+
+.assethub-endpoint {
 	display: flex;
-	flex-direction: column;
-	gap: 4px;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	max-width: 100%;
+}
+
+.assethub-endpoint .ant-typography {
+	min-width: 0;
+}
+
+.settings-drawer-foot {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+
+.settings-drawer-foot .ant-space {
+	flex-wrap: wrap;
 }
 
 .assethub-detail {
 	display: flex;
 	flex-direction: column;
-	gap: 10px;
-	padding: 4px 0;
+	gap: 12px;
+	margin-top: 4px;
+	padding-top: 12px;
+	border-top: 1px solid var(--console-border);
+}
+
+.assethub-detail > div {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.assethub-detail .ant-typography {
+	overflow-wrap: anywhere;
 }
 
 .assethub-detail__pre {
@@ -3076,11 +3437,6 @@ body {
 }
 
 .assethub-detail__note {
-	display: block;
-	font-size: 12px;
-}
-
-.assethub-footnote {
 	display: block;
 	font-size: 12px;
 }
@@ -3402,6 +3758,11 @@ body {
 	display: flex;
 	flex-direction: column;
 	gap: 2px;
+	min-width: 0;
+}
+
+.modelhub-name .ant-space {
+	max-width: 100%;
 }
 
 .modelhub-name .ant-typography:last-child {
@@ -6741,62 +7102,14 @@ body {
 .settings-page__content > * {
 	min-width: 0;
 }
-.settings-page button.primary {
-	border: 1px solid var(--accent);
-	background: var(--accent);
-	color: #fff;
-	box-shadow: none;
-}
-.settings-page button.primary:hover:not(:disabled) {
-	background: var(--accent-hover);
-	border-color: var(--accent-hover);
-}
-.settings-page :is(input, select, textarea):not(:where([type="checkbox"], [type="radio"], [type="file"])) {
-	min-width: 0;
-	height: 32px;
-	margin-top: 0;
-	padding: 5px 10px;
-	border: 1px solid var(--border-strong);
-	border-radius: var(--radius);
-	background-color: var(--card);
-	color: var(--text-bright);
-	font-size: 13px;
-	line-height: 20px;
-	box-shadow: none;
-}
-.settings-page select {
-	padding-right: 30px;
-}
-.settings-page textarea {
-	width: 100%;
-	height: auto;
-	min-height: 120px;
-	resize: vertical;
-	line-height: 1.7;
-}
-.settings-page :is(input, select, textarea):focus-visible {
-	outline: none;
-	border-color: var(--accent);
-	box-shadow: 0 0 0 3px var(--accent-ring);
-}
-.settings-page :is(input, textarea)::placeholder {
-	color: var(--faint);
-	opacity: 1;
-}
-.settings-page :is(input[type="checkbox"], input[type="radio"]) {
-	accent-color: var(--accent);
-}
 .settings-page .gatekeeper {
 	margin-top: 20px;
 	padding-top: 4px;
 	border-top: 1px solid var(--border);
 }
 .settings-page .security-form {
-	display: flex;
-	flex-direction: column;
-	gap: 12px;
-	max-width: 520px;
-	margin-top: 16px;
+	max-width: 420px;
+	margin-top: 0;
 }
 .app {
 	height: 100dvh;
@@ -6959,9 +7272,6 @@ body {
 }
 
 .plugindev__md {
-	padding: 12px 16px;
-	border: 1px solid var(--console-border);
-	border-radius: 10px;
 	font-size: 13px;
 	line-height: 1.7;
 }

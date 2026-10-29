@@ -13,7 +13,6 @@ import {
 	Avatar,
 	Badge,
 	Button,
-	Card,
 	Checkbox,
 	Col,
 	Form,
@@ -27,6 +26,7 @@ import {
 } from "antd";
 import { useMemo, useState } from "react";
 import { getLanguage, t } from "../i18n.ts";
+import { SettingsBar, SettingsNote, SettingsSection } from "../ui/Settings.tsx";
 import type {
 	SentinelNotifyChannel,
 	SentinelNotifyChannelConfig,
@@ -116,10 +116,8 @@ function ChannelCard({
 	onTest: () => void;
 }) {
 	return (
-		<Card
-			size="small"
-			className={`notifyhub-card notifyhub-card--${channel}`}
-			title={
+		<div className={`settings-tile notifyhub-card notifyhub-card--${channel}`}>
+			<div className="settings-tile__head">
 				<Space size={8}>
 					<Avatar shape="square" size={28} className="notifyhub-mark">
 						{channelMark(channel)}
@@ -129,15 +127,12 @@ function ChannelCard({
 						<Text type="secondary">{subtitle}</Text>
 					</span>
 				</Space>
-			}
-			extra={
 				<Switch
 					checked={config.enabled}
 					aria-label={config.enabled ? t("关闭{title}通知", { title }) : t("启用{title}通知", { title })}
 					onChange={(checked) => onChange({ enabled: checked })}
 				/>
-			}
-		>
+			</div>
 			<Space size={8} wrap className="notifyhub-meta">
 				<Tag color={config.enabled ? "green" : "default"} variant="filled">
 					{config.enabled ? t("已启用") : t("已关闭")}
@@ -220,7 +215,7 @@ function ChannelCard({
 					description={result.detail ? <pre className="notifyhub-detail">{result.detail}</pre> : undefined}
 				/>
 			) : null}
-		</Card>
+		</div>
 	);
 }
 
@@ -296,23 +291,21 @@ export function NotifyPanel({
 
 	return (
 		<>
-			<div className="notifyhub-header">
-				<div>
-					<Space size={8}>
-						<Text strong>{t("通知渠道")}</Text>
-						<Tag variant="filled">{t("{enabled} / {total} 已启用", { enabled: enabledChannels, total: 3 })}</Tag>
-					</Space>
-					<Text type="secondary" className="notifyhub-lead">
-						{t("任务结束后把结果推送到团队群。钉钉、飞书和企业微信可同时启用；在群的机器人设置里添加自定义机器人并填入 webhook。钉钉/飞书的加签与关键词按机器人安全设置选填。")}
-					</Text>
-				</div>
-				<Space size={8}>
-					<Text type="secondary">{t("保存后立即生效")}</Text>
-					<Button type="primary" icon={<SaveOutlined />} onClick={() => onSave(draft)}>
-						{t("保存设置")}
-					</Button>
-				</Space>
-			</div>
+			<SettingsBar
+				title={t("通知渠道")}
+				meta={<Tag variant="filled">{t("{enabled} / {total} 已启用", { enabled: enabledChannels, total: 3 })}</Tag>}
+				extra={
+					<>
+						<Text type="secondary">{t("保存后立即生效")}</Text>
+						<Button type="primary" icon={<SaveOutlined />} onClick={() => onSave(draft)}>
+							{t("保存设置")}
+						</Button>
+					</>
+				}
+			/>
+			<SettingsNote>
+				{t("任务结束后把结果推送到团队群。钉钉、飞书和企业微信可同时启用；在群的机器人设置里添加自定义机器人并填入 webhook。钉钉/飞书的加签与关键词按机器人安全设置选填。")}
+			</SettingsNote>
 
 			<Row gutter={[16, 16]}>
 				<Col xs={24} xl={8}>
@@ -363,9 +356,9 @@ export function NotifyPanel({
 				</Col>
 			</Row>
 
-			<Card
-				size="small"
+			<SettingsSection
 				title={t("推送内容")}
+				description={t("已选 {selected} / {total}", { selected: selectedKinds, total: KINDS.length })}
 				extra={
 					<Space size={6}>
 						<Button size="small" onClick={() => setKinds((prev) => ({ ...prev, ...selectAll(true) }))}>
@@ -377,10 +370,7 @@ export function NotifyPanel({
 					</Space>
 				}
 			>
-				<Text type="secondary" className="notifyhub-section-note">
-					{t("勾选的事件会同时发送到所有已启用渠道。")}
-					{t("已选 {selected} / {total}", { selected: selectedKinds, total: KINDS.length })}
-				</Text>
+				<SettingsNote>{t("勾选的事件会同时发送到所有已启用渠道。")}</SettingsNote>
 				<Checkbox.Group
 					className="notifyhub-kinds"
 					value={KINDS.filter(([key]) => kinds[key]).map(([key]) => key)}
@@ -416,41 +406,50 @@ export function NotifyPanel({
 						{t("输入框旁单条强制发送不受「运行报告」勾选影响。")}
 					</Text>
 				</div>
-			</Card>
+			</SettingsSection>
 
-			<Card size="small" className="notifyhub-last">
-				<Space align="start" size={10}>
-					<Badge status={status.at === null ? "default" : status.ok ? "success" : "error"} />
-					<div className="notifyhub-last__copy">
-						<Text strong>
-							{status.at === null
-								? t("最近一次通知")
-								: t("最近一次通知：{time}", { time: formatWhen(status.at) })}
-						</Text>
-						<Text type="secondary">
-							{status.at === null
-								? t("启用渠道并保存后，下一轮任务结束时会在这里显示投递结果。")
-								: `${status.ok ? t("发送成功") : t("发送失败")}${status.subject ? t(" · {subject}", { subject: status.subject }) : ""}`}
-						</Text>
-						{status.error ? <Text type="danger">{status.error}</Text> : null}
-					</div>
-				</Space>
-				{channelStatuses.length > 0 ? (
-					<Space size={6} wrap className="notifyhub-last__channels">
-						{channelStatuses.map((entry) => (
-							<Tag
-								key={entry.channel}
-								color={entry.ok ? "green" : "red"}
-								variant="filled"
-								title={entry.error ?? undefined}
-							>
-								{entry.channel === "dingtalk" ? t("钉钉") : t("飞书")}
-								{entry.ok ? t(" 成功") : t(" 失败")}
-							</Tag>
-						))}
+			<SettingsSection
+				title={t("最近一次通知")}
+				description={
+					status.at === null
+						? t("启用渠道并保存后，下一轮任务结束时会在这里显示投递结果。")
+						: t("发送于 {time}", { time: formatWhen(status.at) })
+				}
+				extra={
+					channelStatuses.length > 0 ? (
+						<Space size={6} wrap>
+							{channelStatuses.map((entry) => (
+								<Tag
+									key={entry.channel}
+									color={entry.ok ? "green" : "red"}
+									variant="filled"
+									title={entry.error ?? undefined}
+								>
+									{entry.channel === "dingtalk" ? t("钉钉") : t("飞书")}
+									{entry.ok ? t(" 成功") : t(" 失败")}
+								</Tag>
+							))}
+						</Space>
+					) : null
+				}
+			>
+				<div className="notifyhub-last">
+					<Space align="start" size={10}>
+						<Badge status={status.at === null ? "default" : status.ok ? "success" : "error"} />
+						<div className="notifyhub-last__copy">
+							<Text strong>
+								{status.at === null
+									? t("尚未发送过通知")
+									: status.ok
+										? t("发送成功")
+										: t("发送失败")}
+								{status.subject ? t(" · {subject}", { subject: status.subject }) : ""}
+							</Text>
+							{status.error ? <Text type="danger">{status.error}</Text> : null}
+						</div>
 					</Space>
-				) : null}
-			</Card>
+				</div>
+			</SettingsSection>
 		</>
 	);
 }

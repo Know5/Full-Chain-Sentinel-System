@@ -7,9 +7,10 @@
  * prove the resolved endpoint actually answers.
  */
 
-import { Alert, Button, Card, Checkbox, Col, InputNumber, Row, Segmented, Space, Tag, Typography } from "antd";
+import { Alert, Button, Checkbox, InputNumber, Segmented, Space, Tag, Typography } from "antd";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { t } from "../i18n.ts";
+import { SettingsNote, SettingsSection } from "../ui/Settings.tsx";
 import type {
 	SentinelGatekeeperConfig,
 	SentinelMcpToolGate,
@@ -87,93 +88,91 @@ export function GatekeeperPanel({
 	};
 
 	return (
-		<Card
-			size="small"
-			className="gatekeeper"
+		<SettingsSection
+			className="settings-panel"
 			title={t("守门设置（AI 审批）")}
-			extra={<Text type="secondary">{t("全局默认 · 判定端点取「守门模型」")}</Text>}
+			description={t("全局默认 · 判定端点取「守门模型」")}
+			extra={
+				<Space size={8} wrap>
+					<Button
+						loading={testing}
+						disabled={judgeResolved === null || testing}
+						onClick={() => void runTest()}
+					>
+						{testing ? t("判定中…") : t("测试判定")}
+					</Button>
+					<Button type="primary" onClick={() => onSave(settingsDraft)}>
+						{t("保存守门配置")}
+					</Button>
+				</Space>
+			}
 		>
-			<Text type="secondary">
+			<SettingsNote>
 				{t("AI 审批模式下每条命令都先交给「守门模型」判定：返回")} <Text code>ALLOW</Text>{" "}
 				{t("才执行，返回")} <Text code>{t("BLOCK: 理由")}</Text>{" "}
 				{t("则拒绝并把理由回给 Agent。判定失败（超时、报错、返回无法解析）一律放行，并在审计页记为「请求失败」。")}{" "}
 				{t("端点在上面「角色 → 守门模型」里选。")}
-			</Text>
+			</SettingsNote>
 
-			<Card size="small" className="gatekeeper__card" title={t("当前生效端点")}>
-				<Row gutter={[12, 12]} align="middle">
-					<Col xs={24} md={16}>
-						{judgeResolved ? (
-							<Space size={6} wrap>
-								<Text>{judgeResolved.entryName}</Text>
-								<Text strong>{judgeResolved.modelId}</Text>
-								{judgeResolved.followedMain ? (
-									<Tag color="blue" variant="filled">
-										{t("跟随主模型")}
-									</Tag>
-								) : null}
-							</Space>
-						) : (
-							<Text type="danger">{t("无（切到 AI 审批会被拒绝）")}</Text>
-						)}
-					</Col>
-					<Col xs={24} md={8}>
-						<Button
-							block
-							loading={testing}
-							disabled={judgeResolved === null || testing}
-							onClick={() => void runTest()}
-						>
-							{testing ? t("判定中…") : t("测试判定")}
-						</Button>
-					</Col>
-				</Row>
-			</Card>
+			<div className="settings-field">
+				<span className="settings-field__label">{t("当前生效端点")}</span>
+				{judgeResolved ? (
+					<Space size={6} wrap>
+						<Text>{judgeResolved.entryName}</Text>
+						<Text strong>{judgeResolved.modelId}</Text>
+						{judgeResolved.followedMain ? (
+							<Tag color="blue" variant="filled">
+								{t("跟随主模型")}
+							</Tag>
+						) : null}
+					</Space>
+				) : (
+					<Text type="danger">{t("无（切到 AI 审批会被拒绝）")}</Text>
+				)}
+			</div>
 
-			<Card size="small" className="gatekeeper__card" title={t("全局默认模式")}>
-				<Segmented
-					value={globalMode}
-					onChange={(value) => setGlobalMode(value as SentinelMode)}
-					options={SENTINEL_MODES.map((item) => ({ value: item, label: SENTINEL_MODE_LABELS[item] }))}
-				/>
-				<Text type="secondary" className="gatekeeper__hint">
-					{t("新建会话跟随它；已有会话可在对话工具栏单独设定或点「跟随全局」回到默认。")}
-				</Text>
-			</Card>
-
-			<Row gutter={[12, 12]}>
-				<Col xs={24} md={12}>
-					<Card size="small" className="gatekeeper__card" title={t("判定超时（毫秒）")}>
-						<InputNumber
-							min={1000}
-							max={120000}
-							step={1000}
-							style={{ width: "100%" }}
-							value={timeoutMs.trim() === "" ? null : Number(timeoutMs)}
-							onChange={(value) => setTimeoutMs(value === null || value === undefined ? "" : String(value))}
-							placeholder="15000"
+			<div className="settings-grid">
+				<div className="settings-field" style={{ gridColumn: "1 / -1" }}>
+					<span className="settings-field__label">{t("全局默认模式")}</span>
+					<div>
+						<Segmented
+							value={globalMode}
+							onChange={(value) => setGlobalMode(value as SentinelMode)}
+							options={SENTINEL_MODES.map((item) => ({ value: item, label: SENTINEL_MODE_LABELS[item] }))}
 						/>
-						<Text type="secondary" className="gatekeeper__hint">
-							{t("超时即放行并记为「请求失败」。范围 1000–120000。")}
-						</Text>
-					</Card>
-				</Col>
-				<Col xs={24} md={12}>
-					<Card size="small" className="gatekeeper__card" title={t("并发上限")}>
-						<InputNumber
-							min={0}
-							max={64}
-							style={{ width: "100%" }}
-							value={concurrency.trim() === "" ? null : Number(concurrency)}
-							onChange={(value) => setConcurrency(value === null || value === undefined ? "" : String(value))}
-							placeholder="0"
-						/>
-						<Text type="secondary" className="gatekeeper__hint">
-							{t("同时进行中的判定数量，0 = 不限制（子代理并行侦察时用得上）。上限 64。")}
-						</Text>
-					</Card>
-				</Col>
-			</Row>
+					</div>
+					<span className="settings-field__hint">
+						{t("新建会话跟随它；已有会话可在对话工具栏单独设定或点「跟随全局」回到默认。")}
+					</span>
+				</div>
+				<div className="settings-field">
+					<span className="settings-field__label">{t("判定超时（毫秒）")}</span>
+					<InputNumber
+						min={1000}
+						max={120000}
+						step={1000}
+						style={{ width: "100%" }}
+						value={timeoutMs.trim() === "" ? null : Number(timeoutMs)}
+						onChange={(value) => setTimeoutMs(value === null || value === undefined ? "" : String(value))}
+						placeholder="15000"
+					/>
+					<span className="settings-field__hint">{t("超时即放行并记为「请求失败」。范围 1000–120000。")}</span>
+				</div>
+				<div className="settings-field">
+					<span className="settings-field__label">{t("并发上限")}</span>
+					<InputNumber
+						min={0}
+						max={64}
+						style={{ width: "100%" }}
+						value={concurrency.trim() === "" ? null : Number(concurrency)}
+						onChange={(value) => setConcurrency(value === null || value === undefined ? "" : String(value))}
+						placeholder="0"
+					/>
+					<span className="settings-field__hint">
+						{t("同时进行中的判定数量，0 = 不限制（子代理并行侦察时用得上）。上限 64。")}
+					</span>
+				</div>
+			</div>
 
 			{result ? (
 				<Alert
@@ -190,13 +189,14 @@ export function GatekeeperPanel({
 				/>
 			) : null}
 
-			<Card size="small" className="gatekeeper__card" title={t("MCP 工具判定")}>
-				<Text type="secondary">
+			<div className="settings-field">
+				<span className="settings-field__label">{t("MCP 工具判定")}</span>
+				<SettingsNote>
 					{t("bash 命令在任何模式下都由上面的模式决定；这一段管的是另外一类调用：MCP 与插件工具。")}{" "}
 					{t("打开后，AI 审批模式下每一次这类调用也会先交给守门模型，被拦时把理由回给 Agent。")}
 					<Text strong>{t("每次调用都要多花一次模型往返")}</Text>
 					{t("，高频只读工具（列目录、查资产）会明显变慢。")}
-				</Text>
+				</SettingsNote>
 				<div className="gatekeeper__options">
 					<Checkbox
 						checked={mcpTools.enabled}
@@ -219,11 +219,7 @@ export function GatekeeperPanel({
 						</Text>
 					</Checkbox>
 				</div>
-			</Card>
-
-			<Button type="primary" onClick={() => onSave(settingsDraft)}>
-				{t("保存守门配置")}
-			</Button>
-		</Card>
+			</div>
+		</SettingsSection>
 	);
 }

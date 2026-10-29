@@ -2,7 +2,6 @@ import { DeleteOutlined, EditOutlined, PlusOutlined, SwapOutlined } from "@ant-d
 import {
 	Alert,
 	Button,
-	Card,
 	Checkbox,
 	Col,
 	Form,
@@ -18,6 +17,7 @@ import {
 } from "antd";
 import { useEffect, useState } from "react";
 import { t } from "../i18n.ts";
+import { SettingsBar, SettingsNote, SettingsSection } from "../ui/Settings.tsx";
 import { SUPERVISOR_STRATEGY_OPTIONS, supervisorStrategyKey } from "../supervisor-strategy.ts";
 import type {
 	SentinelModelLibraryView,
@@ -169,10 +169,55 @@ export function SupervisorSettingsPanel({
 
 	return (
 		<>
-			<Card
-				size="small"
+			<SettingsBar
+				title={t("监督设置")}
+				meta={supervisorDirty ? t("有未保存的修改") : null}
+				extra={
+					<>
+						<Button
+							loading={supervisorTesting}
+							onClick={async () => {
+								setSupervisorTesting(true);
+								try {
+									const outcome = await onTestSupervisor();
+									setSupervisorTest(outcome?.result ?? null);
+								} finally {
+									setSupervisorTesting(false);
+								}
+							}}
+						>
+							{supervisorTesting ? t("测试中…") : t("测试监督模型")}
+						</Button>
+						<Button
+							type="primary"
+							onClick={() => {
+								onSaveSupervisorConfig(supervisorDraft);
+								setSupervisorDirty(false);
+							}}
+						>
+							{t("保存监督设置")}
+						</Button>
+					</>
+				}
+			/>
+
+			{supervisorTest ? (
+				<Alert
+					type={supervisorTest.ok ? "success" : "error"}
+					showIcon
+					title={supervisorTest.message}
+					className="superset-test"
+				/>
+			) : null}
+
+			<SettingsSection
 				title={t("监督模型")}
-				extra={<Text type="secondary">{t("观察模式总结与介入判断使用的端点")}</Text>}
+				description={t("观察模式总结与介入判断使用的端点")}
+				extra={
+					<Button icon={<SwapOutlined />} onClick={() => setPickerOpen(true)}>
+						{t("更换模型")}
+					</Button>
+				}
 			>
 				<div className="superset-model">
 					<div>
@@ -197,25 +242,18 @@ export function SupervisorSettingsPanel({
 								: null}
 						</Space>
 					</div>
-					<Button icon={<SwapOutlined />} onClick={() => setPickerOpen(true)}>
-						{t("更换模型")}
-					</Button>
 				</div>
-				<Text type="secondary" className="superset-note">
+				<SettingsNote>
 					{t("建议使用低成本的独立模型，避免和监督对象共用同一端点。监督模型在「设置 → 模型」的模型库里维护。")}
-				</Text>
-			</Card>
+				</SettingsNote>
+			</SettingsSection>
 
-			<Card
-				size="small"
-				title={t("监督策略")}
-				extra={<Text type="secondary">{t("全局阈值与新会话的默认值")}</Text>}
-			>
-				<Text type="secondary" className="superset-note">
+			<SettingsSection title={t("监督策略")} description={t("全局阈值与新会话的默认值")}>
+				<SettingsNote>
 					{t(
 						"监督是会话级功能：开始对话前在输入框上方点「监督」才会生效。这里配置全局阈值、批大小、新会话的默认策略（可多选）和自定义策略；模式、策略和补充说明在对话里选。",
 					)}
-				</Text>
+				</SettingsNote>
 
 				<Checkbox
 					checked={supervisorDraft.enabled}
@@ -249,11 +287,11 @@ export function SupervisorSettingsPanel({
 							);
 						})}
 					</div>
-					<Text type="secondary" className="superset-note">
+					<SettingsNote>
 						{t(
 							"可同时选择多个策略，开启监督时会合并生效；至少保留一个。这里只决定新会话的默认值，对话里仍可调整。",
 						)}
-					</Text>
+					</SettingsNote>
 				</div>
 
 				<div className="superset-section">
@@ -324,9 +362,7 @@ export function SupervisorSettingsPanel({
 							)}
 						/>
 					)}
-					<Text type="secondary" className="superset-note">
-						{t("先保存到列表，再点下方「保存监督设置」写入配置。")}
-					</Text>
+					<SettingsNote>{t("先保存到列表，再点上方「保存监督设置」写入配置。")}</SettingsNote>
 				</div>
 
 				<div className="superset-section">
@@ -384,40 +420,7 @@ export function SupervisorSettingsPanel({
 					</Row>
 				</div>
 
-				<Space size={8} wrap className="superset-actions">
-					<Button
-						type="primary"
-						onClick={() => {
-							onSaveSupervisorConfig(supervisorDraft);
-							setSupervisorDirty(false);
-						}}
-					>
-						{t("保存监督设置")}
-					</Button>
-					<Button
-						loading={supervisorTesting}
-						onClick={async () => {
-							setSupervisorTesting(true);
-							try {
-								const outcome = await onTestSupervisor();
-								setSupervisorTest(outcome?.result ?? null);
-							} finally {
-								setSupervisorTesting(false);
-							}
-						}}
-					>
-						{supervisorTesting ? t("测试中…") : t("测试监督模型")}
-					</Button>
-					{supervisorTest ? (
-						<Alert
-							type={supervisorTest.ok ? "success" : "error"}
-							showIcon
-							title={supervisorTest.message}
-							className="superset-test"
-						/>
-					) : null}
-				</Space>
-			</Card>
+			</SettingsSection>
 
 			<Modal
 				title={customStrategyDraft?.id ? t("编辑自定义策略") : t("新建自定义策略")}

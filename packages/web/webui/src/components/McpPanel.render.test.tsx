@@ -58,7 +58,6 @@ function render(view_: SentinelMcpConfigView): string {
 test("renders the empty page", () => {
 	const html = render(config([]));
 	expect(html).toContain("还没有自定义 MCP 服务器");
-	expect(html).toContain("stdio 服务器在宿主机上执行");
 	expect(html).not.toContain("权限未开启");
 });
 

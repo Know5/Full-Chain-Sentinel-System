@@ -14,7 +14,6 @@ import { CopyOutlined, PlayCircleOutlined, ReloadOutlined, StopOutlined } from "
 import {
 	Alert,
 	Button,
-	Card,
 	Col,
 	Form,
 	Input,
@@ -28,6 +27,7 @@ import {
 } from "antd";
 import { useEffect, useRef, useState } from "react";
 import { t } from "../i18n.ts";
+import { SettingsBar, SettingsNote, SettingsSection } from "../ui/Settings.tsx";
 import type {
 	SentinelContainerNetwork,
 	SentinelEnvItem,
@@ -95,18 +95,27 @@ function SourcesForm({
 	const set = (key: keyof SentinelSources, value: string) => setDraft((current) => ({ ...current, [key]: value }));
 
 	return (
-		<Card
-			size="small"
+		<SettingsSection
+			className="settings-panel"
 			title={t("构建源")}
+			description={dirty ? t("有未保存的修改") : savedAt !== null ? t("已保存，重建镜像后生效") : undefined}
 			extra={
-				<Text type="secondary">
-					{dirty ? t("有未保存的修改") : savedAt !== null ? t("已保存，重建镜像后生效") : null}
-				</Text>
+				<Space size={8} wrap>
+					<Button disabled={busy} onClick={() => setDraft(CHINA_SOURCES)}>
+						{t("中国镜像源")}
+					</Button>
+					<Button disabled={busy} onClick={() => setDraft(EMPTY_SOURCES)}>
+						{t("清空（用官方源）")}
+					</Button>
+					<Button type="primary" disabled={busy || !dirty} onClick={() => onSave(draft)}>
+						{t("保存")}
+					</Button>
+				</Space>
 			}
 		>
-			<Text type="secondary" className="envhub-note">
+			<SettingsNote>
 				{t("这些值会烘焙进工具镜像，所以保存后需要重建镜像；pip / npm / go 三项在容器内运行时（pip install、npm install、go install）同样生效。留空表示使用官方源。")}
-			</Text>
+			</SettingsNote>
 			<Form layout="vertical" requiredMark={false}>
 				<div className="envhub-grid">
 					{SOURCE_FIELDS.map((field) => (
@@ -120,19 +129,8 @@ function SourcesForm({
 						</Form.Item>
 					))}
 				</div>
-				<Space size={8} wrap className="envhub-actions">
-					<Button size="small" disabled={busy} onClick={() => setDraft(CHINA_SOURCES)}>
-						{t("中国镜像源")}
-					</Button>
-					<Button size="small" disabled={busy} onClick={() => setDraft(EMPTY_SOURCES)}>
-						{t("清空（用官方源）")}
-					</Button>
-					<Button size="small" type="primary" disabled={busy || !dirty} onClick={() => onSave(draft)}>
-						{t("保存")}
-					</Button>
-				</Space>
 			</Form>
-		</Card>
+		</SettingsSection>
 	);
 }
 
@@ -192,23 +190,26 @@ function NetworkAndProxyForm({
 	const dirty = network !== initial || defaultId !== (config?.defaultId ?? null) || image !== (config?.image ?? "");
 
 	return (
-		<Card
-			size="small"
+		<SettingsSection
+			className="settings-panel"
 			title={t("容器网络与代理")}
+			description={
+				dirty ? t("有未保存的修改") : savedAt !== null ? t("已保存，重建容器后生效") : undefined
+			}
 			extra={
-				<Space size={8}>
+				<Space size={8} wrap>
 					<Tag color={config?.imagePresent ? "green" : "orange"} variant="filled">
 						{config?.imagePresent ? t("镜像已在本地") : t("镜像不在本地")}
 					</Tag>
-					<Text type="secondary">
-						{dirty ? t("有未保存的修改") : savedAt !== null ? t("已保存，重建容器后生效") : null}
-					</Text>
+					<Button type="primary" onClick={() => onSave(network, defaultId, image)} disabled={busy || !dirty}>
+						{t("保存")}
+					</Button>
 				</Space>
 			}
 		>
-			<Text type="secondary" className="envhub-note">
+			<SettingsNote>
 				{t("新建项目和重建的容器用这里的设置；已经在跑的容器保持原样，要到「项目」页点「重建容器」才会切换（下面「项目容器」那一项会写明它们现在用的是哪个）。")}
-			</Text>
+			</SettingsNote>
 
 			<Radio.Group
 				className="envhub-network"
@@ -216,7 +217,7 @@ function NetworkAndProxyForm({
 				disabled={busy}
 				onChange={(event) => setNetwork(event.target.value as SentinelContainerNetwork)}
 			>
-				<Space orientation="vertical" size={8} style={{ width: "100%" }}>
+				<div className="envhub-network-grid">
 					{NETWORK_OPTIONS.map((option) => (
 						<Radio key={option.value} value={option.value} className="envhub-network__option">
 							<Text strong>{option.label}</Text>
@@ -225,29 +226,33 @@ function NetworkAndProxyForm({
 							</Text>
 						</Radio>
 					))}
-				</Space>
+				</div>
 			</Radio.Group>
 
-			<Text type="secondary" className="envhub-note">
+			<SettingsNote>
 				{t("没有单独选过代理的项目跟这里选的走；新建项目时也可以单独指定。选「不使用」时容器直接用宿主机的网络。")}
-			</Text>
+			</SettingsNote>
 
 			<Row gutter={[12, 12]} align="bottom">
 				<Col xs={24} md={10}>
-					<Text type="secondary">{t("默认代理")}</Text>
-					<Select
-						style={{ width: "100%" }}
-						value={defaultId ?? ""}
-						onChange={(value) => setDefaultId(value || null)}
-						options={[
-							{ value: "", label: t("不使用（新项目默认直连）") },
-							...list.map((proxy) => ({ value: proxy.id, label: proxy.name })),
-						]}
-					/>
+					<div className="settings-field">
+						<span className="settings-field__label">{t("默认代理")}</span>
+						<Select
+							style={{ width: "100%" }}
+							value={defaultId ?? ""}
+							onChange={(value) => setDefaultId(value || null)}
+							options={[
+								{ value: "", label: t("不使用（新项目默认直连）") },
+								...list.map((proxy) => ({ value: proxy.id, label: proxy.name })),
+							]}
+						/>
+					</div>
 				</Col>
 				<Col xs={24} md={10}>
-					<Text type="secondary">{t("sidecar 镜像")}</Text>
-					<Input value={image} spellCheck={false} onChange={(event) => setImage(event.target.value)} />
+					<div className="settings-field">
+						<span className="settings-field__label">{t("sidecar 镜像")}</span>
+						<Input value={image} spellCheck={false} onChange={(event) => setImage(event.target.value)} />
+					</div>
 				</Col>
 				<Col xs={24} md={4}>
 					<Button block loading={pulling} disabled={busy || pulling} onClick={onPull}>
@@ -255,16 +260,10 @@ function NetworkAndProxyForm({
 					</Button>
 				</Col>
 			</Row>
-			<Text type="secondary" className="envhub-note">
+			<SettingsNote>
 				{t("镜像名国内拉不动 ghcr.io 时换成可达的镜像源；改完要重新拉取一次。")}
-			</Text>
-
-			<div className="envhub-actions">
-				<Button type="primary" onClick={() => onSave(network, defaultId, image)} disabled={busy || !dirty}>
-					{t("保存")}
-				</Button>
-			</div>
-		</Card>
+			</SettingsNote>
+		</SettingsSection>
 	);
 }
 
@@ -365,43 +364,60 @@ export function EnvironmentPanel({
 
 	const failures = report.items.filter((entry) => entry.blocking && entry.status !== "ok");
 	const warnings = report.items.filter((entry) => entry.status === "warn");
+	const okCount = report.items.filter((entry) => entry.status === "ok").length;
+	const failCount = report.items.filter((entry) => entry.status === "fail").length;
+	const skipCount = report.items.filter((entry) => entry.status === "skipped").length;
 
 	return (
 		<>
-			<div className="envhub-head">
-				<Tag color={report.ok ? "green" : "red"} variant="filled" className="envhub-verdict">
-					{report.ok ? t("环境可用") : t("环境不可用")}
-				</Tag>
-				<Text type="secondary">
-					{t("检查于")} {new Date(report.at).toLocaleString("zh-CN")} · {report.url}
-				</Text>
-				<Space size={8} className="envhub-head__actions">
-					{copyNote ? <Text type="secondary">{copyNote}</Text> : null}
-					<Button size="small" icon={<CopyOutlined />} onClick={() => void copyDiagnostics()} title={t("复制全部检查项，便于排障")}>
-						{t("复制诊断")}
-					</Button>
-					<Button size="small" icon={<ReloadOutlined />} onClick={onRefresh} disabled={building} title={t("重新检查")}>
-						{t("复检")}
-					</Button>
-					{building ? (
-						<Button size="small" danger icon={<StopOutlined />} onClick={onAbortBuild}>
-							{t("中止构建")}
-						</Button>
-					) : (
-						<Popconfirm
-							title={t("构建工具镜像")}
-							description={t("用内置的 Dockerfile 构建 sentinel:latest，首次约 5–15 分钟。")}
-							okText={t("确认构建")}
-							cancelText={t("取消")}
-							onConfirm={onBuild}
+			<SettingsBar
+				meta={
+					<>
+						<Tag color={report.ok ? "green" : "red"} variant="filled" className="envhub-verdict">
+							{report.ok ? t("环境可用") : t("环境不可用")}
+						</Tag>
+						<span className="settings-bar__meta">
+							{t("检查于")} {new Date(report.at).toLocaleString("zh-CN")} · {report.url}
+						</span>
+					</>
+				}
+				extra={
+					<>
+						{copyNote ? <Text type="secondary">{copyNote}</Text> : null}
+						<Button
+							icon={<CopyOutlined />}
+							onClick={() => void copyDiagnostics()}
+							title={t("复制全部检查项，便于排障")}
 						>
-							<Button size="small" type="primary" icon={<PlayCircleOutlined />} title={t("用内置的 Dockerfile 构建 sentinel:latest")}>
-								{t("构建镜像")}
+							{t("复制诊断")}
+						</Button>
+						<Button icon={<ReloadOutlined />} onClick={onRefresh} disabled={building} title={t("重新检查")}>
+							{t("复检")}
+						</Button>
+						{building ? (
+							<Button danger icon={<StopOutlined />} onClick={onAbortBuild}>
+								{t("中止构建")}
 							</Button>
-						</Popconfirm>
-					)}
-				</Space>
-			</div>
+						) : (
+							<Popconfirm
+								title={t("构建工具镜像")}
+								description={t("用内置的 Dockerfile 构建 sentinel:latest，首次约 5–15 分钟。")}
+								okText={t("确认构建")}
+								cancelText={t("取消")}
+								onConfirm={onBuild}
+							>
+								<Button
+									type="primary"
+									icon={<PlayCircleOutlined />}
+									title={t("用内置的 Dockerfile 构建 sentinel:latest")}
+								>
+									{t("构建镜像")}
+								</Button>
+							</Popconfirm>
+						)}
+					</>
+				}
+			/>
 
 			{report.ok ? (
 				<Alert
@@ -444,47 +460,64 @@ export function EnvironmentPanel({
 			/>
 
 			{building || buildLog.length > 0 ? (
-				<Card size="small" title={building ? t("正在构建工具镜像…") : t("上次构建输出")}>
+				<SettingsSection
+					className="settings-panel"
+					title={building ? t("正在构建工具镜像…") : t("上次构建输出")}
+				>
 					<pre className="envhub-buildlog" ref={logRef}>
 						{buildLog.length > 0 ? buildLog.join("\n") : t("等待 docker build 输出…")}
 					</pre>
-				</Card>
+				</SettingsSection>
 			) : null}
 
-			{grouped(report.items).map(({ group, items }) => (
-				<Card key={group} size="small" title={t(group)}>
-					<div className="envhub-list">
-						{items.map((item) => (
-							<div key={item.id} className={`envhub-row status-${item.status}`}>
-								<Tag color={STATUS_COLORS[item.status]} variant="filled" className="envhub-row__status">
-									{STATUS_LABEL[item.status]}
-								</Tag>
-								<div className="envhub-row__body">
-									<Space size={6} wrap>
-										<Text strong>{item.label}</Text>
-										{item.blocking ? (
-											<Tag color="red" variant="filled">
-												{t("阻断")}
-											</Tag>
-										) : null}
-									</Space>
-									<Text type="secondary">{item.detail}</Text>
-									{item.hint ? <Text type="warning">{item.hint}</Text> : null}
+			<SettingsSection
+				className="settings-panel"
+				title={t("检查结果")}
+				description={t("通过 {ok} · 警告 {warn} · 失败 {fail} · 跳过 {skip}", {
+					ok: okCount,
+					warn: warnings.length,
+					fail: failCount,
+					skip: skipCount,
+				})}
+			>
+				{grouped(report.items).map(({ group, items }) => (
+					<section className="envhub-check-group" key={group}>
+						<Text strong className="envhub-check-group__title">
+							{t(group)}
+						</Text>
+						<div className="envhub-list">
+							{items.map((item) => (
+								<div key={item.id} className={`envhub-row status-${item.status}`}>
+									<Tag color={STATUS_COLORS[item.status]} variant="filled" className="envhub-row__status">
+										{STATUS_LABEL[item.status]}
+									</Tag>
+									<div className="envhub-row__body">
+										<Space size={6} wrap>
+											<Text strong>{item.label}</Text>
+											{item.blocking ? (
+												<Tag color="red" variant="filled">
+													{t("阻断")}
+												</Tag>
+											) : null}
+										</Space>
+										<Text type="secondary">{item.detail}</Text>
+										{item.hint ? <Text type="warning">{item.hint}</Text> : null}
+									</div>
 								</div>
-							</div>
-						))}
-					</div>
-				</Card>
-			))}
+							))}
+						</div>
+					</section>
+				))}
+			</SettingsSection>
 
 			{warnings.length > 0 ? (
-				<Text type="secondary">{t("警告项不影响运行，但可能让工具变慢或缺少能力，建议一并处理。")}</Text>
+				<SettingsNote>{t("警告项不影响运行，但可能让工具变慢或缺少能力，建议一并处理。")}</SettingsNote>
 			) : null}
 
 			{fallback ? (
-				<Card size="small" title={t("诊断信息（手动复制）：")}>
+				<SettingsSection className="settings-panel" title={t("诊断信息（手动复制）")}>
 					<Input.TextArea className="envhub-diag" readOnly value={fallback} rows={12} />
-				</Card>
+				</SettingsSection>
 			) : null}
 		</>
 	);

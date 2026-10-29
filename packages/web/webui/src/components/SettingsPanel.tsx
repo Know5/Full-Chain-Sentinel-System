@@ -21,6 +21,7 @@ import {
 } from "antd";
 import { useEffect, useRef, useState } from "react";
 import { t } from "../i18n.ts";
+import { SettingsEmpty, SettingsNote, SettingsSection } from "../ui/Settings.tsx";
 
 const { Text } = Typography;
 import type {
@@ -408,11 +409,7 @@ export function SettingsPanel({
 	}, [drawerOpen]);
 
 	if (!library) {
-		return (
-			<div className="settings settings--wide">
-				<p className="settings-hint">{t("正在读取模型配置…")}</p>
-			</div>
-		);
+		return <SettingsNote>{t("正在读取模型配置…")}</SettingsNote>;
 	}
 
 	const runTest = async (id: string) => {
@@ -818,15 +815,10 @@ export function SettingsPanel({
 	);
 
 	const capabilityCard = () => (
-		<Card
-			size="small"
+		<SettingsSection
 			className="modelhub-caps"
-			title={
-				<Space size={8} wrap>
-					<Text strong>{t("能力概览")}</Text>
-					<Text type="secondary">{capsSourceLabel}</Text>
-				</Space>
-			}
+			title={t("能力概览")}
+			description={capsSourceLabel}
 		>
 			<Space size={18} wrap>
 				<Text type="secondary">
@@ -845,12 +837,12 @@ export function SettingsPanel({
 					{t("价格")} <Text strong>{capPrice}</Text>
 				</Text>
 			</Space>
-			<Text type="secondary" className="modelhub-lookup__note">
+			<SettingsNote>
 				{customChannel
 					? t("自定义渠道的能力沿用当前填写，请自行核对。")
 					: t("端点与协议跟随渠道；能力可在「能力与价格」里改。")}
-			</Text>
-		</Card>
+			</SettingsNote>
+		</SettingsSection>
 	);
 
 	const columns: ProColumns<SentinelModelEntryView>[] = [
@@ -860,10 +852,14 @@ export function SettingsPanel({
 			render: (_, entry) => (
 				<div className="modelhub-name">
 					<Space size={6} wrap>
-						<Text strong>{entry.name}</Text>
-						<Text type="secondary">{entry.modelId}</Text>
+						<Text strong ellipsis title={entry.name}>
+							{entry.name}
+						</Text>
+						<Text type="secondary" ellipsis title={entry.modelId}>
+							{entry.modelId}
+						</Text>
 					</Space>
-					<Text type="secondary" title={entry.baseUrl}>
+					<Text type="secondary" ellipsis title={entry.baseUrl}>
 						{hostOf(entry.baseUrl)}
 					</Text>
 				</div>
@@ -936,28 +932,23 @@ export function SettingsPanel({
 	];
 
 	return (
-		<div className="settings settings--wide cockpit">
-			<Card
-				size="small"
+		<>
+			<SettingsSection
+				className="settings-panel"
 				title={t("角色")}
+				description={t("{assigned} / {total} 已分配 · 点击「更换」选择模型", {
+					assigned,
+					total: ROLE_ORDER.length,
+				})}
 				extra={
-					<Space size={8} wrap>
-						<Text type="secondary">
-							{t("{assigned} / {total} 已分配 · 点击「更换」选择模型", {
-								assigned,
-								total: ROLE_ORDER.length,
-							})}
-						</Text>
-						<Button
-							size="small"
-							icon={<ReloadOutlined />}
-							loading={testingAll}
-							disabled={testingAll || library.entries.length === 0}
-							onClick={() => void runAllTests()}
-						>
-							{t("全部测试")}
-						</Button>
-					</Space>
+					<Button
+						icon={<ReloadOutlined />}
+						loading={testingAll}
+						disabled={testingAll || library.entries.length === 0}
+						onClick={() => void runAllTests()}
+					>
+						{t("全部测试")}
+					</Button>
 				}
 			>
 				<Row gutter={[12, 12]}>
@@ -1038,31 +1029,32 @@ export function SettingsPanel({
 						);
 					})}
 				</Row>
-			</Card>
+			</SettingsSection>
 
-			<Card
-				size="small"
+			<SettingsSection
+				className="settings-panel"
 				title={t("模型库")}
+				description={
+					<>
+						{t("{count} 个模型", { count: library.entries.length })} ·{" "}
+						{unused === 0 ? t("全部已使用") : t("{count} 个未使用", { count: unused })}
+						{keyword ? ` · ${t("匹配 {count} 个", { count: shown.length })}` : ""}
+					</>
+				}
 				extra={
-					<Space size={8} wrap>
-						<Text type="secondary">
-							{t("{count} 个模型", { count: library.entries.length })} ·{" "}
-							{unused === 0 ? t("全部已使用") : t("{count} 个未使用", { count: unused })}
-							{keyword ? ` · ${t("匹配 {count} 个", { count: shown.length })}` : ""}
-						</Text>
+					<>
 						<Input
 							allowClear
-							size="small"
 							style={{ width: 220 }}
 							value={search}
 							onChange={(event) => setSearch(event.target.value)}
 							placeholder={t("搜索名称、模型 ID、端点")}
 							spellCheck={false}
 						/>
-						<Button size="small" type="primary" icon={<PlusOutlined />} onClick={() => openDraft({ ...EMPTY_DRAFT })}>
+						<Button type="primary" icon={<PlusOutlined />} onClick={() => openDraft({ ...EMPTY_DRAFT })}>
 							{t("添加模型")}
 						</Button>
-					</Space>
+					</>
 				}
 			>
 				<ProTable<SentinelModelEntryView>
@@ -1073,6 +1065,7 @@ export function SettingsPanel({
 					search={false}
 					options={false}
 					pagination={false}
+					tableLayout="fixed"
 					scroll={{ x: 900 }}
 					onRow={(entry) => ({
 						onClick: () => openDraft(draftOf(entry)),
@@ -1080,12 +1073,17 @@ export function SettingsPanel({
 					})}
 					locale={{
 						emptyText:
-							library.entries.length === 0
-								? t("还没有模型。添加一条后，角色里就能分配它。")
-								: t("没有匹配的模型，换个关键词试试"),
+							library.entries.length === 0 ? (
+								<SettingsEmpty
+									title={t("还没有模型")}
+									hint={t("添加一条后，角色里就能分配它。")}
+								/>
+							) : (
+								<SettingsEmpty title={t("没有匹配的模型")} hint={t("换个关键词试试。")} />
+							),
 					}}
 				/>
-			</Card>
+			</SettingsSection>
 
 			{pickerRole ? (
 				<ModelRolePicker
@@ -1495,6 +1493,6 @@ export function SettingsPanel({
 					/>
 				</Drawer>
 			) : null}
-		</div>
+		</>
 	);
 }

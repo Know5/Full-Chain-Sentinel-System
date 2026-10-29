@@ -26,11 +26,8 @@ import { ProTable } from "@ant-design/pro-components";
 import {
 	Alert,
 	Button,
-	Card,
-	Col,
 	InputNumber,
 	List,
-	Row,
 	Space,
 	Switch,
 	Tag,
@@ -39,6 +36,7 @@ import {
 } from "antd";
 import { useEffect, useState } from "react";
 import { t } from "../i18n.ts";
+import { SettingsBar, SettingsNote, SettingsSection } from "../ui/Settings.tsx";
 import type {
 	SentinelCommanderPermissionKey,
 	SentinelMcpServerView,
@@ -342,134 +340,139 @@ export function PermissionsPanel({
 				)}
 			/>
 
-			<div className="permhub-toolbar">
-				<Text type="secondary">{t("预设")}</Text>
-				<Space size={6} wrap>
-					{presets.map((preset) => (
-						<Tooltip key={preset.id} title={preset.hint}>
-							<Button size="small" disabled={busy} onClick={() => applyPreset(preset)}>
-								{preset.label}
-							</Button>
-						</Tooltip>
-					))}
-				</Space>
-				<Text type={dirty ? "warning" : "secondary"} className="permhub-dirty">
-					{dirty ? t("有未保存的修改") : t("主 Agent 已禁用 {count} 项", { count: disabledCount(draft.main) })}
-				</Text>
-				<Space size={6} className="permhub-toolbar__right">
-					<Button
-						size="small"
-						icon={<ReloadOutlined />}
-						disabled={busy}
-						title={t("重新读取已挂载工具")}
-						onClick={onRefresh}
-					>
-						{t("刷新清单")}
-					</Button>
-					<Button
-						size="small"
-						type="primary"
-						icon={<SaveOutlined />}
-						disabled={busy || !dirty}
-						onClick={() =>
-							onSave({
-								main: { ...draft.main },
-								subagent: { ...draft.subagent },
-								commander: { ...draft.commander },
-								subagentMaxTurns: draft.subagentMaxTurns,
-								plugins: {
-									main: { ...draft.plugins.main },
-									subagent: { ...draft.plugins.subagent },
-								},
-							})
-						}
-					>
-						{t("保存并重建会话")}
-					</Button>
-				</Space>
+			<SettingsBar
+				meta={
+					<>
+						<Text type="secondary">{t("预设")}</Text>
+						<Space size={6} wrap>
+							{presets.map((preset) => (
+								<Tooltip key={preset.id} title={preset.hint}>
+									<Button disabled={busy} onClick={() => applyPreset(preset)}>
+										{preset.label}
+									</Button>
+								</Tooltip>
+							))}
+						</Space>
+						<Text type={dirty ? "warning" : "secondary"} className="permhub-dirty">
+							{dirty
+								? t("有未保存的修改")
+								: t("主 Agent 已禁用 {count} 项", { count: disabledCount(draft.main) })}
+						</Text>
+					</>
+				}
+				extra={
+					<>
+						<Button
+							icon={<ReloadOutlined />}
+							disabled={busy}
+							title={t("重新读取已挂载工具")}
+							onClick={onRefresh}
+						>
+							{t("刷新清单")}
+						</Button>
+						<Button
+							type="primary"
+							icon={<SaveOutlined />}
+							disabled={busy || !dirty}
+							onClick={() =>
+								onSave({
+									main: { ...draft.main },
+									subagent: { ...draft.subagent },
+									commander: { ...draft.commander },
+									subagentMaxTurns: draft.subagentMaxTurns,
+									plugins: {
+										main: { ...draft.plugins.main },
+										subagent: { ...draft.plugins.subagent },
+									},
+								})
+							}
+						>
+							{t("保存并重建会话")}
+						</Button>
+					</>
+				}
+			/>
+
+			<div className="permhub-grid">
+				<SettingsSection
+					title={t("主 Agent")}
+					description={t("共 {count} 项权限", { count: SWITCHES.length })}
+					className="permhub-panel"
+				>
+					<div className="permhub-list">
+						{SWITCHES.map((item) => (
+							<div key={item.key}>
+								{switchRow("main", item)}
+								{item.key === "mcp" ? mcpServerRows : null}
+							</div>
+						))}
+					</div>
+				</SettingsSection>
+				<SettingsSection
+					title={t("子 Agent")}
+					description={t("权限不超过主 Agent")}
+					className="permhub-panel"
+				>
+					<div className="permhub-list">
+						{SUBAGENT_SWITCHES.map((item) => switchRow("subagent", item))}
+						<div className="permhub-row">
+							<div className="permhub-row__text">
+								<Text strong>{t("轮次上限")}</Text>
+								<Text type="secondary" className="permhub-row__hint">
+									{t("单个子代理最多执行的轮数，达到后中止并汇报已有结果")}
+								</Text>
+							</div>
+							<InputNumber
+								size="small"
+								min={1}
+								max={200}
+								value={draft.subagentMaxTurns}
+								disabled={busy}
+								style={{ width: 72 }}
+								onChange={(value) => {
+									if (typeof value === "number" && Number.isFinite(value)) setMaxTurns(Math.round(value));
+								}}
+							/>
+						</div>
+					</div>
+				</SettingsSection>
+				<SettingsSection
+					title={t("当前已挂载工具 ({count})", { count: tools.length })}
+					description={t("按当前会话的实际挂载结果")}
+					className="permhub-panel"
+				>
+					{tools.length === 0 ? (
+						<div className="permhub-panel__empty">
+							<Text type="secondary">{t("当前没有会话（先选择项目），或所有工具都被禁用。")}</Text>
+						</div>
+					) : (
+						<List
+							size="small"
+							dataSource={tools}
+							renderItem={(tool) => (
+								<List.Item className={tool.active ? "permhub-tool" : "permhub-tool is-dim"}>
+									<Space size={6} wrap>
+										<Text code>{tool.name}</Text>
+										<Text type="secondary">{tool.source}</Text>
+										{tool.active ? null : <Tag variant="filled">{t("按需加载")}</Tag>}
+									</Space>
+								</List.Item>
+							)}
+						/>
+					)}
+				</SettingsSection>
 			</div>
 
-			<Row gutter={[16, 16]}>
-				<Col xs={24} lg={8}>
-					<Card size="small" title={t("主 Agent")} className="permhub-card">
-						<div className="permhub-list">
-							{SWITCHES.map((item) => (
-								<div key={item.key}>
-									{switchRow("main", item)}
-									{item.key === "mcp" ? mcpServerRows : null}
-								</div>
-							))}
-						</div>
-					</Card>
-				</Col>
-				<Col xs={24} lg={8}>
-					<Card
-						size="small"
-						title={t("子 Agent")}
-						extra={<Text type="secondary">{t("权限不超过主 Agent")}</Text>}
-						className="permhub-card"
-					>
-						<div className="permhub-list">
-							{SUBAGENT_SWITCHES.map((item) => switchRow("subagent", item))}
-							<div className="permhub-row">
-								<div className="permhub-row__text">
-									<Text strong>{t("轮次上限")}</Text>
-									<Text type="secondary" className="permhub-row__hint">
-										{t("单个子代理最多执行的轮数，达到后中止并汇报已有结果")}
-									</Text>
-								</div>
-								<InputNumber
-									size="small"
-									min={1}
-									max={200}
-									value={draft.subagentMaxTurns}
-									disabled={busy}
-									style={{ width: 72 }}
-									onChange={(value) => {
-										if (typeof value === "number" && Number.isFinite(value)) setMaxTurns(Math.round(value));
-									}}
-								/>
-							</div>
-						</div>
-					</Card>
-				</Col>
-				<Col xs={24} lg={8}>
-					<Card
-						size="small"
-						title={t("当前已挂载工具 ({count})", { count: tools.length })}
-						className="permhub-card"
-					>
-						{tools.length === 0 ? (
-							<Text type="secondary">{t("当前没有会话（先选择项目），或所有工具都被禁用。")}</Text>
-						) : (
-							<List
-								size="small"
-								dataSource={tools}
-								renderItem={(tool) => (
-									<List.Item className={tool.active ? "" : "permhub-tool is-dim"}>
-										<Space size={6} wrap>
-											<Text code>{tool.name}</Text>
-											<Text type="secondary">{tool.source}</Text>
-											{tool.active ? null : <Tag variant="filled">{t("按需加载")}</Tag>}
-										</Space>
-									</List.Item>
-								)}
-							/>
-						)}
-					</Card>
-				</Col>
-			</Row>
-
-			<Card size="small" className="permhub-card">
-				<Text type="secondary" className="permhub-section-note">
+			<SettingsSection title={t("插件")} className="permhub-card">
+				<SettingsNote>
 					{t(
 						"插件在实现上是 MCP 服务器，因此先受上面的 MCP 总开关约束；这里决定每个插件挂载给哪一类 Agent。关掉后该 Agent 的会话不连接这个插件，它的工具不会注册，tool_search 也搜不到。插件页的启用开关仍然有效，两处都开才会挂载。",
 					)}
-				</Text>
+				</SettingsNote>
 				{plugins === null ? (
-					<Text type="secondary">{t("正在读取插件…")}</Text>
+					<SettingsNote>{t("正在读取插件…")}</SettingsNote>
 				) : plugins.plugins.length === 0 ? (
-					<Text type="secondary">{t("还没有安装插件（设置 → 插件）。")}</Text>
+					<SettingsNote>{t("还没有安装插件（设置 → 插件）。")}</SettingsNote>
 				) : (
 					<ProTable
 						size="small"
@@ -477,8 +480,8 @@ export function PermissionsPanel({
 						search={false}
 						options={false}
 						pagination={false}
+						tableLayout="fixed"
 						dataSource={plugins.plugins}
-						toolbar={{ title: <Text strong>{t("插件")}</Text> }}
 						columns={[
 							{
 								title: t("插件"),
@@ -548,14 +551,14 @@ export function PermissionsPanel({
 						]}
 					/>
 				)}
-			</Card>
+			</SettingsSection>
 
-			<Card size="small" title={t("指挥官（工程模式）")} className="permhub-card">
-				<Text type="secondary" className="permhub-section-note">
+			<SettingsSection title={t("指挥官（工程模式）")} className="permhub-card">
+				<SettingsNote>
 					{t(
 						"指挥官的调度工具（dispatch_task 等）始终挂载；这里控制的是它拆解任务用的受限执行面。修改在指挥官会话下次创建时生效（新建或恢复工程），运行中的工程不受影响。",
 					)}
-				</Text>
+				</SettingsNote>
 				<div className="permhub-list">
 					{COMMANDER_SWITCHES.map((item) => (
 						<SwitchRow
@@ -569,11 +572,11 @@ export function PermissionsPanel({
 					))}
 				</div>
 				{draft.commander.bash ? null : (
-					<Text type="secondary" className="permhub-section-note">
+					<SettingsNote>
 						{t("bash 已关闭：指挥官将完全基于目标清单与任务结果摘要编排，不能再自行确认目标类型。")}
-					</Text>
+					</SettingsNote>
 				)}
-			</Card>
+			</SettingsSection>
 
 			{draft.main.bash || draft.main.edit || draft.main.write ? null : (
 				<Alert

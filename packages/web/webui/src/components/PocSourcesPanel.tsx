@@ -15,12 +15,20 @@
  * other, and pressing the button again recreates it.
  */
 
-import { CloudDownloadOutlined, DeleteOutlined, EditOutlined, HistoryOutlined, ReloadOutlined, SyncOutlined } from "@ant-design/icons";
+import {
+	CloudDownloadOutlined,
+	DeleteOutlined,
+	EditOutlined,
+	PlusOutlined,
+	ReloadOutlined,
+	SyncOutlined,
+} from "@ant-design/icons";
 import { ProTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
-import { Alert, Button, Card, Checkbox, Form, Input, Popconfirm, Select, Space, Tag, Typography } from "antd";
+import { Alert, Button, Checkbox, Form, Input, Modal, Popconfirm, Select, Space, Tag, Typography } from "antd";
 import { useState } from "react";
 import { t } from "../i18n.ts";
+import { SettingsEmpty } from "../ui/Settings.tsx";
 import type { SentinelPocSource, SentinelPocSourceSave } from "../types.ts";
 import { SENTINEL_OFFICIAL_POC_SOURCE_ID } from "../types.ts";
 
@@ -105,10 +113,12 @@ export function PocSourcesPanel({
 	officialSyncing: boolean;
 	onSyncOfficial(): void;
 }) {
-	const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
+	const [draft, setDraft] = useState<Draft | null>(null);
 	const [error, setError] = useState<string | null>(null);
 
-	const set = (patch: Partial<Draft>): void => setDraft((prev) => ({ ...prev, ...patch }));
+	const set = (patch: Partial<Draft>): void => {
+		setDraft((prev) => (prev ? { ...prev, ...patch } : prev));
+	};
 
 	const edit = (source: SentinelPocSource): void => {
 		setDraft({
@@ -126,6 +136,7 @@ export function PocSourcesPanel({
 	};
 
 	const submit = (): void => {
+		if (!draft) return;
 		if (!draft.name.trim() || !draft.url.trim()) {
 			setError(t("名称和 URL 不能为空"));
 			return;
@@ -144,14 +155,14 @@ export function PocSourcesPanel({
 			intervalHours: draft.intervalHours,
 			enabled: draft.enabled,
 		});
-		setDraft(EMPTY_DRAFT);
+		setDraft(null);
 	};
 
 	const columns: ProColumns<SentinelPocSource>[] = [
 		{
 			title: t("名称"),
 			key: "name",
-			width: 220,
+			width: 200,
 			render: (_, source) => {
 				const status = statusOf(source);
 				return (
@@ -172,13 +183,14 @@ export function PocSourcesPanel({
 			title: t("zip 直链"),
 			dataIndex: "url",
 			key: "url",
+			width: 280,
 			ellipsis: { showTitle: true },
 			render: (_, source) => <Text code>{source.url}</Text>,
 		},
 		{
 			title: t("同步"),
 			key: "schedule",
-			width: 160,
+			width: 150,
 			render: (_, source) => (
 				<div className="pocsource-schedule">
 					<Text>{intervalLabel(source.intervalHours)}</Text>
@@ -189,7 +201,7 @@ export function PocSourcesPanel({
 		{
 			title: t("最近结果"),
 			key: "result",
-			width: 260,
+			width: 220,
 			ellipsis: { showTitle: true },
 			render: (_, source) => (
 				<Text
@@ -204,7 +216,7 @@ export function PocSourcesPanel({
 		{
 			title: t("操作"),
 			key: "actions",
-			width: 260,
+			width: 240,
 			render: (_, source) => {
 				// The official sync starts before its source exists in this list, so
 				// its busy state is not keyed on the id alone.
@@ -253,65 +265,6 @@ export function PocSourcesPanel({
 				)}
 			/>
 
-			<Card
-				size="small"
-				title={draft.id ? t("编辑订阅源") : t("添加订阅源")}
-				className="pocsource-editor"
-			>
-				<Form layout="vertical" requiredMark={false} onFinish={submit}>
-					<div className="pocsource-grid">
-						<Form.Item label={t("名称")} required>
-							<Input
-								value={draft.name}
-								placeholder={t("内网模板包")}
-								spellCheck={false}
-								onChange={(event) => set({ name: event.target.value })}
-							/>
-						</Form.Item>
-						<Form.Item label={t("同步间隔")}>
-							<Select
-								value={draft.intervalHours}
-								onChange={(value) => set({ intervalHours: value })}
-								options={INTERVAL_CHOICES.map((hours) => ({ value: hours, label: intervalLabel(hours) }))}
-							/>
-						</Form.Item>
-						<Form.Item label={t("zip 直链 URL")} required className="pocsource-grid__wide">
-							<Input
-								value={draft.url}
-								placeholder="https://example.com/nuclei-templates.zip"
-								spellCheck={false}
-								onChange={(event) => set({ url: event.target.value })}
-							/>
-						</Form.Item>
-						<Form.Item label={t("认证头名称（可选）")}>
-							<Input
-								value={draft.headerName}
-								placeholder="Authorization"
-								spellCheck={false}
-								onChange={(event) => set({ headerName: event.target.value })}
-							/>
-						</Form.Item>
-						<Form.Item label={t("认证头的值（可选）")}>
-							<Input.Password
-								value={draft.headerValue}
-								placeholder={draft.headerSet ? t("留空保留原值") : "Bearer …"}
-								spellCheck={false}
-								onChange={(event) => set({ headerValue: event.target.value })}
-							/>
-						</Form.Item>
-					</div>
-					<Checkbox checked={draft.enabled} onChange={(event) => set({ enabled: event.target.checked })}>
-						{t("启用（停用后不再自动同步，仍可手动「立即同步」）")}
-					</Checkbox>
-					{error ? <Alert type="error" showIcon title={error} className="ui-page__alert" /> : null}
-					<Space size={8} className="pocsource-actions">
-						<Button type="primary" htmlType="submit">
-							{draft.id ? t("保存修改") : t("添加订阅源")}
-						</Button>
-						{draft.id ? <Button onClick={() => setDraft(EMPTY_DRAFT)}>{t("取消")}</Button> : null}
-					</Space>
-				</Form>
-			</Card>
 
 			<ProTable<SentinelPocSource>
 				rowKey="id"
@@ -321,7 +274,8 @@ export function PocSourcesPanel({
 				search={false}
 				options={false}
 				pagination={false}
-				scroll={{ x: 1080 }}
+				tableLayout="fixed"
+				scroll={{ x: 1137 }}
 				toolbar={{
 					title: (
 						<Text strong>
@@ -340,6 +294,17 @@ export function PocSourcesPanel({
 						</Button>,
 						<Button key="refresh" icon={<ReloadOutlined />} onClick={onRefresh}>
 							{t("刷新")}
+						</Button>,
+						<Button
+							key="add"
+							type="primary"
+							icon={<PlusOutlined />}
+							onClick={() => {
+								setError(null);
+								setDraft({ ...EMPTY_DRAFT });
+							}}
+						>
+							{t("添加订阅源")}
 						</Button>,
 					],
 				}}
@@ -373,11 +338,82 @@ export function PocSourcesPanel({
 					expandRowByClick: false,
 				}}
 				locale={{
-					emptyText: t(
-						"还没有订阅源。填一个 zip 直链后点「添加订阅源」；「立即同步」会把包内模板按 id 去重后并入 POC 库。",
+					emptyText: (
+						<SettingsEmpty
+							title={t("还没有订阅源")}
+							hint={t("点右上角「添加订阅源」，填入 zip 直链；同步会把包内模板按 id 去重后并入 POC 库。")}
+						/>
 					),
 				}}
 			/>
+
+			<Modal
+				title={draft?.id ? t("编辑订阅源") : t("添加订阅源")}
+				open={draft !== null}
+				width={640}
+				okText={draft?.id ? t("保存修改") : t("添加订阅源")}
+				cancelText={t("取消")}
+				okButtonProps={{ disabled: !draft?.name.trim() || !draft?.url.trim() }}
+				onOk={submit}
+				onCancel={() => {
+					setDraft(null);
+					setError(null);
+				}}
+				destroyOnHidden
+			>
+				{draft ? (
+					<Form layout="vertical" requiredMark={false} onFinish={submit}>
+						<div className="pocsource-grid">
+							<Form.Item label={t("名称")} required>
+								<Input
+									value={draft.name}
+									placeholder={t("内网模板包")}
+									spellCheck={false}
+									onChange={(event) => set({ name: event.target.value })}
+								/>
+							</Form.Item>
+							<Form.Item label={t("同步间隔")}>
+								<Select
+									value={draft.intervalHours}
+									onChange={(value) => set({ intervalHours: value })}
+									options={INTERVAL_CHOICES.map((hours) => ({
+										value: hours,
+										label: intervalLabel(hours),
+									}))}
+								/>
+							</Form.Item>
+							<Form.Item label={t("zip 直链 URL")} required className="pocsource-grid__wide">
+								<Input
+									value={draft.url}
+									placeholder="https://example.com/nuclei-templates.zip"
+									spellCheck={false}
+									onChange={(event) => set({ url: event.target.value })}
+								/>
+							</Form.Item>
+							<Form.Item label={t("认证头名称（可选）")}>
+								<Input
+									value={draft.headerName}
+									placeholder="Authorization"
+									spellCheck={false}
+									onChange={(event) => set({ headerName: event.target.value })}
+								/>
+							</Form.Item>
+							<Form.Item label={t("认证头的值（可选）")}>
+								<Input.Password
+									value={draft.headerValue}
+									placeholder={draft.headerSet ? t("留空保留原值") : "Bearer …"}
+									spellCheck={false}
+									onChange={(event) => set({ headerValue: event.target.value })}
+								/>
+							</Form.Item>
+						</div>
+						<Checkbox checked={draft.enabled} onChange={(event) => set({ enabled: event.target.checked })}>
+							{t("启用（停用后不再自动同步，仍可手动「立即同步」）")}
+						</Checkbox>
+						{error ? <Alert type="error" showIcon title={error} className="ui-page__alert" /> : null}
+					</Form>
+				) : null}
+			</Modal>
 		</>
 	);
 }

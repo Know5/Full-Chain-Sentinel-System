@@ -421,10 +421,7 @@ export const EN_MESSAGES: Record<string, string> = {
 	"source 必须是 http(s) 链接": "source must be an http(s) link",
 	"stdio 命令在控制台宿主机上直接执行（不在容器内，也不经过 bash 审批），请先勾选风险确认":
 		"A stdio command runs directly on the console host (not in the container and without bash approval); check the risk acknowledgment first",
-	"stdio 服务器在宿主机上执行": "stdio servers run on the host",
 	"stdio 服务器需要填写命令": "A stdio server needs a command",
-	"stdio 类型的 MCP 服务器由控制台进程直接 spawn（不在项目容器内，也不经过 bash 审批与守门模型），等于把宿主机命令执行权交给该服务器。只添加你信任的来源；需要容器内执行的工具请让 Agent 用 bash 在容器里跑。":
-		"A stdio MCP server is spawned directly by the console process (outside the project container and without bash approval or the Gatekeeper model), which gives that server host command execution. Add only sources you trust; for tools that must run in the container, have the agent use bash there.",
 	"stdio（宿主机执行命令）": "stdio (runs commands on the host)",
 	"storage key 非法": "Invalid storage key",
 	"storage value 必须是字符串": "The storage value must be a string",
@@ -893,8 +890,8 @@ export const EN_MESSAGES: Record<string, string> = {
 	保存守门配置: "Save gatekeeper settings",
 	保存并重启: "Save and restart",
 	保存并重建会话: "Save and rebuild session",
-	"保存时会自动验证一次，也可以点「测试」单独验证（验证结果会立即生效，并按需重建活动会话）。上限按「每个会话、三家合计」计算，子代理共用同一个额度；修改上限同样会重建会话，请先中止正在运行的会话。":
-		"Saving verifies once automatically; you can also verify separately with Test (the result takes effect immediately and rebuilds the active session if needed). The limit is per session, summed across all three platforms, and subagents share the same quota; changing the limit also rebuilds the session, so stop any running session first.",
+	"保存时会自动验证一次；每行「设置」抽屉里也可以点「测试连接」单独验证（验证结果会立即生效，并按需重建活动会话）。上限按「每个会话、三家合计」计算，子代理共用同一个额度；修改上限同样会重建会话，请先中止正在运行的会话。":
+		"Saving verifies once automatically; the per-row Settings drawer also has Test connection for a one-off verification (the result takes effect immediately and rebuilds the active session as needed). The limit is shared by all three platforms per session and by subagents; changing it also rebuilds the session, so stop a running session first.",
 	保存监督设置: "Save supervision settings",
 	保存计划: "Save schedule",
 	保存设置: "Save settings",
@@ -1276,6 +1273,7 @@ export const EN_MESSAGES: Record<string, string> = {
 	复制: "Copy",
 	复制全文: "Copy full text",
 	"复制全部检查项，便于排障": "Copy all checks for troubleshooting",
+	检查结果: "Check results",
 	"独立监听只提供 ws://（私网可用）；公网或需要加密时用控制台的 wss 地址，并把下面的证书指纹填进设备。":
 		"The dedicated listener serves ws:// only (fine on a private network); for public or encrypted links use the console's wss URL and pin the fingerprint below.",
 	"控制台证书 SHA-256（wss 自签时填进设备）": "Console certificate SHA-256 (pin it on the device for self-signed wss)",
@@ -1294,7 +1292,6 @@ export const EN_MESSAGES: Record<string, string> = {
 	"复核备注（回车提交，追加到时间线）…": "Review note (Enter to submit; appended to the timeline)…",
 	复检: "Recheck",
 	复现步骤: "Reproduction steps",
-	外发提示: "Data sent externally",
 	"多个策略会合并到同一份监督判断中；冲突时以安全规则和补充说明为准。":
 		"Multiple strategies combine into one supervision decision; when they conflict, safety rules and notes take precedence.",
 	失败: "Failed",
@@ -1927,8 +1924,6 @@ export const EN_MESSAGES: Record<string, string> = {
 	"插件页已停用：不挂载": "Disabled on the Plugins page: not mounted",
 	插话: "Steer",
 	"插话中：": "Interjecting:",
-	"搜索关键词与 API Key 会发送到 Tavily（api.tavily.com），搜索前请确认不包含涉密内容。多个 Key 组成号池，控制台按剩余额度自动轮换；单 Key 额度耗尽自动切换。":
-		"Search keywords and API keys are sent to Tavily (api.tavily.com). Confirm they contain no classified information before searching. Multiple keys form a key pool that the console rotates by remaining quota; when one key is exhausted, it switches automatically.",
 	"搜索名称、模型 ID、端点": "Search name, model ID, endpoint",
 	搜索名称或目标: "Search name or target",
 	"搜索命令、输出…": "Search commands and output…",
@@ -2260,8 +2255,6 @@ export const EN_MESSAGES: Record<string, string> = {
 	查看源码与许可证: "View source code and license",
 	查询: "Search",
 	"查询中…": "Looking up…",
-	"查询内容与 API Key 会发送到对应第三方平台（FOFA / 360 Quake / 奇安信 Hunter），查询前请确认目标在授权范围内。":
-		"Queries and API keys are sent to the selected third-party platform (FOFA / 360 Quake / Qi-AnXin Hunter). Confirm the target is in scope before querying.",
 	查询失败: "Query failed",
 	"查询语法（给 Agent 用）": "Query syntax (for the Agent)",
 	标准: "Standard",
@@ -2882,6 +2875,10 @@ export const EN_MESSAGES: Record<string, string> = {
 	"留空即使用官方地址；也可填反向代理前缀（如 https://proxy.example/fofa），控制台会拼接各平台的 API 路径。保存后会重新验证，验证失败则工具不挂载。":
 		"Leave it empty for the official URL. You can also enter a reverse-proxy prefix (for example https://proxy.example/fofa); the console appends each platform's API path. Saving re-validates the platform, and a failed validation unmounts its tool.",
 	"自定义 BaseURL（留空使用官方地址）": "Custom base URL (empty uses the official URL)",
+	"密钥 / 端点": "Key / endpoint",
+	官方地址: "Official URL",
+	已保存: "Saved",
+	清除密钥: "Clear key",
 	"{label} 的自定义 BaseURL": "{label} custom base URL",
 	资产测绘: "Asset discovery",
 	资产测绘配置: "Asset mapping settings",
@@ -3691,6 +3688,83 @@ export const EN_MESSAGES: Record<string, string> = {
 	对应会话已删除: "The reporting conversation was deleted",
 	该漏洞没有关联会话: "This finding has no linked conversation",
 	"对应会话已删除，无法跳转": "The reporting conversation was deleted; cannot open it",
+	// Settings pages: block headings, table toolbars and empty states.
+	"发送于 {time}": "Sent at {time}",
+	"自定义 MCP 服务器": "Custom MCP servers",
+	"还没有自定义 MCP 服务器": "No custom MCP servers yet",
+	"添加一个之后，它的工具会以": "After you add one, its tools are mounted as",
+	测绘平台: "Asset platforms",
+	个平台: "platforms",
+	"只有「已启用 + 已配置密钥 + 已验证通过」的平台才把工具挂给 Agent":
+		"Only platforms that are enabled, keyed, and verified mount their tool for the agent",
+	"添加 Key": "Add key",
+	"编辑 Key": "Edit key",
+	"删除这个 Key？": "Delete this key?",
+	"删除后该 Key 不再参与轮换，正在运行的会话会重建。": "The key stops being rotated and running sessions are rebuilt.",
+	备注名: "Label",
+	"点右上角「添加 Key」，粘贴一个 Tavily Key；保存后自动验证一次。":
+		"Click Add key in the top right and paste a Tavily key; it is verified once on save.",
+	"保存后自动验证一次，通过即入池": "Verified once on save; added to the pool when it passes",
+	"粘贴 Tavily API Key（tvly-…）": "Paste a Tavily API key (tvly-…)",
+	"已加入的 Key": "Keys in the pool",
+	"还没有 Key": "No keys yet",
+	"在上方粘贴并添加。申请地址 https://app.tavily.com": "Paste one above to add it. Apply at https://app.tavily.com",
+	"同步只新增与覆盖，不会删除本地模板": "Sync only adds and overwrites; local templates are never deleted",
+	还没有订阅源: "No sources yet",
+	"填一个 zip 直链后点「添加订阅源」；「立即同步」会把包内模板按 id 去重后并入 POC 库。":
+		"Enter a zip URL and click Add source; Sync now merges the archive into the POC library by template id.",
+	"点右上角「添加订阅源」，填入 zip 直链；同步会把包内模板按 id 去重后并入 POC 库。":
+		"Click Add source in the top right and enter a zip URL; sync merges the archive into the POC library by template id.",
+	"还没有预设 Agent": "No preset agents yet",
+	"点「新建预设」写入一段系统提示即可；不创建也不影响使用，会话会跑默认 Agent。":
+		"Click New preset to write a system-prompt block. Creating none is fine; sessions run the default agent.",
+	"退出登录在侧栏底部；修改密码后其他已登录的会话（包括别的浏览器）会全部退出。":
+		"Sign out from the sider footer. Changing the password signs out every other session, including other browsers.",
+	"密码只以哈希存在本机，从不保存明文。": "The password is stored only as a local hash, never in plain text.",
+	监督设置: "Supervisor settings",
+	全局默认与新会话的默认值: "Global defaults and the default for new sessions",
+	"先保存到列表，再点上方「保存监督设置」写入配置。":
+		"Save it to the list first, then click Save supervisor settings above to write the config.",
+	上传插件包: "Upload plugin package",
+	还没有安装插件: "No plugins installed",
+	"点右上角「上传插件包」开始。": "Use Upload plugin package in the top right to start.",
+	没有匹配的插件: "No plugins match",
+	"换个关键字或筛选条件。": "Try another keyword or filter.",
+	还没有模型: "No models yet",
+	"添加一条后，角色里就能分配它。": "Add one and it can be assigned to a role.",
+	没有匹配的模型: "No models match",
+	"换个关键词试试。": "Try another keyword.",
+	"诊断信息（手动复制）": "Diagnostic information (copy manually)",
+	"通过 {ok} · 警告 {warn} · 失败 {fail} · 跳过 {skip}":
+		"Passed {ok} · Warned {warn} · Failed {fail} · Skipped {skip}",
+	"权限不超过主 Agent": "Permissions cannot exceed the main agent",
+	"共 {count} 项权限": "{count} permissions in total",
+	按当前会话的实际挂载结果: "Tools actually mounted in the current session",
+	当前登录: "Signed in",
+	构建工具镜像: "Build toolbox image",
+	"用内置的 Dockerfile 构建 sentinel:latest，首次约 5–15 分钟。":
+		"Build sentinel:latest from the bundled Dockerfile; the first build takes about 5–15 minutes.",
+	"对话已锁定：{count} 项阻断检查未通过，Agent 无法执行任何工具。":
+		"Chat is locked: {count} blocking checks failed, so the agent cannot run any tool.",
+	能力: "Capabilities",
+	删除模型: "Delete model",
+	"删除这个模型？": "Delete this model?",
+	"自定义渠道（自己填 Base URL 与协议）": "Custom channel (enter Base URL and API yourself)",
+	"删除 MCP 服务器": "Delete MCP server",
+	"存放位置：{path}（0600）。请求头与环境变量保存在这里，由控制台读取，不写入项目容器。":
+		"Stored at {path} (0600). Headers and environment variables live here, read by the console and never written into project containers.",
+	"API Key / BaseURL": "API key / Base URL",
+	清除已保存的密钥: "Clear stored key",
+	"清除后该平台的工具不再挂载，直到重新填写并验证。":
+		"After clearing, this platform's tool is not mounted until a new key is entered and verified.",
+	删除订阅源: "Delete source",
+	"删除订阅源「{name}」？已导入的模板不会被删除。": 'Delete source "{name}"? Templates already imported are kept.',
+	删除预设: "Delete preset",
+	插件目录有问题: "The plugin directory has problems",
+	新建: "New",
+	"Agent 上报的资产与测试记录在侧栏「资产库」。":
+		"Assets and test records reported by the agent live under Asset library in the sider.",
+	插件开发任务: "Plugin development task",
 };
 
 export function translate(language: UiLanguage, source: string, vars?: Record<string, string | number>): string {
