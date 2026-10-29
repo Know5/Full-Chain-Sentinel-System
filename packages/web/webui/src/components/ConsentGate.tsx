@@ -16,6 +16,7 @@ import { PROJECT_LICENSE, PROJECT_LICENSE_URL, PROJECT_REPOSITORY } from "../bra
 import { t } from "../i18n.ts";
 import { SentinelMark } from "./icons.tsx";
 import { LanguageSwitch } from "./LanguageSwitch.tsx";
+import "./consent-gate.css";
 
 const { Title, Text, Link } = Typography;
 
@@ -98,8 +99,10 @@ export function ConsentGate({ onAccepted }: { onAccepted: () => void }) {
 	};
 
 	return (
-		<div className="consent">
-			<LanguageSwitch className="consent-language" />
+		<div className="consent consent-gate">
+			<div className="consent-toolbar">
+				<LanguageSwitch className="consent-language" />
+			</div>
 			<Card className="consent-card" variant="borderless">
 				{rejected ? (
 					<Result
@@ -150,7 +153,7 @@ export function ConsentGate({ onAccepted }: { onAccepted: () => void }) {
 										size="small"
 										className="consent-ai"
 										title={
-											<Space size={8}>
+											<Space size={8} wrap>
 												<Tag color="purple" variant="filled">
 													AI
 												</Tag>
@@ -201,7 +204,7 @@ export function ConsentGate({ onAccepted }: { onAccepted: () => void }) {
 									</>
 								) : null}
 							</Checkbox>
-							<Space className="consent-actions" size={8}>
+							<Space className="consent-actions" size={8} wrap>
 								<Button
 									type="primary"
 									size="large"

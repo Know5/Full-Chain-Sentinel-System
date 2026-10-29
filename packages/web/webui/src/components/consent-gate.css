@@ -1,0 +1,89 @@
+.consent.consent-gate {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: safe center;
+	gap: 12px;
+	padding: 24px;
+	overflow: auto;
+}
+
+.consent-gate .consent-toolbar {
+	flex: none;
+	display: flex;
+	justify-content: flex-end;
+	width: min(880px, 100%);
+}
+
+.consent-gate .consent-language {
+	position: static;
+	background: var(--ant-color-bg-container);
+	color: var(--ant-color-text);
+}
+
+.consent-gate .consent-card {
+	flex: 0 1 auto;
+	min-height: 0;
+	max-height: calc(100dvh - 100px);
+}
+
+/* Card inserts this wrapper between the height limit and the scrolling terms. */
+.consent-gate .consent-card > .ant-card-body {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-width: 0;
+	min-height: 0;
+	overflow: auto;
+}
+
+.consent-gate .consent-head,
+.consent-gate .consent-foot,
+.consent-gate .consent-body > * {
+	flex: none;
+}
+
+.consent-gate .consent-head > div,
+.consent-gate .consent-body {
+	min-width: 0;
+}
+
+.consent-gate .consent-ai {
+	border-color: var(--ant-color-border-secondary);
+	background: var(--ant-color-bg-container);
+}
+
+.consent-gate .consent-body {
+	overscroll-behavior: contain;
+	overflow-wrap: anywhere;
+}
+
+.consent-gate .consent-ai .ant-card-head-title {
+	white-space: normal;
+}
+
+.consent-gate .consent-actions {
+	margin-top: 0;
+}
+
+/* On narrow or short screens, keep one scroll area for both terms and actions. */
+@media (max-width: 600px), (max-height: 640px) {
+	.consent.consent-gate {
+		display: block;
+		padding: 12px;
+	}
+
+	.consent-gate .consent-toolbar {
+		margin: 0 auto 12px;
+	}
+
+	.consent-gate .consent-card {
+		max-height: none;
+		margin: 0 auto;
+	}
+
+	.consent-gate .consent-card > .ant-card-body,
+	.consent-gate .consent-body {
+		overflow: visible;
+	}
+}
