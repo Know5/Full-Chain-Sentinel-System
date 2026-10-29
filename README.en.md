@@ -6,7 +6,20 @@ An authorized penetration-testing agent by Zhigong Shanfang Lab, built on [pi](h
 
 > **Use only against targets for which you hold written authorization.** Auto mode can run arbitrary commands; operators are responsible for the consequences. Read the [authorized-use statement and security boundaries](docs/security.en.md) before use.
 
-[Quick start](#quick-start) · [Capabilities](#capabilities) · [Documentation](#documentation) · [Community](#community) · [License](#license)
+[Community](#community) · [Quick start](#quick-start) · [Capabilities](#capabilities) · [Documentation](#documentation) · [License](#license)
+
+<a id="community"></a>
+
+## Full Chain Sentinel community
+
+Include **"全链哨兵"** in your greeting when joining.
+
+<p>
+  <img src="images/Pasted%20image%2020261017125335.png" width="260" alt="Full Chain Sentinel community contact one" />
+  <img src="images/Pasted%20image%2020261017125351.png" width="260" alt="Full Chain Sentinel community contact two" />
+</p>
+
+[Community details and acknowledgements](docs/community.en.md)
 
 ---
 
@@ -87,12 +100,6 @@ More screenshots are in the [usage guide](docs/usage.en.md). Screenshots illustr
 | Plugin development and frontend | [Authoring](docs/plugin-authoring.md) · [Plugin UI](docs/plugin-ui.md) (Chinese) |
 | Repository structure, builds, tests | [Development](docs/development.en.md) |
 | Authorization, approval scope, data boundaries | [Security boundaries](docs/security.en.md) |
-
-<a id="community"></a>
-
-## Community
-
-Include "全链哨兵" in your greeting when joining. [Group QR codes and acknowledgements](docs/community.en.md).
 
 <a id="license"></a>
 

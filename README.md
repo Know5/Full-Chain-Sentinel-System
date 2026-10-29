@@ -6,7 +6,20 @@
 
 > **仅用于已获得书面授权的目标。** 自动执行模式可运行任意命令，使用者须自行承担操作后果。使用前请阅读[授权声明与安全边界](docs/security.md)。
 
-[快速开始](#quick-start) · [核心能力](#capabilities) · [文档导航](#documentation) · [社区](#community) · [许可](#license)
+[交流群](#community) · [快速开始](#quick-start) · [核心能力](#capabilities) · [文档导航](#documentation) · [许可](#license)
+
+<a id="community"></a>
+
+## 全链哨兵交流群
+
+加入交流群请在打招呼内容中备注 **「全链哨兵」**。
+
+<p>
+  <img src="images/Pasted%20image%2020261017125335.png" width="260" alt="全链哨兵交流群入口一" />
+  <img src="images/Pasted%20image%2020261017125351.png" width="260" alt="全链哨兵交流群入口二" />
+</p>
+
+[社区说明与致谢](docs/community.md)
 
 ---
 
@@ -87,12 +100,6 @@ Windows 解压 `sentinel-web-windows-x64.zip` 后，在 PowerShell 运行 `.\sen
 | 开发插件与插件前端 | [插件开发](docs/plugin-authoring.md) · [插件前端](docs/plugin-ui.md) |
 | 仓库结构、构建与测试 | [开发指南](docs/development.md) |
 | 授权、审批范围与数据边界 | [授权声明与安全边界](docs/security.md) |
-
-<a id="community"></a>
-
-## 社区
-
-加入交流群请在打招呼内容中备注「全链哨兵」。[查看群二维码与致谢](docs/community.md)。
 
 <a id="license"></a>
 
