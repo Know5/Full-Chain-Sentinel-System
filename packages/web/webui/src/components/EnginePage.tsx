@@ -4,9 +4,8 @@
  * Visual language follows the console: light page cards with ws-panel headers,
  * data-table rows for the engine list and the task board, tag badges for
  * statuses, and dark blocks only for terminal output. Layout per the approved
- * mockup (variant A): the list is a table, the board splits 7:5 between the
- * task board and the commander's light conversation feed, task details open in
- * a vulnerability-style modal, and the create form is a full page.
+ * parallel workspace: compact tasks on the left, commander conversation on the
+ * right, and secondary configuration in drawers. Task details open in a modal.
  */
 
 import { PlusOutlined, ReadOutlined, SettingOutlined } from "@ant-design/icons";
@@ -14,6 +13,7 @@ import { ProTable } from "@ant-design/pro-components";
 import type { ProColumns } from "@ant-design/pro-components";
 import {
 	Alert,
+	Badge,
 	Button,
 	Card,
 	Checkbox,
@@ -27,6 +27,7 @@ import {
 	InputNumber,
 	Modal,
 	Popconfirm,
+	Popover,
 	Radio,
 	Row,
 	Segmented,
@@ -43,6 +44,7 @@ import { getLanguage, t } from "../i18n.ts";
 import type { UploadedFile } from "../uploads.ts";
 import { Page } from "../ui/Page.tsx";
 import { EngineTargetFiles } from "./EngineTargetFiles.tsx";
+import { CommanderFeed } from "./EngineCommander.tsx";
 import type {
 	SentinelDoctrineView,
 	SentinelEngine,
@@ -58,6 +60,7 @@ import type {
 	SentinelSubagentEvent,
 } from "../types.ts";
 import "./doctrine-manager.css";
+import "./engine-workspace.css";
 
 const { Text, Title } = Typography;
 
@@ -383,6 +386,7 @@ export function EnginePage(props: EnginePageProps) {
 
 		return (
 			<Page
+				className="engine-workspace"
 				title={
 					<Space size={8} wrap>
 						<Button size="small" onClick={() => setView("list")}>
@@ -501,23 +505,16 @@ export function EnginePage(props: EnginePageProps) {
 					</Space>
 				}
 			>
-				<div className="ws-panel__body">
+				<div className="engine-workspace__body">
 					{board.schedule ? <ScheduleStrip schedule={board.schedule} /> : null}
 					<EngineStats
-						engine={board}
-						judgeAvailable={props.judgeAvailable}
-						onSetGateMode={(gateMode) => send({ type: "engine_set_gate_mode", id: board.id, gateMode })}
-					/>
-					<EnginePresetWhitelist
+						key={board.id}
 						engine={board}
 						presets={props.presets}
-						onChange={(presetIds) => send({ type: "engine_set_presets", id: board.id, presetIds })}
-						onChangeOptional={(optional) => send({ type: "engine_set_preset_optional", id: board.id, optional })}
+						judgeAvailable={props.judgeAvailable}
+						onSend={send}
 					/>
-					{(board.status === "running" || board.status === "paused") && (
-						<TargetsBox engineId={board.id} onSend={send} />
-					)}
-					<div className="board">
+					<div className="engine-workspace__columns">
 						<TaskBoard
 							engine={board}
 							onOpenTask={(taskId) => {
@@ -527,9 +524,9 @@ export function EnginePage(props: EnginePageProps) {
 							onAbortTask={(taskId) => send({ type: "engine_abort_task", taskId })}
 						/>
 						<CommanderFeed
+							key={board.id}
 							engineId={board.id}
-							running={board.status === "running"}
-							completed={board.status === "completed"}
+							status={board.status}
 							events={props.commanderEvents[board.id] ?? []}
 							onSend={send}
 						/>
@@ -691,74 +688,99 @@ export function EnginePage(props: EnginePageProps) {
 
 function EngineStats({
 	engine,
+	presets,
 	judgeAvailable,
-	onSetGateMode,
+	onSend,
 }: {
 	engine: SentinelEngine;
+	presets: SentinelPresetView[];
 	judgeAvailable: boolean;
-	onSetGateMode: (mode: SentinelEngineGateMode) => void;
+	onSend: (message: unknown) => void;
 }) {
+	const [settingsOpen, setSettingsOpen] = useState(false);
+	const [presetsOpen, setPresetsOpen] = useState(false);
 	const count = (status: SentinelEngineTaskStatus) => engine.tasks.filter((task) => task.status === status).length;
 	const vulns = engine.tasks.reduce((sum, task) => sum + task.vulns, 0);
-	// The server refuses a change while a worker is in flight, because each task
-	// session captures its gate when it is created.
+	// Task sessions capture their gate mode when created, so an active worker locks it.
 	const busy = engine.tasks.some((task) => task.status === "running" || task.status === "queued");
-	const gateLockedReason = busy ? t("有任务正在运行或排队，等它们结束再改") : undefined;
 	return (
-		<Card size="small" className="enginehub-stats">
-			<Space size={8} wrap>
-				<Tag color="processing" variant="filled">
-					{t("运行 {count}", { count: count("running") })}
-				</Tag>
-				<Tag variant="filled">{t("排队 {count}", { count: count("queued") })}</Tag>
-				<Tag color="success" variant="filled">
-					{t("完成 {count}", { count: count("done") })}
-				</Tag>
-				<Tag color="error" variant="filled">
-					{t("失败 {count}", { count: count("failed") })}
-				</Tag>
-				<Tag color="warning" variant="filled">
-					{t("阻塞 {count}", { count: count("blocked") })}
-				</Tag>
-				<Text type="secondary">
-					{t("· 中枢提交")} <Text strong>{vulns}</Text> {t("条")}
-				</Text>
-				<Text type="secondary">
-					{t("· 并发")} <Text strong>{engine.limits.concurrency}</Text>
-				</Text>
-				<Text type="secondary">
-					{t("轮数")} <Text strong>{engine.limits.roundLimit}</Text>
-				</Text>
-				<Text type="secondary">
-					{t("重试")} <Text strong>{engine.limits.maxRetries}</Text>
-				</Text>
-				{engine.limits.tokenLimit ? (
-					<Text type="secondary">
-						{t("token 上限")} <Text strong>{formatUsage(engine.limits.tokenLimit)}</Text>
-					</Text>
-				) : null}
-				{engine.limits.timeLimitMin ? (
-					<Text type="secondary">
-						{t("时间上限")}{" "}
-						<Text strong>
-							{engine.limits.timeLimitMin} {t("分")}
-						</Text>
-					</Text>
-				) : null}
-				<Segmented
+		<>
+			<div className="engine-workspace__summary">
+				<div className="engine-workspace__metrics">
+					<Text type="secondary">{t("任务")} <Text strong>{count("done")} / {engine.tasks.length}</Text></Text>
+					<Text type="secondary">{t("运行中")} <Text strong>{count("running")}</Text></Text>
+					<Text type="secondary">{t("排队中")} <Text strong>{count("queued")}</Text></Text>
+					<Text type="secondary">{t("中枢提交")} <Text strong>{vulns}</Text></Text>
+					{(["failed", "blocked", "paused"] as const).filter((status) => count(status) > 0).map((status) => (
+						<Text key={status} type={status === "failed" ? "danger" : "secondary"}>{TASK_STATUS_LABELS[status]} {count(status)}</Text>
+					))}
+				</div>
+				<Space size={4} wrap className="engine-workspace__controls">
+					{engine.status === "running" || engine.status === "paused" ? (
+						<Popover
+							title={t("追加目标")}
+							trigger="click"
+							placement="bottomRight"
+							styles={{ container: { width: "min(420px, calc(100vw - 32px))" } }}
+							content={<TargetsBox engineId={engine.id} onSend={onSend} />}
+						>
+							<Button size="small" type="text" icon={<PlusOutlined />}>{t("追加目标")}</Button>
+						</Popover>
+					) : null}
+					<Button size="small" type="text" icon={<SettingOutlined />} onClick={() => setSettingsOpen(true)}>{t("执行配置")}</Button>
+					<Button size="small" type="text" onClick={() => setPresetsOpen(true)}>{t("Agent 白名单")}</Button>
+				</Space>
+			</div>
+			{engine.pauseNote ? <Text type="secondary" className="engine-workspace__pause-note">{engine.pauseNote}</Text> : null}
+			<Drawer
+				title={t("执行配置")}
+				size={440}
+				open={settingsOpen}
+				onClose={() => setSettingsOpen(false)}
+				styles={{ wrapper: { maxWidth: "100vw" } }}
+			>
+				<Descriptions
 					size="small"
-					value={engine.gateMode}
-					disabled={busy}
-					title={gateLockedReason ?? t("worker 命令的守门方式")}
-					onChange={(value) => onSetGateMode(value as SentinelEngineGateMode)}
-					options={[
-						{ value: "auto", label: t("自动执行") },
-						{ value: "ai", label: t("AI 裁判"), disabled: !judgeAvailable },
+					column={1}
+					items={[
+						{ key: "concurrency", label: t("最大并发任务"), children: engine.limits.concurrency },
+						{ key: "rounds", label: t("单任务最大轮数"), children: engine.limits.roundLimit },
+						{ key: "retries", label: t("每目标重试次数"), children: engine.limits.maxRetries },
+						{ key: "tokens", label: t("token 上限"), children: engine.limits.tokenLimit ? formatUsage(engine.limits.tokenLimit) : t("不限制") },
+						{ key: "time", label: t("总时间上限 / 分钟（可选）"), children: engine.limits.timeLimitMin ?? t("不限制") },
 					]}
 				/>
-				{engine.pauseNote ? <Text type="secondary">{engine.pauseNote}</Text> : null}
-			</Space>
-		</Card>
+				<Form layout="vertical" requiredMark={false}>
+					<Form.Item label={t("命令守门")} extra={busy ? t("有任务正在运行或排队，等它们结束再改") : undefined}>
+						<Segmented
+							size="small"
+							value={engine.gateMode}
+							disabled={busy}
+							onChange={(gateMode) => onSend({ type: "engine_set_gate_mode", id: engine.id, gateMode })}
+							options={[
+								{ value: "auto", label: t("自动执行") },
+								{ value: "ai", label: t("AI 裁判"), disabled: !judgeAvailable },
+							]}
+						/>
+					</Form.Item>
+				</Form>
+			</Drawer>
+			<Drawer
+				title={t("Agent 白名单")}
+				size={480}
+				open={presetsOpen}
+				onClose={() => setPresetsOpen(false)}
+				className="engine-workspace-presets"
+				styles={{ wrapper: { maxWidth: "100vw" } }}
+			>
+				<EnginePresetWhitelist
+					engine={engine}
+					presets={presets}
+					onChange={(presetIds) => onSend({ type: "engine_set_presets", id: engine.id, presetIds })}
+					onChangeOptional={(optional) => onSend({ type: "engine_set_preset_optional", id: engine.id, optional })}
+				/>
+			</Drawer>
+		</>
 	);
 }
 
@@ -786,17 +808,12 @@ function EnginePresetWhitelist({
 	// commander would be refused on every attempt.
 	const stuck = !engine.presetOptional && allowed === 0;
 	return (
-		<Card
-			size="small"
-			title={t("预设 Agent 白名单")}
-			extra={
-				<Tag color={selected.length === 0 ? "green" : undefined} variant="filled">
-					{selected.length === 0
-						? t("未限制：指挥官可使用全部已启用的预设")
-						: t("已限制为 {count} 个预设", { count: selected.length })}
-				</Tag>
-			}
-		>
+		<div className="engine-workspace-presets__form">
+			<Text strong>
+				{selected.length === 0
+					? t("未限制：指挥官可使用全部已启用的预设")
+					: t("已限制为 {count} 个预设", { count: selected.length })}
+			</Text>
 			<Text type="secondary">
 				{t("勾选指挥官可以使用的预设；未勾选任何一项 = 不限制（指挥官可用全部已启用的预设）。")}{" "}
 				{t("运行中也能修改，只影响之后派发的任务；已停用或已删除的预设不会出现在上面，也不会再被派发。")}
@@ -852,7 +869,7 @@ function EnginePresetWhitelist({
 								})
 				}
 			/>
-		</Card>
+		</div>
 	);
 }
 
@@ -884,276 +901,38 @@ function TargetsBox({ engineId, onSend }: { engineId: string; onSend: (message: 
 function TaskBoard(props: { engine: SentinelEngine; onOpenTask(taskId: string): void; onAbortTask(taskId: string): void }) {
 	const tasks = props.engine.tasks;
 	return (
-		<Card size="small" className="enginehub-board">
-			<ProTable<SentinelEngineTask>
-				rowKey="id"
-				size="small"
-				dataSource={tasks}
-				search={false}
-				options={false}
-				pagination={false}
-				scroll={{ x: 820 }}
-				toolbar={{
-					title: <Text strong>{t("任务看板")}</Text>,
-					actions: [
-						<Text key="count" type="secondary">
-							{t("{count} 个任务 · 点行看详情", { count: tasks.length })}
-						</Text>,
-					],
-				}}
-				onRow={(task) => ({
-					onClick: () => props.onOpenTask(task.id),
-					style: { cursor: "pointer" },
-				})}
-				columns={[
-					{
-						title: t("状态"),
-						key: "status",
-						width: 100,
-						render: (_, task) => (
-							<Tag
-								color={
-									task.status === "done"
-										? "green"
-										: task.status === "failed" || task.status === "blocked"
-											? "red"
-											: task.status === "running"
-												? "processing"
-												: "default"
-								}
-								variant="filled"
-							>
-								{TASK_STATUS_LABELS[task.status]}
-							</Tag>
-						),
-					},
-					{
-						title: t("任务"),
-						key: "title",
-						render: (_, task) => (
-							<div className="enginehub-task">
-								<Text strong>{task.title}</Text>
-								<Tag
-									variant="filled"
-									title={
-										task.presetName
-											? t("预设 Agent：{name}", { name: task.presetName })
-											: t("默认 Agent：未指定预设")
-									}
-								>
-									{task.presetName ?? t("默认")}
-								</Tag>
-							</div>
-						),
-					},
-					{
-						title: t("目标"),
-						key: "target",
-						width: 160,
-						render: (_, task) => <Text code>{task.target ?? "—"}</Text>,
-					},
-					{
-						title: t("次数"),
-						key: "attempt",
-						width: 80,
-						render: (_, task) => t("第 {count} 次", { count: task.attempt }),
-					},
-					{
-						title: t("用量"),
-						key: "usage",
-						width: 90,
-						render: (_, task) => <Text type="secondary">{formatUsage(task.usage?.total)}</Text>,
-					},
-					{
-						title: t("结论"),
-						key: "summary",
-						ellipsis: true,
-						render: (_, task) => <Text type="secondary">{task.summary ?? task.error ?? ""}</Text>,
-					},
-					{
-						title: "",
-						key: "ops",
-						width: 90,
-						render: (_, task) =>
-							task.status === "running" || task.status === "queued" ? (
-								<Button
-									size="small"
-									type="link"
-									danger
-									onClick={(event) => {
-										event.stopPropagation();
-										props.onAbortTask(task.id);
-									}}
-								>
-									{t("中止")}
-								</Button>
-							) : null,
-					},
-				]}
-				locale={{
-					emptyText: (
-						<Empty
-							image={Empty.PRESENTED_IMAGE_SIMPLE}
-							description={
-								props.engine.status === "scheduled"
-									? t("计划等待开始。到点后先检查运行环境，再启动指挥官并派发任务。")
-									: t("还没有任务。指挥官启动后会在这里派发。")
-							}
-						/>
-					),
-				}}
-			/>
-		</Card>
-	);
-}
-
-/** Tool-call summary for one feed row: name plus the most useful argument. */
-function toolArgSummary(event: SentinelSubagentEvent): string {
-	const args = (event.args ?? {}) as Record<string, unknown>;
-	for (const key of ["title", "task_id", "instruction", "reason"]) {
-		const value = args[key];
-		if (typeof value === "string" && value.trim()) return value;
-	}
-	const text = JSON.stringify(args);
-	return text === "{}" ? "" : text;
-}
-
-function CommanderFeed({
-	engineId,
-	running,
-	completed,
-	events,
-	onSend,
-}: {
-	engineId: string;
-	running: boolean;
-	completed: boolean;
-	events: SentinelSubagentEvent[];
-	onSend: (message: unknown) => void;
-}) {
-	const canChat = running || completed;
-	const [draft, setDraft] = useState("");
-	const sendDraft = (): void => {
-		const text = draft.trim();
-		if (!text || !canChat) return;
-		onSend({ type: "engine_steer_commander", id: engineId, text });
-		setDraft("");
-	};
-	return (
-		<Card
-			size="small"
-			className="enginehub-feed"
-			title={t("指挥官")}
-			extra={<Text type="secondary">{t("对话 · 决策日志")}</Text>}
-		>
-			<div className="enginehub-feed__body">
-				{events.length === 0 ? (
-					<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t("指挥官还没有动作。")} />
+		<section className="engine-workspace-tasks" aria-label={t("任务看板")}>
+			<div className="engine-workspace__panel-head">
+				<Text strong>{t("任务")}</Text>
+				<Text type="secondary">{t("{count} 个任务", { count: tasks.length })}</Text>
+			</div>
+			<div className="engine-workspace-tasks__list">
+				{tasks.length === 0 ? (
+					<Empty
+						image={Empty.PRESENTED_IMAGE_SIMPLE}
+						description={props.engine.status === "scheduled" ? t("计划等待开始。到点后先检查运行环境，再启动指挥官并派发任务。") : t("还没有任务。指挥官启动后会在这里派发。")}
+					/>
 				) : null}
-				{events.map((event) => {
-					if (event.kind === "thinking") {
-						return (
-							<Collapse
-								key={event.seq}
-								ghost
-								size="small"
-								className="enginehub-thinking"
-								items={[
-									{
-										key: String(event.seq),
-										label: (
-											<Text type="secondary">
-												{t("{time} · 思考 · {count} 字", {
-													time: formatClock(event.at),
-													count: (event.text ?? "").length,
-												})}
-											</Text>
-										),
-										children: <pre className="enginehub-pre">{event.text}</pre>,
-									},
-								]}
-							/>
-						);
-					}
-					if (event.kind === "text" && event.from === "operator") {
-						return (
-							<div key={event.seq} className="enginehub-msg is-operator">
-								<Text type="secondary" className="enginehub-msg__meta">
-									{t("你 · {time}", { time: formatClock(event.at) })}
-								</Text>
-								<Text className="enginehub-msg__text">{event.text}</Text>
-							</div>
-						);
-					}
-					if (event.kind === "text") {
-						return (
-							<div key={event.seq} className="enginehub-msg">
-								<Text type="secondary" className="enginehub-msg__meta">
-									{t("{time} · 指挥官", { time: formatClock(event.at) })}
-								</Text>
-								<Text className="enginehub-msg__text">{event.text}</Text>
-							</div>
-						);
-					}
-					if (event.kind === "tool_start") {
-						return (
-							<div key={event.seq} className="enginehub-tool">
-								<Text type="secondary">{formatClock(event.at)}</Text>
-								<Text code>{event.toolName}</Text>
-								<Text type="secondary" ellipsis>
-									{toolArgSummary(event)}
-								</Text>
-							</div>
-						);
-					}
-					if (event.kind === "tool_end") {
-						return (
-							<div key={event.seq} className="enginehub-tool">
-								<Text type="secondary">{formatClock(event.at)}</Text>
-								<Tag color={event.isError ? "red" : "green"} variant="filled">
-									{event.toolName}
-								</Tag>
-								<Text type="secondary" ellipsis>
-									{(event.output ?? "").trim().slice(0, 200)}
-								</Text>
-							</div>
-						);
-					}
-					if (event.kind === "status") {
-						return (
-							<Text key={event.seq} type="secondary" className="enginehub-status">
-								{event.note ?? event.status ?? ""}
-							</Text>
-						);
-					}
-					return null;
-				})}
+				{tasks.map((task) => (
+					<div key={task.id} className="engine-workspace-task">
+						<button type="button" className="engine-workspace-task__open" onClick={() => props.onOpenTask(task.id)}>
+							<span className="engine-workspace-task__heading">
+								<span className="engine-workspace-task__title" title={task.title}>{task.title}</span>
+								<Badge status={task.status === "done" ? "success" : task.status === "running" ? "processing" : task.status === "failed" ? "error" : task.status === "blocked" || task.status === "paused" ? "warning" : "default"} text={TASK_STATUS_LABELS[task.status]} />
+							</span>
+							<span className="engine-workspace-task__meta">
+								{task.presetName ?? t("默认 Agent")} · {t("第 {count} 次", { count: task.attempt })}
+								{task.vulns > 0 ? ` · ${t("{count} 条", { count: task.vulns })}` : ""}
+							</span>
+							{task.error || task.summary || task.target ? <span className={task.error ? "engine-workspace-task__preview is-error" : "engine-workspace-task__preview"} title={task.error ?? task.summary ?? task.target ?? undefined}>{task.error ?? task.summary ?? task.target}</span> : null}
+						</button>
+						{task.status === "running" || task.status === "queued" ? (
+							<Button size="small" type="text" danger className="engine-workspace-task__abort" onClick={() => props.onAbortTask(task.id)}>{t("中止")}</Button>
+						) : null}
+					</div>
+				))}
 			</div>
-			<div className="enginehub-composer">
-				<Input.TextArea
-					rows={2}
-					value={draft}
-					disabled={!canChat}
-					placeholder={
-						running
-							? t("和指挥官对话…Enter 发送，Shift+Enter 换行")
-							: completed
-								? t("工程已完成，向指挥官追问报告细节…")
-								: t("工程未运行，暂时不能对话")
-					}
-					onChange={(event) => setDraft(event.target.value)}
-					onKeyDown={(event) => {
-						if (event.key === "Enter" && !event.shiftKey) {
-							event.preventDefault();
-							sendDraft();
-						}
-					}}
-				/>
-				<Button type="primary" disabled={!canChat || !draft.trim()} onClick={sendDraft}>
-					{t("发送")}
-				</Button>
-			</div>
-		</Card>
+		</section>
 	);
 }
 
