@@ -5,38 +5,40 @@
 
 import {
 	DownOutlined,
-	DeleteOutlined,
-	EditOutlined,
 	FilterOutlined,
 	MenuFoldOutlined,
 	MenuUnfoldOutlined,
-	MoreOutlined,
 	PlusOutlined,
 	RightOutlined,
 	SearchOutlined,
 } from "@ant-design/icons";
 import { App, Badge, Button, ConfigProvider, Dropdown, Empty, Input, Modal, Tooltip, Typography } from "antd";
-import type { MenuProps } from "antd";
 import { useEffect, useId, useMemo, useState } from "react";
 import { t } from "../i18n.ts";
 import { consoleTheme } from "../ui/theme.ts";
 import type { SentinelEngine, SentinelSessionStatus, SessionInfoView } from "../types.ts";
-import { SESSION_STATUS_LABELS } from "../components/SessionStatusControl.tsx";
+import { SESSION_STATUSES, SESSION_STATUS_LABELS } from "../components/SessionStatusControl.tsx";
+import { SessionActions } from "./SessionActions.tsx";
 
 const { Text } = Typography;
 
-type StatusFilter = "all" | "open";
+type StatusFilter = SentinelSessionStatus | "none";
 type SourceFilter = "all" | "chat" | "engine";
+
+const OPEN_STATUSES: StatusFilter[] = ["todo", "active", "none"];
 
 const STORAGE_STATUS = "sentinel-session-filter";
 const STORAGE_SOURCE = "sentinel-session-source";
 const STORAGE_COLLAPSED = "sentinel-session-collapsed-groups";
 
-function readStatusFilter(): StatusFilter {
+function readStatusFilter(): StatusFilter[] {
 	try {
-		return localStorage.getItem(STORAGE_STATUS) === "open" ? "open" : "all";
+		const stored: unknown = JSON.parse(localStorage.getItem(STORAGE_STATUS) ?? "[]");
+		return Array.isArray(stored)
+			? [...new Set(stored.filter((value): value is StatusFilter => value === "none" || SESSION_STATUSES.includes(value)))]
+			: [];
 	} catch {
-		return "all";
+		return [];
 	}
 }
 
@@ -109,7 +111,7 @@ export function SessionPanel({
 }: SessionPanelProps) {
 	const { modal } = App.useApp();
 	const [query, setQuery] = useState("");
-	const [statusFilter, setStatusFilter] = useState<StatusFilter>(readStatusFilter);
+	const [statusFilter, setStatusFilter] = useState<StatusFilter[]>(readStatusFilter);
 	const [sourceFilter, setSourceFilter] = useState<SourceFilter>(readSourceFilter);
 	const [renaming, setRenaming] = useState<{ path: string; name: string } | null>(null);
 	const groupId = useId();
@@ -129,19 +131,27 @@ export function SessionPanel({
 		}
 	}, [collapsed]);
 
-	const setStatus = (next: StatusFilter) => {
-		localStorage.setItem(STORAGE_STATUS, next);
+	const setStatus = (next: StatusFilter[]) => {
 		setStatusFilter(next);
+		try {
+			localStorage.setItem(STORAGE_STATUS, JSON.stringify(next));
+		} catch {
+			// Filtering still works when browser storage is unavailable.
+		}
 	};
 	const setSource = (next: SourceFilter) => {
-		localStorage.setItem(STORAGE_SOURCE, next);
 		setSourceFilter(next);
+		try {
+			localStorage.setItem(STORAGE_SOURCE, next);
+		} catch {
+			// Filtering still works when browser storage is unavailable.
+		}
 	};
 
 	const visible = useMemo(() => {
 		const needle = query.trim().toLowerCase();
 		return sessions.filter((session) => {
-			if (statusFilter === "open" && (session.status === "done" || session.status === "ignored")) return false;
+			if (statusFilter.length > 0 && !statusFilter.includes(session.status ?? "none")) return false;
 			if (sourceFilter === "chat" && session.engine) return false;
 			if (sourceFilter === "engine" && !session.engine) return false;
 			if (!needle) return true;
@@ -168,50 +178,7 @@ export function SessionPanel({
 		];
 	}, [visible]);
 	const allCollapsed = groups.length > 0 && groups.every((group) => collapsed.includes(group.key));
-
-	const menuFor = (session: SessionInfoView): MenuProps => ({
-		items: [
-			{ key: "rename", icon: <EditOutlined />, label: t("重命名") },
-			{ type: "divider" },
-			{
-				key: "status",
-				label: t("标记状态"),
-				children: [
-					...(Object.keys(SESSION_STATUS_LABELS) as SentinelSessionStatus[]).map((status) => ({
-						key: `status:${status}`,
-						label: (
-							<span className="session-status-option">
-								<Badge status={status === "done" ? "success" : status === "ignored" ? "default" : "processing"} />
-								{SESSION_STATUS_LABELS[status]}
-							</span>
-						),
-					})),
-					{ type: "divider" as const },
-					{ key: "status:none", label: t("清除标记") },
-				],
-			},
-			{ type: "divider" },
-			{ key: "delete", icon: <DeleteOutlined />, label: t("删除会话"), danger: true },
-		],
-		onClick: ({ key, domEvent }) => {
-			domEvent.stopPropagation();
-			if (key === "rename") setRenaming({ path: session.path, name: rowLabel(session) });
-			if (key === "delete") {
-				modal.confirm({
-					title: t("删除会话"),
-					content: t("删除「{name}」？该操作不可恢复。", { name: rowLabel(session) }),
-					okText: t("删除"),
-					okButtonProps: { danger: true },
-					cancelText: t("取消"),
-					onOk: () => onDelete(session.path),
-				});
-			}
-			if (key.startsWith("status:")) {
-				const value = key.slice("status:".length);
-				onSetStatus(session.path, value === "none" ? null : (value as SentinelSessionStatus));
-			}
-		},
-	});
+	const openOnly = statusFilter.length === OPEN_STATUSES.length && OPEN_STATUSES.every((status) => statusFilter.includes(status));
 
 	const row = (session: SessionInfoView) => {
 		const active = session.id === activeSessionId;
@@ -235,16 +202,22 @@ export function SessionPanel({
 				<span className="session-row__name" title={rowLabel(session)}>
 					{rowLabel(session)}
 				</span>
-				<Dropdown menu={menuFor(session)} trigger={["click"]} placement="bottomRight">
-					<Button
-						type="text"
-						size="small"
-						className="session-row__more"
-						icon={<MoreOutlined />}
-						onClick={(event) => event.stopPropagation()}
-						aria-label={t("会话操作")}
-					/>
-				</Dropdown>
+				{session.status ? (
+					<span className="session-row__status">{SESSION_STATUS_LABELS[session.status]}</span>
+				) : null}
+				<SessionActions
+					status={session.status}
+					onRename={() => setRenaming({ path: session.path, name: rowLabel(session) })}
+					onSetStatus={(status) => onSetStatus(session.path, status)}
+					onDelete={() => modal.confirm({
+						title: t("删除会话"),
+						content: t("删除「{name}」？该操作不可恢复。", { name: rowLabel(session) }),
+						okText: t("删除"),
+						okButtonProps: { danger: true },
+						cancelText: t("取消"),
+						onOk: () => onDelete(session.path),
+					})}
+				/>
 			</div>
 		);
 	};
@@ -292,7 +265,12 @@ export function SessionPanel({
 					trigger={["click"]}
 					menu={{
 						selectable: true,
-						selectedKeys: [`status:${statusFilter}`, `source:${sourceFilter}`],
+						multiple: true,
+						selectedKeys: [
+							...(statusFilter.length === 0 ? ["status:all"] : statusFilter.map((status) => `status:${status}`)),
+							...(openOnly ? ["status:open"] : []),
+							`source:${sourceFilter}`,
+						],
 						items: [
 							{
 								type: "group",
@@ -300,6 +278,8 @@ export function SessionPanel({
 								children: [
 									{ key: "status:all", label: t("全部") },
 									{ key: "status:open", label: t("未完成") },
+									...SESSION_STATUSES.map((status) => ({ key: `status:${status}`, label: SESSION_STATUS_LABELS[status] })),
+									{ key: "status:none", label: t("未标记") },
 								],
 							},
 							{
@@ -313,14 +293,22 @@ export function SessionPanel({
 							},
 						],
 						onClick: ({ key }) => {
-							if (key === "status:all" || key === "status:open") setStatus(key === "status:open" ? "open" : "all");
+							if (key === "status:all") setStatus([]);
+							else if (key === "status:open") setStatus(OPEN_STATUSES);
+							else if (key.startsWith("status:")) {
+								const value = key.slice("status:".length);
+								if (value === "none" || SESSION_STATUSES.includes(value as SentinelSessionStatus)) {
+									const status = value as StatusFilter;
+									setStatus(statusFilter.includes(status) ? statusFilter.filter((item) => item !== status) : [...statusFilter, status]);
+								}
+							}
 							if (key === "source:all" || key === "source:chat" || key === "source:engine") {
 								setSource(key === "source:chat" ? "chat" : key === "source:engine" ? "engine" : "all");
 							}
 						},
 					}}
 				>
-					<Badge dot={statusFilter !== "all" || sourceFilter !== "all"}>
+					<Badge dot={statusFilter.length > 0 || sourceFilter !== "all"}>
 						<Button
 							className="session-panel__filter"
 							icon={<FilterOutlined />}

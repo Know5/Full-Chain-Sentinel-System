@@ -171,6 +171,107 @@
 	font-size: 14px;
 }
 
+.session-row__status {
+	flex: none;
+	font-size: 11px;
+	color: var(--ant-color-text-secondary);
+	white-space: nowrap;
+}
+
+.session-row__actions {
+	display: inline-flex;
+	flex: none;
+}
+
+.session-actions-surface {
+	padding: 6px;
+	border: 1px solid var(--ant-color-border);
+}
+
+.session-actions {
+	width: 208px;
+	max-width: calc(100vw - 40px);
+}
+
+.session-actions .ant-btn {
+	font-size: 12px;
+	font-weight: 400;
+}
+
+.session-actions .session-actions__command {
+	justify-content: flex-start;
+	height: 28px;
+	padding-inline: 8px;
+}
+
+.session-actions__status {
+	margin-block: 4px;
+	padding: 6px 4px 8px;
+	border-block: 1px solid var(--ant-color-border);
+}
+
+.session-actions__heading {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding-left: 4px;
+	font-size: 11px;
+	color: var(--ant-color-text-tertiary);
+}
+
+.session-actions__heading .ant-btn {
+	height: 22px;
+	padding-inline: 4px;
+	font-size: 11px;
+	color: var(--ant-color-text-tertiary);
+}
+
+.session-actions__grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 4px;
+	margin-top: 4px;
+}
+
+.session-actions .session-actions__mark {
+	justify-content: flex-start;
+	gap: 6px;
+	height: 28px;
+	padding-inline: 6px;
+	border: 1px solid transparent;
+}
+
+.session-actions .session-actions__mark[aria-pressed="true"] {
+	background: var(--ant-color-bg-text-hover);
+	border-color: var(--ant-color-border);
+}
+
+.session-actions__dot {
+	width: 5px;
+	height: 5px;
+	flex: none;
+	border-radius: 50%;
+	background: var(--ant-color-text-quaternary);
+}
+
+.mark-todo .session-actions__dot {
+	background: var(--ant-color-warning);
+}
+
+.mark-active .session-actions__dot {
+	background: var(--ant-color-info);
+}
+
+.mark-done .session-actions__dot {
+	background: var(--ant-color-success);
+}
+
+.session-actions__check {
+	margin-left: auto;
+	font-size: 10px;
+	color: var(--ant-color-text-secondary);
+}
+
 .console-sidebar .session-row:hover {
 	background: var(--ant-color-bg-text-hover);
 }
@@ -185,6 +286,12 @@
 
 .console-sidebar .session-row__more {
 	opacity: 0;
+	background: transparent;
+}
+
+.console-sidebar .session-row__more.ant-btn:not(:disabled):hover {
+	background: var(--ant-color-bg-text-hover);
+	color: var(--ant-color-text);
 }
 
 .console-sidebar .session-row:hover .session-row__more,
