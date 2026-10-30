@@ -15,7 +15,8 @@ import {
 	PROJECT_NAME,
 	PROJECT_REPOSITORY,
 } from "../branding.ts";
-import { t } from "../i18n.ts";
+import { getLanguage, t } from "../i18n.ts";
+import { SESSION_ENDED_NOTICE } from "../ws.ts";
 import { consoleAuthTheme } from "../ui/theme.ts";
 import { SentinelMark } from "./icons.tsx";
 import { LanguageSwitch } from "./LanguageSwitch.tsx";
@@ -32,6 +33,13 @@ export function AuthGate({ mode, onDone }: { mode: "setup" | "login"; onDone: ()
 	const [remember, setRemember] = useState(true);
 	const [error, setError] = useState("");
 	const [busy, setBusy] = useState(false);
+	const [sessionNotice] = useState(() => {
+		try {
+			return window.sessionStorage.getItem(SESSION_ENDED_NOTICE);
+		} catch {
+			return null;
+		}
+	});
 
 	const submit = async () => {
 		if (busy) return;
@@ -141,6 +149,16 @@ export function AuthGate({ mode, onDone }: { mode: "setup" | "login"; onDone: ()
 									</Form.Item>
 								)}
 
+								{mode === "login" && sessionNotice ? (
+									<Alert
+										type="info"
+										showIcon
+										className="auth-screen__error"
+										title={sessionNotice === "session_replaced"
+											? getLanguage() === "en" ? "Signed in on another terminal. This terminal has been signed out." : "账号已在其他终端登录，当前终端已退出。"
+											: getLanguage() === "en" ? "Your session has expired. Please sign in again." : "登录已失效，请重新登录。"}
+									/>
+								) : null}
 								{error ? <Alert type="error" showIcon title={error} className="auth-screen__error" /> : null}
 
 								<Button

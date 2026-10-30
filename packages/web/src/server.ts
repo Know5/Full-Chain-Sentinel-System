@@ -420,6 +420,7 @@ export async function startSentinelServer(
 ): Promise<{ close: () => void; url: string; environment: Promise<SentinelEnvReport> }> {
 	const startupCwd = resolve(options.cwd ?? process.cwd());
 	const clients = new Set<WebSocket>();
+	const clientRequests = new WeakMap<WebSocket, IncomingMessage>();
 	/** Profiles whose connectivity test is running; one is enough per profile. */
 	const proxyChecksInFlight = new Set<string>();
 	const proxyImagePulls = new Map<string, Promise<{ ok: boolean; error?: string }>>();
@@ -867,6 +868,13 @@ export async function startSentinelServer(
 	const authEnabled = options.auth !== false && Boolean(agentDir);
 	const currentAuth = (): StoredAuth | null => (authEnabled && agentDir ? readStoredAuth(agentDir) : null);
 	const limiter = createLoginLimiter();
+	function disconnectClients(reason: "session_replaced" | "session_expired"): void {
+		pluginUiTokens.clear();
+		for (const client of clients) {
+			clients.delete(client);
+			client.close(4001, reason);
+		}
+	}
 	/** The promise state for the account this request belongs to. */
 	const consentFor = (username: string | null): ConsentStatus =>
 		consentEnabled
@@ -911,21 +919,18 @@ export async function startSentinelServer(
 			sendJson(response, { error: problem }, 400);
 			return;
 		}
+		// Another setup request may have finished while this body was arriving.
+		if (readStoredAuth(agentDir)) {
+			sendJson(response, { error: t("管理员账号已存在，请直接登录") }, 409);
+			return;
+		}
 		const stored = createAuth(agentDir, username, password);
 		const token = issueSessionToken(stored);
 		response.setHeader("set-cookie", sessionCookieHeader(token.value, token.maxAge));
 		sendJson(response, { ok: true, username: stored.username });
 	}
 
-	async function handleLogin(
-		request: IncomingMessage,
-		response: ServerResponse,
-		stored: StoredAuth | null,
-	): Promise<void> {
-		if (!stored) {
-			sendJson(response, { error: t("还没有管理员账号，请先创建") }, 409);
-			return;
-		}
+	async function handleLogin(request: IncomingMessage, response: ServerResponse): Promise<void> {
 		const key = request.socket.remoteAddress ?? "unknown";
 		const lockedFor = limiter.blocked(key);
 		if (lockedFor > 0) {
@@ -941,6 +946,12 @@ export async function startSentinelServer(
 			sendJson(response, { error: t("请求体不是合法的 JSON") }, 400);
 			return;
 		}
+		// Read after the body: a delayed request must not restore old credentials.
+		const stored = currentAuth();
+		if (!stored || !agentDir) {
+			sendJson(response, { error: t("还没有管理员账号，请先创建") }, 409);
+			return;
+		}
 		const username = textField(body, "username").trim();
 		const password = textField(body, "password");
 		if (!verifyLogin(stored, username, password)) {
@@ -949,19 +960,16 @@ export async function startSentinelServer(
 			return;
 		}
 		limiter.success(key);
-		const token = issueSessionToken(stored);
+		const token = issueSessionToken(revokeSessions(agentDir, stored));
 		// 记住登录 keeps the cookie across browser restarts (30 days); otherwise it
 		// dies with the browser session. The token's own expiry never moves.
 		const remember = body.remember !== false;
 		response.setHeader("set-cookie", sessionCookieHeader(token.value, remember ? token.maxAge : 0));
 		sendJson(response, { ok: true, username: stored.username });
+		disconnectClients("session_replaced");
 	}
 
-	async function handleChangePassword(
-		request: IncomingMessage,
-		response: ServerResponse,
-		stored: StoredAuth,
-	): Promise<void> {
+	async function handleChangePassword(request: IncomingMessage, response: ServerResponse): Promise<void> {
 		if (!agentDir) {
 			sendJson(response, { error: t("缺少配置目录") }, 500);
 			return;
@@ -969,6 +977,11 @@ export async function startSentinelServer(
 		const body = await readJsonBody(request);
 		if (!body) {
 			sendJson(response, { error: t("请求体不是合法的 JSON") }, 400);
+			return;
+		}
+		const stored = currentAuth();
+		if (!stored || !hasValidSession(stored, request)) {
+			sendJson(response, { error: t("未登录") }, 401);
 			return;
 		}
 		if (!verifyLogin(stored, stored.username, textField(body, "current"))) {
@@ -986,6 +999,7 @@ export async function startSentinelServer(
 		const token = issueSessionToken(updated);
 		response.setHeader("set-cookie", sessionCookieHeader(token.value, token.maxAge));
 		sendJson(response, { ok: true });
+		disconnectClients("session_expired");
 	}
 
 	/**
@@ -1200,13 +1214,15 @@ export async function startSentinelServer(
 				return;
 			}
 			if (path === "/api/auth/login" && request.method === "POST") {
-				void handleLogin(request, response, auth);
+				void handleLogin(request, response);
 				return;
 			}
 			if (path === "/api/auth/logout" && request.method === "POST") {
-				// The cookie is stateless, so revocation is recorded in auth.json:
-				// sessions issued before now stop working, including this one.
-				if (auth && agentDir) revokeSessions(agentDir, auth);
+				// A replaced or anonymous browser must not log out the active terminal.
+				if (auth && agentDir && hasValidSession(auth, request)) {
+					revokeSessions(agentDir, auth);
+					disconnectClients("session_expired");
+				}
 				response.setHeader("set-cookie", clearSessionCookieHeader());
 				sendJson(response, { ok: true });
 				return;
@@ -1280,7 +1296,7 @@ export async function startSentinelServer(
 					sendJson(response, { error: "Not logged in" }, 401);
 					return;
 				}
-				void handleChangePassword(request, response, auth);
+				void handleChangePassword(request, response);
 				return;
 			}
 			// One chat attachment: the raw body is the file, `name` is what to call
@@ -1362,8 +1378,9 @@ export async function startSentinelServer(
 		}
 		wss.handleUpgrade(request, socket, head, (ws) => wss.emit("connection", ws, request));
 	});
-	wss.on("connection", (socket) => {
+	wss.on("connection", (socket, request) => {
 		clients.add(socket);
+		clientRequests.set(socket, request);
 		// Listeners first: the project list needs docker, and a client that sends a
 		// command right after connecting must not have it dropped in the meantime.
 		socket.on("message", (data) => {
@@ -1396,6 +1413,12 @@ export async function startSentinelServer(
 	});
 
 	async function handleClientMessage(socket: WebSocket, raw: string): Promise<void> {
+		const request = clientRequests.get(socket);
+		if (authEnabled && (!request || !clients.has(socket) || !hasValidSession(currentAuth(), request))) {
+			clients.delete(socket);
+			socket.close(4001, "session_expired");
+			return;
+		}
 		console.error(`[srv-recv] ${raw.slice(0, 70)}`);
 		let message: SentinelClientMessage;
 		try {

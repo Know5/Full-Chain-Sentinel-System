@@ -6,9 +6,8 @@
  * account (username + password, scrypt-hashed, no plaintext on disk) guards
  * every API route and the WebSocket.
  *
- * Sessions are stateless: the cookie carries an expiry plus an HMAC of it,
- * keyed by a random secret stored next to the password hash. Changing the
- * password rotates the secret, which logs out every other session at once.
+ * Only the latest login is valid: the cookie carries an expiry plus an HMAC,
+ * keyed by a secret rotated on every login, logout and password change.
  * The browser keeps the cookie for 30 days (or for the session only, when
  * "记住登录" is unchecked); the server has no session store to clean up.
  */
@@ -33,7 +32,7 @@ export interface StoredAuth {
 	/** scrypt salt and hash, hex. */
 	salt: string;
 	hash: string;
-	/** Session-signing secret, hex. Rotated on password change. */
+	/** Session-signing secret, hex. Rotated whenever the active login changes. */
 	secret: string;
 	createdAt: string;
 	/**
@@ -141,7 +140,8 @@ function sign(secret: string, expiry: number): string {
 
 /** A session token: `<expiry ms>.<hmac>`; the secret lives in auth.json, not in the cookie. */
 export function issueSessionToken(stored: StoredAuth, now = Date.now()): { value: string; maxAge: number } {
-	const expiry = now + REMEMBER_TTL_MS;
+	// Rotation and issuance may happen in the same millisecond.
+	const expiry = Math.max(now, stored.validAfter + 1) + REMEMBER_TTL_MS;
 	return { value: `${expiry}.${sign(stored.secret, expiry)}`, maxAge: Math.floor(REMEMBER_TTL_MS / 1000) };
 }
 
@@ -236,7 +236,8 @@ export type LoginLimiter = ReturnType<typeof createLoginLimiter>;
  * Invalidate every session issued so far (logout). The caller clears the cookie
  * separately; a stolen cookie stops working here.
  */
-export function revokeSessions(agentDir: string, stored: StoredAuth, now = Date.now()): void {
-	const next: StoredAuth = { ...stored, validAfter: now };
+export function revokeSessions(agentDir: string, stored: StoredAuth, now = Date.now()): StoredAuth {
+	const next: StoredAuth = { ...stored, secret: randomBytes(32).toString("hex"), validAfter: now };
 	writeFileSync(authFilePath(agentDir), `${JSON.stringify(next, null, "\t")}\n`, { mode: 0o600 });
+	return next;
 }
