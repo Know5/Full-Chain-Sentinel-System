@@ -260,6 +260,21 @@ test("FOFA sends the query as standard base64 and maps the positional fields", a
 	expect(params.get("key")).toBe("k");
 	expect(params.get("qbase64")).toBe(encodeFofaQuery('ip="1.1.1.1"'));
 	expect(params.get("fields")).toBe(FOFA_FIELDS.join(","));
+	expect(params.get("fields")?.split(",")).toEqual([
+		"host",
+		"ip",
+		"port",
+		"domain",
+		"title",
+		"server",
+		"protocol",
+		"country",
+		"region",
+		"city",
+		"org",
+		"os",
+		"lastupdatetime",
+	]);
 	expect(params.get("size")).toBe("20");
 	expect(params.get("page")).toBe("1");
 	expect(result.total).toBe(67742);
@@ -272,6 +287,8 @@ test("FOFA sends the query as standard base64 and maps the positional fields", a
 		server: "nginx",
 		protocol: "https",
 		country: "CN",
+		province: "北京",
+		city: "北京",
 		org: "示例公司",
 		os: "Linux",
 		updatedAt: "2026-01-01",
@@ -319,6 +336,52 @@ test("a custom base URL prefixes the platform's API path", async () => {
 		baseUrl: `${base}/proxy/fofa`,
 	});
 	expect(seen[0].url).toContain("/proxy/fofa/api/v1/search/all");
+});
+
+test("a custom FOFA relay accepts native location and timestamp fields", async () => {
+	// Regression: fafaapi.info rejects province and updated_at as illegal fields.
+	const result = await searchAssets({
+		platform: "fofa",
+		key: "test-key",
+		query: 'ip="192.0.2.1"',
+		baseUrl: "https://relay.example",
+		fetchImpl: async (input) => {
+			const url = new URL(input);
+			expect(url.pathname).toBe("/api/v1/search/all");
+			const fields = url.searchParams.get("fields")?.split(",") ?? [];
+			const values: Record<string, string> = {
+				host: "https://example.test",
+				ip: "192.0.2.1",
+				port: "443",
+				domain: "example.test",
+				title: "Example",
+				server: "nginx",
+				protocol: "https",
+				country: "CN",
+				region: "浙江",
+				city: "杭州",
+				org: "Example Org",
+				os: "Linux",
+				lastupdatetime: "2026-10-30",
+			};
+			const invalid = fields.find((field) => !Object.hasOwn(values, field));
+			return new Response(
+				json(
+					invalid
+						? { error: true, errmsg: `请求有非法的字段名: ${invalid}` }
+						: { error: false, size: 1, results: [fields.map((field) => values[field])] },
+				),
+				{ status: invalid ? 400 : 200 },
+			);
+		},
+	});
+	expect(result.records[0]).toMatchObject({
+		province: "浙江",
+		city: "杭州",
+		org: "Example Org",
+		os: "Linux",
+		updatedAt: "2026-10-30",
+	});
 });
 
 test("the custom base URL applies to all three search clients", async () => {

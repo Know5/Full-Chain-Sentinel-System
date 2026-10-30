@@ -382,6 +382,8 @@ function isRateLimitText(value: string): boolean {
  * The fields requested from FOFA, in the order the positional `results` arrays
  * arrive. A fixed list keeps the mapping deterministic: FOFA answers with arrays
  * aligned to `fields`, so an omitted field would shift every later column.
+ * FOFA calls the province `region` and the update time `lastupdatetime`;
+ * the normalized record names are not valid request fields.
  */
 export const FOFA_FIELDS = [
 	"host",
@@ -392,11 +394,11 @@ export const FOFA_FIELDS = [
 	"server",
 	"protocol",
 	"country",
-	"province",
+	"region",
 	"city",
 	"org",
 	"os",
-	"updated_at",
+	"lastupdatetime",
 ] as const;
 
 function fofaRecord(row: unknown[]): AssetRecord {
