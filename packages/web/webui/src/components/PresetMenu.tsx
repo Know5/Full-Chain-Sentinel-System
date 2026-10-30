@@ -23,18 +23,18 @@ export type PresetMenuAnchor = PickerAnchor;
  * where a fixed menu cannot be scrolled into view, so the menu flips upward when
  * the space below is too small.
  */
-export function presetMenuPosition(rect: DOMRect, width = 232, maximumHeight = 320): PresetMenuAnchor {
-	const left = Math.max(8, Math.min(rect.left - 6, window.innerWidth - width));
-	const below = window.innerHeight - rect.bottom - 8;
-	const above = rect.top - 8;
+export function presetMenuPosition(rect: DOMRect, width = 260, maximumHeight = 320): PresetMenuAnchor {
+	const left = Math.max(8, Math.min(rect.left - 6, window.innerWidth - width - 8));
+	const below = Math.max(0, window.innerHeight - rect.bottom - 12);
+	const above = Math.max(0, rect.top - 12);
 	if (below < 200 && above > below) {
 		return {
 			left,
 			bottom: window.innerHeight - rect.top + 4,
-			maxHeight: Math.max(120, Math.min(maximumHeight, above)),
+			maxHeight: Math.min(maximumHeight, above),
 		};
 	}
-	return { left, top: rect.bottom + 4, maxHeight: Math.max(120, Math.min(maximumHeight, below)) };
+	return { left, top: rect.bottom + 4, maxHeight: Math.min(maximumHeight, below) };
 }
 
 export function PresetMenu(props: {
@@ -79,7 +79,7 @@ export function PresetMenu(props: {
 						className="pickmenu__item"
 						onClick={() => props.onPick(item.id === "__default__" ? undefined : item.id)}
 					>
-						<div className="pickmenu__item-text">
+						<div className="pickmenu__item-text" style={{ minWidth: 0 }}>
 							<Space size={6}>
 								<Text>{item.name}</Text>
 								{item.current ? (
@@ -88,7 +88,7 @@ export function PresetMenu(props: {
 									</Tag>
 								) : null}
 							</Space>
-							{item.description ? <Text type="secondary">{item.description}</Text> : null}
+							{item.description ? <Text type="secondary" style={{ whiteSpace: "normal", overflowWrap: "anywhere" }}>{item.description}</Text> : null}
 						</div>
 					</List.Item>
 				)}

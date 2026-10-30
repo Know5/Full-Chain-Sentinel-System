@@ -1248,7 +1248,8 @@ function CreateEngineForm(props: {
 	const [name, setName] = useState("");
 	const [targets, setTargets] = useState("");
 	const [files, setFiles] = useState<UploadFile<UploadedFile>[]>([]);
-	const [selected, setSelected] = useState<string[]>(props.doctrines.some((doctrine) => doctrine.id === "attack-defense-web") ? ["attack-defense-web"] : []);
+	const [selectedDoctrineId, setSelectedDoctrineId] = useState<string | null>(props.doctrines.some((doctrine) => doctrine.id === "attack-defense-web") ? "attack-defense-web" : null);
+	const selectedDoctrine = props.doctrines.find((doctrine) => doctrine.id === selectedDoctrineId);
 	/** Preset whitelist; empty means "no restriction" and is the default. */
 	const [selectedPresets, setSelectedPresets] = useState<string[]>([]);
 	const [presetsOpen, setPresetsOpen] = useState(false);
@@ -1285,7 +1286,7 @@ function CreateEngineForm(props: {
 	/** Validation is per step so "下一步" never skips a blocking field. */
 	function validateStep(target: WizardStep): string | null {
 		if (target === 1) {
-			if (selected.length === 0) return t("请至少选择一个指挥思路");
+			if (!selectedDoctrine) return getLanguage() === "en" ? "Choose one command doctrine." : "请选择一个指挥思路";
 			return null;
 		}
 		if (target === 2) {
@@ -1334,10 +1335,11 @@ function CreateEngineForm(props: {
 			return;
 		}
 		setFormError(null);
+		if (!selectedDoctrine) return;
 		props.onSubmit({
 			name: name.trim(),
 			targets: engineTargetText(targets, attachments, props.project?.id ?? ""),
-			doctrines: selected,
+			doctrines: [selectedDoctrine.id],
 			presetIds: selectedPresets,
 			presetOptional,
 			limits: {
@@ -1383,7 +1385,7 @@ function CreateEngineForm(props: {
 						{t("新建工程")}
 					</Title>
 					<Text type="secondary">
-						{getLanguage() === "en" ? "Choose command doctrines, add targets, then configure execution." : "先选择指挥思路，再添加目标，最后配置执行。"}
+						{getLanguage() === "en" ? "Choose one command doctrine, add targets, then configure execution." : "先选择一个指挥思路，再添加目标，最后配置执行。"}
 					</Text>
 				</div>
 				<Button onClick={props.onCancel}>{t("取消")}</Button>
@@ -1425,22 +1427,18 @@ function CreateEngineForm(props: {
 										title={t("还没有可用的指挥思路，请先到「指挥思路」页面创建。")}
 									/>
 								) : (
+									<Radio.Group value={selectedDoctrineId} onChange={(event) => {
+										setSelectedDoctrineId(event.target.value as string);
+										setFormError(null);
+									}} style={{ width: "100%" }} aria-label={t("指挥思路")}>
 									<Space orientation="vertical" size={8} className="enginewiz-list">
 										{props.doctrines.map((doctrine) => {
-											const checked = selected.includes(doctrine.id);
+											const checked = selectedDoctrineId === doctrine.id;
 											return (
-												<Checkbox
+												<Radio
 													key={doctrine.id}
-													checked={checked}
+													value={doctrine.id}
 													className={checked ? "enginewiz-card is-on" : "enginewiz-card"}
-													onChange={() => {
-														setSelected((prev) =>
-															prev.includes(doctrine.id)
-																? prev.filter((id) => id !== doctrine.id)
-																: [...prev, doctrine.id],
-														);
-														setFormError(null);
-													}}
 												>
 													<Space size={6} wrap>
 														<Text strong>{doctrine.name}</Text>
@@ -1451,10 +1449,11 @@ function CreateEngineForm(props: {
 													<Text type="secondary" className="enginewiz-card__text">
 														{doctrine.text.split("\n")[0]}
 													</Text>
-												</Checkbox>
+												</Radio>
 											);
 										})}
 									</Space>
+									</Radio.Group>
 								)}
 
 								<div className="enginewiz-agent-entry">
@@ -1622,7 +1621,7 @@ function CreateEngineForm(props: {
 								<Card size="small" className="enginewiz-review" title={t("确认")}>
 									<Space size={24} wrap>
 										<Text type="secondary">
-											{t("指挥")} <Text strong>{t("{count} 条思路", { count: selected.length })}</Text>
+											{t("指挥")} <Text strong>{selectedDoctrine?.name ?? t("待填写")}</Text>
 										</Text>
 										<Text type="secondary">
 											{t("Agent")}{" "}
@@ -1666,7 +1665,7 @@ function CreateEngineForm(props: {
 						<Text type="secondary">DRAFT / 0{step}</Text>
 						<Text strong>{name.trim() || t("未命名工程")}</Text>
 						<Text type="secondary">
-							{t("{doctrines} 条思路", { doctrines: selected.length })} · {selectedPresetLabel}
+							{selectedDoctrine?.name ?? t("待填写")} · {selectedPresetLabel}
 						</Text>
 						{files.length > 0 ? <Text type="secondary">{getLanguage() === "en" ? `${attachments.length} attachments uploaded` : `已上传 ${attachments.length} 个附件`}</Text> : null}
 					</Card>
@@ -1791,7 +1790,7 @@ function DoctrineManager(props: {
 		<Page
 			className="doctrine-manager"
 			title={t("指挥思路")}
-			description={t("命名的文本模板，创建工程时多选叠加注入指挥官")}
+			description={getLanguage() === "en" ? "Choose one command doctrine when creating an engagement to guide the commander." : "创建工程时选择一个指挥思路，作为指挥官的任务编排依据。"}
 			extra={
 				<Space size={8} wrap>
 					<Button onClick={props.onClose}>{t("返回")}</Button>

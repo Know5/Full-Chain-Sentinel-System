@@ -81,12 +81,13 @@ export function PickerShell({
 				bottom: anchor.bottom,
 				left: anchor.left,
 				width,
+				maxWidth: "calc(100vw - 16px)",
 				maxHeight: anchor.maxHeight,
 				zIndex: 1100,
 			}}
 			styles={{
 				header: { flexShrink: 0 },
-				body: { minHeight: 0, maxHeight: "none", overflowY: "auto" },
+				body: { display: "flex", flexDirection: "column", flex: "1 1 auto", minHeight: 0, maxHeight: "none", padding: 0, overflow: "hidden" },
 			}}
 			onClick={(event) => event.stopPropagation()}
 			title={
@@ -96,8 +97,10 @@ export function PickerShell({
 				</div>
 			}
 		>
-			<div className="pickmenu__body">{children}</div>
-			{footer ? <div className="pickmenu__foot">{footer}</div> : null}
+			<div className="pickmenu__scroll" style={{ flex: "1 1 auto", minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", padding: "6px 6px 12px" }}>
+				<div className="pickmenu__body">{children}</div>
+			</div>
+			{footer ? <div className="pickmenu__foot" style={{ flexShrink: 0, margin: 0, padding: 6 }}>{footer}</div> : null}
 		</Card>,
 		document.body,
 	);

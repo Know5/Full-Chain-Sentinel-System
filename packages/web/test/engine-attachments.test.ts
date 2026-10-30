@@ -86,15 +86,55 @@ describe("engineering target attachments", () => {
 	});
 });
 
-test("CTF is a protected built-in alongside custom command doctrines", () => {
+test.each([
+	{ id: "ctf-jeopardy", name: "CTF 竞赛-夺旗" },
+	{ id: "code-audit", name: "代码审计" },
+])("$name is a protected built-in alongside custom command doctrines", ({ id, name }) => {
 	const root = mkdtempSync(join(tmpdir(), "engine-doctrines-"));
 	roots.push(root);
-	const ctf = listDoctrines(root).find((doctrine) => doctrine.id === "ctf-jeopardy");
-	expect(ctf).toMatchObject({ name: "CTF 竞赛-夺旗", builtin: true });
-	expect(saveDoctrine(root, { id: "ctf-jeopardy", name: "override", text: "override" }).error).toBeTruthy();
-	expect(deleteDoctrine(root, "ctf-jeopardy").ok).toBe(false);
+	const builtin = listDoctrines(root).find((doctrine) => doctrine.id === id);
+	expect(builtin).toMatchObject({ name, builtin: true });
+	expect(saveDoctrine(root, { id, name: "override", text: "override" }).error).toBeTruthy();
+	expect(deleteDoctrine(root, id).ok).toBe(false);
 	const custom = saveDoctrine(root, { name: "赛题补充", text: "flag 格式为 flag{...}" }).doctrine;
 	if (!custom) throw new Error("Custom doctrine was not saved");
-	expect(resolveDoctrines(root, ["ctf-jeopardy", custom.id])).toEqual([ctf, custom]);
-	expect(listDoctrines(root).find((doctrine) => doctrine.id === "ctf-jeopardy")).toEqual(ctf);
+	expect(resolveDoctrines(root, [id, custom.id])).toEqual([builtin, custom]);
+	expect(listDoctrines(root).find((doctrine) => doctrine.id === id)).toEqual(builtin);
+});
+
+test("a code audit engagement retains its doctrine and injects the audit brief on resume", () => {
+	const root = mkdtempSync(join(tmpdir(), "engine-code-audit-"));
+	roots.push(root);
+	const dbPath = join(root, "engines.db");
+	const store = new EngineStore(dbPath);
+	let id: string;
+	try {
+		id = store.createEngine({
+			projectId: "audit-project",
+			projectName: "Source audit",
+			name: "Source audit",
+			targets: parseTargetLines("/work/source 审计代码中的高危、严重漏洞"),
+			doctrines: ["code-audit"],
+			limits: { concurrency: 2, roundLimit: 5, tokenLimit: null, timeLimitMin: null, maxRetries: 1 },
+			gateMode: "auto",
+		}).id;
+	} finally {
+		store.close();
+	}
+	const reopened = new EngineStore(dbPath);
+	try {
+		const engine = reopened.getEngine(id);
+		if (!engine) throw new Error("Engine was not persisted");
+		expect(engine.doctrines).toEqual(["code-audit"]);
+		const brief = buildCommanderBrief(engine, resolveDoctrines(root, engine.doctrines), [], "resume", {
+			bash: false,
+			read: false,
+		});
+		expect(brief).toContain("代码审计");
+		expect(brief).toContain("命令执行 RCE 和其他高危、严重漏洞");
+		expect(brief).toContain("/work/source");
+		expect(brief).not.toContain("CTF 竞赛-夺旗");
+	} finally {
+		reopened.close();
+	}
 });
