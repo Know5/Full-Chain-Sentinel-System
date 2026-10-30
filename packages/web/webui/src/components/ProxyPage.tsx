@@ -421,7 +421,7 @@ export function ProxyEditorBody({
 							? t("WireGuard 档案的容器跑 wg-quick 而不是 sing-box：隧道是真实网卡加默认路由，所以 ping、UDP、原始套接字都走隧道；只有这一个出口，没有节点可切。要走哪些网段由配置里的 AllowedIPs 决定（写 0.0.0.0/0 就是全部），没有内网直连这个开关。DNS 必填——Docker 自己的解析在隧道外。")
 							: draft.mode === "openvpn"
 								? t("OpenVPN 档案的容器跑 openvpn 客户端而不是 sing-box：同样是真实网卡加默认路由，所以 ping、UDP、原始套接字都走隧道。配置里的证书必须内联（引用 ca.crt 这类外部文件会被拒绝），daemon、log 与 up/down/route-up 这些脚本选项会被剥掉——控制台只运行自己的 hook。DNS 可以留空：服务器推送的解析器会自动用上。同一份证书同时只能有一个连接，要给每个项目单独一份证书就分别建档案。")
-								: t("保存时会用 sing-box 校验一次（镜像已在本地时），不通过的配置会带着报错退回，不会等到重建容器才发现。")}
+								: t("保存时自动拉取缺失的 sing-box 镜像并校验配置；拉取或校验失败时显示具体原因。")}
 				</p>
 				{error ? <div className="page-error">{error}</div> : null}
 				</div>

@@ -199,7 +199,12 @@ function NetworkAndProxyForm({
 					<Tag color={config?.imagePresent ? "green" : "orange"} variant="filled">
 						{config?.imagePresent ? t("镜像已在本地") : t("镜像不在本地")}
 					</Tag>
-					<Button type="primary" onClick={() => onSave(network, defaultId, image)} disabled={busy || !dirty}>
+					<Button
+						type="primary"
+						onClick={() => onSave(network, defaultId, image)}
+						loading={pulling}
+						disabled={busy || pulling || (!dirty && config.imagePresent)}
+					>
 						{t("保存")}
 					</Button>
 				</Space>
@@ -260,7 +265,7 @@ function NetworkAndProxyForm({
 				</Col>
 			</Row>
 			<SettingsNote>
-				{t("镜像名国内拉不动 ghcr.io 时换成可达的镜像源；改完要重新拉取一次。")}
+				{t("保存时自动拉取本地缺失的代理镜像；拉取失败可更换可达的镜像源后重试。")}
 			</SettingsNote>
 		</SettingsSection>
 	);

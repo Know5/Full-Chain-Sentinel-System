@@ -422,6 +422,7 @@ export async function startSentinelServer(
 	const clients = new Set<WebSocket>();
 	/** Profiles whose connectivity test is running; one is enough per profile. */
 	const proxyChecksInFlight = new Set<string>();
+	const proxyImagePulls = new Map<string, Promise<{ ok: boolean; error?: string }>>();
 	const agentDir = options.agentDir;
 	if (agentDir) setServerLanguage(readUiConfig(agentDir).language);
 	// The gate follows authentication by default: a console with no password to
@@ -789,11 +790,33 @@ export async function startSentinelServer(
 		return proxyConfigView(agentDir, await hasSingboxImage(readProxies(agentDir).image));
 	}
 
-	/**
-	 * `sing-box check` on one saved profile, or undefined when it passes. Skipped
-	 * when the image is not local: "could not check" is not a failure, and the page
-	 * already reports the missing image.
-	 */
+	/** Install missing images before validation; concurrent saves share one pull. */
+	async function prepareProxyImage(image: string, force = false): Promise<{ ok: boolean; error?: string }> {
+		if (!force && (await hasSingboxImage(image))) return { ok: true };
+		const pending = proxyImagePulls.get(image);
+		if (pending) return pending;
+		const pull = (async () => {
+			broadcast({ type: "singbox_pull_started" });
+			try {
+				return await pullSingboxImage(image, {
+					onOutput: (chunk) => broadcast({ type: "image_build_log", line: chunk.trimEnd() }),
+				});
+			} catch (error) {
+				return { ok: false, error: error instanceof Error ? error.message : String(error) };
+			}
+		})();
+		proxyImagePulls.set(image, pull);
+		try {
+			const result = await pull;
+			broadcast({ type: "singbox_pull_result", ...result });
+			broadcast({ type: "proxy_config", config: await proxyView(), push: true });
+			return result;
+		} finally {
+			proxyImagePulls.delete(image);
+		}
+	}
+
+	/** `sing-box check` on one saved profile, or undefined when it passes. */
 	async function validateProfile(profile: SentinelProxy): Promise<string | undefined> {
 		if (!agentDir) return undefined;
 		const settings = resolveProjectProxy(agentDir, profile.id);
@@ -811,7 +834,8 @@ export async function startSentinelServer(
 		const built = buildSingboxConfig(settings);
 		if (built.error) return built.error;
 		if (!built.config) return t("配置生成失败");
-		if (!(await hasSingboxImage(settings.image))) return undefined;
+		const prepared = await prepareProxyImage(settings.image);
+		if (!prepared.ok) return t("代理镜像拉取失败：{error}", { error: prepared.error ?? t("未知错误") });
 		const checked = await checkProxyProfile(settings.image, built.config, agentDir);
 		return checked.ok ? undefined : t("sing-box 校验未通过：{error}", { error: checked.error ?? "" });
 	}
@@ -1781,7 +1805,7 @@ export async function startSentinelServer(
 						config: await proxyView(),
 						error,
 					} satisfies SentinelServerMessage);
-					await afterProxyChange();
+					if (!error) await afterProxyChange();
 					return;
 				}
 				case "delete_proxy": {
@@ -1817,7 +1841,7 @@ export async function startSentinelServer(
 						config: await proxyView(),
 						error,
 					} satisfies SentinelServerMessage);
-					await afterProxyChange();
+					if (!error) await afterProxyChange();
 					return;
 				}
 				case "set_proxy_node": {
@@ -1978,8 +2002,15 @@ export async function startSentinelServer(
 						return;
 					}
 					setProxyImage(agentDir, message.image);
-					sendTo(socket, { type: "proxy_config", config: await proxyView() } satisfies SentinelServerMessage);
-					await afterProxyChange();
+					const prepared = await prepareProxyImage(readProxies(agentDir).image);
+					sendTo(socket, {
+						type: "proxy_config",
+						config: await proxyView(),
+						error: prepared.ok
+							? undefined
+							: t("代理镜像拉取失败：{error}", { error: prepared.error ?? t("未知错误") }),
+					} satisfies SentinelServerMessage);
+					if (prepared.ok) await afterProxyChange();
 					return;
 				}
 				case "pull_singbox_image": {
@@ -1988,15 +2019,8 @@ export async function startSentinelServer(
 						return;
 					}
 					const image = readProxies(agentDir).image;
-					const result = await pullSingboxImage(image, {
-						onOutput: (chunk) => sendTo(socket, { type: "image_build_log", line: chunk.trimEnd() }),
-					});
-					sendTo(socket, {
-						type: "singbox_pull_result",
-						ok: result.ok,
-						error: result.error,
-					} satisfies SentinelServerMessage);
-					await afterProxyChange();
+					const result = await prepareProxyImage(image, true);
+					if (result.ok) await afterProxyChange();
 					return;
 				}
 				case "set_project_proxy": {

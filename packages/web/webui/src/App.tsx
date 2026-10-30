@@ -1006,6 +1006,9 @@ export function App() {
 					return;
 				}
 
+				case "singbox_pull_started":
+					setPullingSingboxImage(true);
+					return;
 				case "singbox_pull_result": {
 					setPullingSingboxImage(false);
 					if (!message.ok) {
@@ -2613,6 +2616,7 @@ export function App() {
 				}}
 				onSwitchProject={(id) => send({ type: "switch_project", id })}
 				onCreateProject={addProject}
+				proxyConfig={proxyView}
 				onManageProjects={() => openPage("projects")}
 				onRefresh={refreshPage}
 				onLogout={() => {
@@ -2704,6 +2708,7 @@ export function App() {
 					) : needsProject && (page === "chat" || page === "dashboard") ? (
 						<ProjectGate
 							projects={projects}
+							proxyConfig={proxyView}
 							busy={streaming}
 							onCreate={addProject}
 							onSwitch={(id) => send({ type: "switch_project", id })}
@@ -2949,6 +2954,11 @@ export function App() {
 											: null
 									}
 									hasProject={snapshot?.project !== null && snapshot?.project !== undefined}
+									supportsImageInput={
+										modelLibrary?.entries
+											.find((entry) => entry.id === modelLibrary.resolved.main?.entryId)
+											?.input.includes("image") ?? false
+									}
 									projectId={snapshot?.project?.id ?? null}
 									blockedReason={
 										envReport && !envReport.ok
@@ -3058,8 +3068,8 @@ export function App() {
 						<ProxyPage
 							config={proxyView}
 							projects={projects}
-							busy={streaming}
-							onSave={(input) => runProxyAction(() => send({ type: "save_proxy", proxy: input }))}
+							busy={streaming || pullingSingboxImage}
+							onSave={(input) => runProxyAction(() => send({ type: "save_proxy", proxy: input }), 1860000)}
 							onDelete={(id) => runProxyAction(() => send({ type: "delete_proxy", id }))}
 							onTestNodes={(id, url) => {
 								setTestingProxyId(id);
@@ -3071,7 +3081,7 @@ export function App() {
 							refreshingId={refreshingProxyId}
 							onRefreshSubscription={(id) => {
 								setRefreshingProxyId(id);
-								return runProxyAction(() => send({ type: "refresh_proxy_subscription", id }), 60000);
+								return runProxyAction(() => send({ type: "refresh_proxy_subscription", id }), 1860000);
 							}}
 							onSetNode={(id, nodeTag) => runProxyAction(() => send({ type: "set_proxy_node", id, nodeTag }))}
 							testingId={testingProxyId}
@@ -3443,7 +3453,7 @@ export function App() {
 									if (defaultId !== proxyView.defaultId) {
 										send({ type: "set_default_proxy", id: defaultId });
 									}
-									if (image !== proxyView.image) {
+									if (image !== proxyView.image || !proxyView.imagePresent) {
 										send({ type: "set_proxy_image", image });
 									}
 								}}

@@ -212,9 +212,10 @@ test("the review chip distinguishes queued, failed, dubious and done", () => {
 });
 
 test("the active filters are shown as removable chips, without opening the panel", () => {
-	const html = renderPage({ filters: { engineId: "e1", severity: "high" } });
+	const html = renderPage({ filters: { engineId: "e1", severity: ["high", "critical"] } });
 	expect(html).toContain("工程：内网打点");
 	expect(html).toContain("等级：高危");
+	expect(html).toContain("等级：严重");
 	// The project-isolated page never offers another project's engines.
 	expect(html).not.toContain("别的工程");
 });

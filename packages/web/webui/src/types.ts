@@ -610,8 +610,11 @@ export interface SentinelVulnerability {
 export type SentinelVulnSummary = Omit<SentinelVulnerability, "packet" | "evidence" | "notes">;
 
 export interface SentinelVulnFilters {
+	/** Restrict to selected records; an empty selection matches nothing. */
+	ids?: string[];
 	status?: SentinelVulnStatus;
-	severity?: SentinelVulnSeverity;
+	/** Match any selected level; omitted or empty means all levels. */
+	severity?: SentinelVulnSeverity[];
 	target?: string;
 	/** Matches id, title, type, description and the origin/source text. */
 	search?: string;
@@ -1864,6 +1867,7 @@ export type SentinelServerMessage =
 	| { type: "sources_saved"; sources: SentinelSources; error?: string }
 	| { type: "container_network_saved"; network: SentinelContainerNetwork; error?: string }
 	| { type: "proxy_config"; config: SentinelProxyConfigView; error?: string; push?: boolean }
+	| { type: "singbox_pull_started" }
 	| { type: "singbox_pull_result"; ok: boolean; error?: string }
 	| { type: "project_proxy_saved"; projectId: string; error?: string; applied?: boolean }
 	| { type: "asset_config"; config: SentinelAssetConfigView }

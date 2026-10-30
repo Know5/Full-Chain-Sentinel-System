@@ -459,7 +459,7 @@ export function createVulnerabilityTools(options: VulnerabilityToolOptions): Too
 			const project = requireProject();
 			const filters: SentinelVulnFilters = {
 				...(params.status ? { status: params.status as SentinelVulnStatus } : {}),
-				...(params.severity ? { severity: params.severity as SentinelVulnSeverity } : {}),
+				...(params.severity ? { severity: [params.severity as SentinelVulnSeverity] } : {}),
 				...(params.target?.trim() ? { target: params.target.trim() } : {}),
 				...(params.search?.trim() ? { search: params.search.trim() } : {}),
 			};

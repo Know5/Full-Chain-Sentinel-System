@@ -759,8 +759,11 @@ export type SentinelVulnSummary = Omit<SentinelVulnerability, "packet" | "eviden
 
 /** List filters; every field is optional and they combine with AND. */
 export interface SentinelVulnFilters {
+	/** Restrict to selected records; an empty selection matches nothing. */
+	ids?: string[];
 	status?: SentinelVulnStatus;
-	severity?: SentinelVulnSeverity;
+	/** Match any selected level; omitted or empty means all levels. */
+	severity?: SentinelVulnSeverity[];
 	/** Case-insensitive substring match on the affected target. */
 	target?: string;
 	/** Case-insensitive substring match on label, title, category, description and source. */
@@ -2147,6 +2150,7 @@ export type SentinelServerMessage =
 	 * (a scheduled subscription refresh), which must not release a pending form.
 	 */
 	| { type: "proxy_config"; config: SentinelProxyConfigView; error?: string; push?: boolean }
+	| { type: "singbox_pull_started" }
 	| { type: "singbox_pull_result"; ok: boolean; error?: string }
 	/**
 	 * A project's proxy choice was stored. `applied` says whether a running

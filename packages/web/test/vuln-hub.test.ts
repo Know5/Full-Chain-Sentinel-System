@@ -88,6 +88,24 @@ test("filters by session, engine and task, and search covers the source text", (
 	expect(store.list("p1", { target: "192.168" })).toHaveLength(0);
 });
 
+test("severity selections match any chosen level while other filters and project boundaries still apply", () => {
+	const { store } = openStore();
+	const high = submit(store, { engineId: "e1" });
+	const critical = submit(store, { severity: "critical", cvss: 9.8, engineId: "e1" });
+	submit(store, { severity: "low", cvss: 2, engineId: "e1" });
+	submit(store, { severity: "critical", cvss: 9.8, engineId: "e2" });
+	submit(store, { projectId: "p2", severity: "critical", cvss: 9.8, engineId: "e1" });
+
+	expect(store.list("p1", { severity: ["high", "critical"], engineId: "e1" }).map((item) => item.id)).toEqual([
+		critical,
+		high,
+	]);
+	expect(store.list("p1", { severity: ["critical"], ids: [high, critical] }).map((item) => item.id)).toEqual([
+		critical,
+	]);
+	expect(store.list("p1", { severity: [] })).toHaveLength(4);
+});
+
 test("a deletion previews what it will take and then removes exactly that", () => {
 	const { store } = openStore();
 	const first = submit(store);
@@ -110,6 +128,24 @@ test("a deletion previews what it will take and then removes exactly that", () =
 	expect(store.deleteMany("p1", ["missing"])).toBe(0);
 	expect(store.deleteMany("p1", [])).toBe(0);
 	expect(store.deletePreview("p1", [])).toEqual({ count: 0, evidence: 0, notes: 0 });
+});
+
+test("selected ids restrict findings within the project and combine with other filters", () => {
+	const { store } = openStore();
+	const first = submit(store);
+	const second = submit(store, { severity: "low", cvss: 2 });
+	submit(store);
+	const foreign = submit(store, { projectId: "p2" });
+
+	expect(store.list("p1", { ids: [first] }).map((item) => item.id)).toEqual([first]);
+	expect(store.list("p1", { ids: [first, second, first, foreign, "missing"] }).map((item) => item.id)).toEqual([
+		second,
+		first,
+	]);
+	expect(store.list("p1", { ids: [first, second], severity: ["low"] }).map((item) => item.id)).toEqual([second]);
+	expect(store.list("p1", { ids: [] })).toEqual([]);
+	expect(store.list("p1", { ids: [foreign, "missing", "' OR 1=1 --"] })).toEqual([]);
+	expect(store.list("p1")).toHaveLength(3);
 });
 
 test("a deletion cannot reach another project's findings", () => {

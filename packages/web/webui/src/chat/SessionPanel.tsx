@@ -4,16 +4,20 @@
  */
 
 import {
+	DownOutlined,
 	DeleteOutlined,
 	EditOutlined,
 	FilterOutlined,
+	MenuFoldOutlined,
+	MenuUnfoldOutlined,
 	MoreOutlined,
 	PlusOutlined,
+	RightOutlined,
 	SearchOutlined,
 } from "@ant-design/icons";
 import { App, Badge, Button, ConfigProvider, Dropdown, Empty, Input, Modal, Tooltip, Typography } from "antd";
 import type { MenuProps } from "antd";
-import { useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { t } from "../i18n.ts";
 import { consoleTheme } from "../ui/theme.ts";
 import type { SentinelEngine, SentinelSessionStatus, SessionInfoView } from "../types.ts";
@@ -26,6 +30,7 @@ type SourceFilter = "all" | "chat" | "engine";
 
 const STORAGE_STATUS = "sentinel-session-filter";
 const STORAGE_SOURCE = "sentinel-session-source";
+const STORAGE_COLLAPSED = "sentinel-session-collapsed-groups";
 
 function readStatusFilter(): StatusFilter {
 	try {
@@ -107,6 +112,22 @@ export function SessionPanel({
 	const [statusFilter, setStatusFilter] = useState<StatusFilter>(readStatusFilter);
 	const [sourceFilter, setSourceFilter] = useState<SourceFilter>(readSourceFilter);
 	const [renaming, setRenaming] = useState<{ path: string; name: string } | null>(null);
+	const groupId = useId();
+	const [collapsed, setCollapsed] = useState<string[]>(() => {
+		try {
+			const stored: unknown = JSON.parse(localStorage.getItem(STORAGE_COLLAPSED) ?? "[]");
+			return Array.isArray(stored) ? stored.filter((key): key is string => typeof key === "string") : [];
+		} catch {
+			return [];
+		}
+	});
+	useEffect(() => {
+		try {
+			localStorage.setItem(STORAGE_COLLAPSED, JSON.stringify(collapsed));
+		} catch {
+			// Group toggles still work when browser storage is unavailable.
+		}
+	}, [collapsed]);
 
 	const setStatus = (next: StatusFilter) => {
 		localStorage.setItem(STORAGE_STATUS, next);
@@ -128,17 +149,25 @@ export function SessionPanel({
 		});
 	}, [sessions, statusFilter, sourceFilter, query]);
 
-	const chatSessions = visible.filter((session) => !session.engine);
-	const engineGroups = useMemo(() => {
-		const groups = new Map<string, { name: string; sessions: SessionInfoView[] }>();
+	const groups = useMemo(() => {
+		const chatSessions = visible.filter((session) => !session.engine);
+		const engines = new Map<string, { key: string; name: string; sessions: SessionInfoView[] }>();
 		for (const session of visible) {
 			if (!session.engine) continue;
-			const group = groups.get(session.engine.engineId) ?? { name: session.engine.engineName, sessions: [] };
+			const group = engines.get(session.engine.engineId) ?? {
+				key: `engine:${session.engine.engineId}`,
+				name: session.engine.engineName,
+				sessions: [],
+			};
 			group.sessions.push(session);
-			groups.set(session.engine.engineId, group);
+			engines.set(session.engine.engineId, group);
 		}
-		return [...groups.values()];
+		return [
+			...(chatSessions.length ? [{ key: "chat", name: t("对话"), sessions: chatSessions }] : []),
+			...engines.values(),
+		];
 	}, [visible]);
+	const allCollapsed = groups.length > 0 && groups.every((group) => collapsed.includes(group.key));
 
 	const menuFor = (session: SessionInfoView): MenuProps => ({
 		items: [
@@ -229,6 +258,22 @@ export function SessionPanel({
 				<Text type="secondary" className="session-panel__count">
 					{visible.length === sessions.length ? sessions.length : `${visible.length} / ${sessions.length}`}
 				</Text>
+				<Tooltip title={allCollapsed ? t("全部展开") : t("全部折叠")}>
+					<Button
+						type="text"
+						size="small"
+						icon={allCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+						disabled={groups.length === 0}
+						aria-label={allCollapsed ? t("全部展开") : t("全部折叠")}
+						onClick={() =>
+							setCollapsed((previous) =>
+								allCollapsed
+									? previous.filter((key) => !groups.some((group) => group.key === key))
+									: [...new Set([...previous, ...groups.map((group) => group.key)])],
+							)
+						}
+					/>
+				</Tooltip>
 				<Tooltip title={t("新建会话")}>
 					<Button type="primary" size="small" icon={<PlusOutlined />} onClick={onNew} aria-label={t("新建会话")} />
 				</Tooltip>
@@ -288,19 +333,40 @@ export function SessionPanel({
 
 			<div className="session-panel__list">
 				{visible.length === 0 ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t("没有匹配的会话")} /> : null}
-				{chatSessions.length > 0 && engineGroups.length > 0 ? (
-					<div className="session-panel__section">{t("对话")}</div>
-				) : null}
-				{chatSessions.map(row)}
-				{engineGroups.map((group) => (
-					<div key={group.name}>
-						<div className="session-panel__section">
-							{group.name}
-							<span className="session-panel__section-count">{group.sessions.length}</span>
+				{groups.map((group) => {
+					const isCollapsed = collapsed.includes(group.key);
+					const hasRunning = group.sessions.some(
+						(session) => dotStatus(session, runningSessions.includes(session.id)) === "processing",
+					);
+					const contentId = `${groupId}-${group.key}`;
+					return (
+						<div key={group.key}>
+							<button
+								type="button"
+								className="session-panel__group-toggle"
+								aria-expanded={!isCollapsed}
+								aria-controls={contentId}
+								onClick={() =>
+									setCollapsed((previous) =>
+										previous.includes(group.key)
+											? previous.filter((key) => key !== group.key)
+											: [...previous, group.key],
+									)
+								}
+							>
+								{isCollapsed ? <RightOutlined /> : <DownOutlined />}
+								<span className="session-panel__group-name" title={group.name}>
+									{group.name}
+								</span>
+								{isCollapsed && hasRunning ? <Badge status="processing" /> : null}
+								<span className="session-panel__section-count">{group.sessions.length}</span>
+							</button>
+							<div id={contentId} hidden={isCollapsed}>
+								{group.sessions.map(row)}
+							</div>
 						</div>
-						{group.sessions.map(row)}
-					</div>
-				))}
+					);
+				})}
 			</div>
 
 			<ConfigProvider theme={consoleTheme}>

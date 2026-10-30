@@ -40,7 +40,7 @@ import {
 } from "antd";
 import type { DescriptionsProps } from "antd";
 import { useEffect, useState } from "react";
-import { t } from "../i18n.ts";
+import { getLanguage, t } from "../i18n.ts";
 import type {
 	SentinelEngine,
 	SentinelFilePreview,
@@ -257,7 +257,7 @@ export function VulnPage({
 	const [target, setTarget] = useState(filters.target ?? "");
 	/** The condition panel is closed by default: the chips already say what is on. */
 	const [filterOpen, setFilterOpen] = useState(false);
-	/** Rows ticked for deletion; cleared whenever the list is replaced. */
+	/** Rows selected for export or batch deletion. */
 	const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
 
 	// Keep the inputs in step when the page is opened fresh or filters are reset.
@@ -331,12 +331,15 @@ export function VulnPage({
 			clear: () => onFiltersChange({ ...filters, taskId: undefined }),
 		});
 	}
-	if (filters.severity) {
+	for (const severity of filters.severity ?? []) {
 		chips.push({
-			key: "severity",
+			key: `severity:${severity}`,
 			label: t("等级"),
-			value: SENTINEL_VULN_SEVERITY_LABELS[filters.severity],
-			clear: () => onFiltersChange({ ...filters, severity: undefined }),
+			value: SENTINEL_VULN_SEVERITY_LABELS[severity],
+			clear: () => {
+				const remaining = filters.severity?.filter((value) => value !== severity);
+				onFiltersChange({ ...filters, severity: remaining?.length ? remaining : undefined });
+			},
 		});
 	}
 	if (filters.status) {
@@ -431,17 +434,19 @@ export function VulnPage({
 				<span>{t("等级")}</span>
 				<Select
 					size="small"
-					value={filters.severity ?? ""}
-					onChange={(value) =>
-						onFiltersChange({ ...filters, severity: (value || undefined) as SentinelVulnSeverity | undefined })
+					mode="multiple"
+					allowClear
+					maxTagCount="responsive"
+					aria-label={t("等级")}
+					placeholder={t("全部等级")}
+					value={filters.severity ?? []}
+					onChange={(value: SentinelVulnSeverity[]) =>
+						onFiltersChange({ ...filters, severity: value.length ? value : undefined })
 					}
-					options={[
-						{ value: "", label: t("全部等级") },
-						...SENTINEL_VULN_SEVERITIES.map((severity) => ({
-							value: severity,
-							label: SENTINEL_VULN_SEVERITY_LABELS[severity],
-						})),
-					]}
+					options={SENTINEL_VULN_SEVERITIES.map((severity) => ({
+						value: severity,
+						label: SENTINEL_VULN_SEVERITY_LABELS[severity],
+					}))}
 				/>
 			</label>
 			<label className="vulnhub-filters__field">
@@ -623,8 +628,14 @@ export function VulnPage({
 					>
 						{t("重新评审待确认")}
 					</Button>
-					<Button type="primary" icon={<DownloadOutlined />} onClick={() => onExport(filters)}>
-						{t("导出 Markdown")}
+					<Button
+						type="primary"
+						icon={<DownloadOutlined />}
+						onClick={() => onExport(selectedIds.length > 0 ? { ...filters, ids: selectedIds } : filters)}
+					>
+						{selectedIds.length > 0
+							? `${getLanguage() === "en" ? "Export selected" : "导出选中"} (${selectedIds.length})`
+							: t("导出 Markdown")}
 					</Button>
 				</Space>
 			}
@@ -768,6 +779,7 @@ export function VulnPage({
 					{t("代理提交的漏洞一律先记为「待确认」；确认、改级、标误报都在详情里完成，改动会记入时间线。")}
 				</Text>
 				<Text type="secondary">
+					{t("勾选记录后仅导出选中项；未勾选时导出当前筛选结果。")}
 					{t("导出只包含当前项目的记录与当前筛选条件。删除只能通过勾选记录进行：删除后证据与备注一并消失，不可恢复。")}
 				</Text>
 			</div>

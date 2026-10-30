@@ -74,6 +74,8 @@ export function PickerShell({
 			size="small"
 			className={className ? `pickmenu ${className}` : "pickmenu"}
 			style={{
+				display: "flex",
+				flexDirection: "column",
 				position: "fixed",
 				top: anchor.top,
 				bottom: anchor.bottom,
@@ -81,6 +83,10 @@ export function PickerShell({
 				width,
 				maxHeight: anchor.maxHeight,
 				zIndex: 1100,
+			}}
+			styles={{
+				header: { flexShrink: 0 },
+				body: { minHeight: 0, maxHeight: "none", overflowY: "auto" },
 			}}
 			onClick={(event) => event.stopPropagation()}
 			title={

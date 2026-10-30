@@ -121,6 +121,39 @@
 	letter-spacing: 0.02em;
 }
 
+.session-panel__group-toggle {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	width: 100%;
+	margin-top: 6px;
+	padding: 8px;
+	border: 0;
+	border-radius: 6px;
+	background: transparent;
+	color: var(--ant-color-text-secondary);
+	font: inherit;
+	font-size: 12px;
+	text-align: left;
+	cursor: pointer;
+}
+
+.session-panel__group-toggle:hover {
+	background: var(--ant-color-bg-text-hover);
+}
+
+.session-panel__group-toggle > .anticon {
+	flex: none;
+	font-size: 10px;
+}
+
+.session-panel__group-name {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
 .console-sidebar .session-row {
 	min-height: 38px;
 	margin-block: 1px;

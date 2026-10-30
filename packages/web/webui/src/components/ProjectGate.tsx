@@ -5,40 +5,47 @@
  */
 
 import { FolderOpenOutlined, PlusOutlined, SettingOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Input, List, Space, Typography } from "antd";
+import { Alert, Button, Card, Form, Input, List, Typography } from "antd";
 import { useState } from "react";
 import { t } from "../i18n.ts";
-import type { SentinelProjectInfo } from "../types.ts";
+import type { SentinelProjectInfo, SentinelProxyConfigView } from "../types.ts";
+import { type ProjectProxyChoice, projectProxyId, projectProxyNode } from "./ProjectProxyDialog.tsx";
+import { ProjectProxyFields } from "./ProjectProxyFields.tsx";
 
 const { Title, Text } = Typography;
 
 export function ProjectGate({
 	projects,
 	busy,
+	proxyConfig,
 	onCreate,
 	onSwitch,
 	onOpenSettings,
 }: {
 	projects: SentinelProjectInfo[];
 	busy: boolean;
-	onCreate: (name: string) => Promise<string | null>;
+	proxyConfig: SentinelProxyConfigView;
+	onCreate: (name: string, proxyId?: string | null, proxyNode?: string) => Promise<string | null>;
 	onSwitch: (id: string) => void;
 	onOpenSettings: () => void;
 }) {
 	const [name, setName] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const [submitting, setSubmitting] = useState(false);
+	const [createProxy, setCreateProxy] = useState<ProjectProxyChoice>({ kind: "inherit" });
 
 	const submit = async () => {
+		if (!name.trim() || submitting || busy) return;
 		setSubmitting(true);
 		setError(null);
-		const message = await onCreate(name);
+		const message = await onCreate(name.trim(), projectProxyId(createProxy), projectProxyNode(createProxy));
 		setSubmitting(false);
 		if (message) {
 			setError(message);
 			return;
 		}
 		setName("");
+		setCreateProxy({ kind: "inherit" });
 	};
 
 	return (
@@ -51,28 +58,29 @@ export function ProjectGate({
 					)}
 				</Text>
 
-				<Space.Compact className="gate-form">
+				<Form layout="vertical" className="gate-form" onFinish={() => void submit()} disabled={submitting || busy}>
+					<Form.Item label={t("项目名称")} required htmlFor="project-gate-name">
 					<Input
+							id="project-gate-name"
 						autoFocus
 						value={name}
 						placeholder={t("项目名称，如 靶场-01")}
 						spellCheck={false}
 						disabled={submitting || busy}
 						onChange={(event) => setName(event.target.value)}
-						onPressEnter={() => {
-							if (name.trim()) void submit();
-						}}
 					/>
+					</Form.Item>
+					<ProjectProxyFields config={proxyConfig} choice={createProxy} disabled={submitting || busy} onChange={setCreateProxy} />
 					<Button
 						type="primary"
 						icon={<PlusOutlined />}
 						loading={submitting || busy}
 						disabled={!name.trim()}
-						onClick={() => void submit()}
+						htmlType="submit"
 					>
 						{t("创建并进入")}
 					</Button>
-				</Space.Compact>
+				</Form>
 
 				{error ? <Alert type="error" showIcon title={error} className="ui-page__alert" /> : null}
 

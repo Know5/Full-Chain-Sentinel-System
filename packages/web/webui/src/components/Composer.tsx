@@ -6,9 +6,9 @@ import {
 	PictureOutlined,
 	StopOutlined,
 } from "@ant-design/icons";
-import { Alert, Button, Input, Progress, Segmented, Space, Typography } from "antd";
+import { Alert, Button, Input, Progress, Segmented, Space, Tooltip, Typography } from "antd";
 import { useEffect, useRef, useState } from "react";
-import { t } from "../i18n.ts";
+import { getLanguage, t } from "../i18n.ts";
 import { formatSize, formatTokens } from "../transcript.ts";
 import type {
 	SentinelApiModelSummary,
@@ -101,6 +101,7 @@ export function Composer({
 	stats,
 	throughput,
 	hasProject,
+	supportsImageInput,
 	projectId,
 	blockedReason,
 	notifyRun,
@@ -136,6 +137,8 @@ export function Composer({
 	/** Average output speed of the latest run; null before any assistant usage is seen. */
 	throughput: { tokPerSec: number; outputTokens: number; durationMs: number } | null;
 	hasProject: boolean;
+	/** Whether the configured main model accepts images. */
+	supportsImageInput: boolean;
 	/** The active project's id; null while none is selected. Uploads land in its work dir. */
 	projectId: string | null;
 	/** Set when the console cannot run anything: the input is locked until it clears. */
@@ -235,12 +238,19 @@ export function Composer({
 	/** The 图片 picker and the 附件 picker: images are inlined, files are uploaded. */
 	const imageInputRef = useRef<HTMLInputElement | null>(null);
 	const fileInputRef = useRef<HTMLInputElement | null>(null);
+	const imageUnsupportedReason =
+		getLanguage() === "en" ? "This model does not have multimodal support enabled." : "该模型未开启多模态支持";
+	const imagesBlocked = !supportsImageInput && images.length > 0;
 
 	const submit = (override?: "steer" | "followUp") => {
 		const trimmed = text.trim();
 		const ready = attachments.flatMap((item) => (item.uploaded ? [item.uploaded] : []));
 		const uploading = attachments.some((item) => !item.uploaded && !item.error);
 		if (blocked || uploading) return;
+		if (imagesBlocked) {
+			setSendNotice(imageUnsupportedReason);
+			return;
+		}
 		if (!trimmed && images.length === 0 && ready.length === 0) return;
 		// An upload is written into whichever project was active when it finished,
 		// and only that project's directory is mounted into the container: a path
@@ -273,6 +283,10 @@ export function Composer({
 	};
 
 	const addImages = async (files: FileList | File[]) => {
+		if (!supportsImageInput) {
+			setSendNotice(imageUnsupportedReason);
+			return;
+		}
 		const next: SentinelImageAttachment[] = [];
 		for (const file of Array.from(files)) {
 			if (!file.type.startsWith("image/")) continue;
@@ -288,6 +302,7 @@ export function Composer({
 	 * real progress and sending only has to write the paths into the message.
 	 */
 	const addFiles = (files: FileList | File[]) => {
+		setSendNotice(null);
 		const plans = planAttachments(Array.from(files), projectId);
 		const images = plans.flatMap((plan) => (plan.kind === "image" ? [plan.file] : []));
 		if (images.length > 0) void addImages(images);
@@ -303,7 +318,6 @@ export function Composer({
 			};
 			setAttachments((prev) => [...prev, entry]);
 			if (plan.kind === "refused") continue;
-			setSendNotice(null);
 			void uploadFile(plan.file, plan.projectId, (ratio) => {
 				setAttachments((prev) => prev.map((item) => (item.id === entry.id ? { ...item, ratio } : item)));
 			})
@@ -324,7 +338,8 @@ export function Composer({
 	const blocked = blockedReason !== null;
 	const uploading = attachments.some((item) => !item.uploaded && !item.error);
 	const readyCount = attachments.filter((item) => item.uploaded !== null).length;
-	const canSend = !blocked && !uploading && (text.trim().length > 0 || images.length > 0 || readyCount > 0);
+	const canSend =
+		!blocked && !uploading && !imagesBlocked && (text.trim().length > 0 || images.length > 0 || readyCount > 0);
 
 	return (
 		<div className="composerbox">
@@ -611,7 +626,14 @@ export function Composer({
 						</span>
 					</div>
 				) : null}
-				{sendNotice ? <Alert type="warning" showIcon className="composerbox__notice" title={sendNotice} /> : null}
+				{imagesBlocked || sendNotice ? (
+					<Alert
+						type="warning"
+						showIcon
+						className="composerbox__notice"
+						title={imagesBlocked ? imageUnsupportedReason : sendNotice}
+					/>
+				) : null}
 				<Input.TextArea
 					className="composerbox__input"
 					variant="borderless"
@@ -648,16 +670,19 @@ export function Composer({
 					}}
 				/>
 				<div className="composerbox__actions">
-					<Button
-						type="text"
-						size="small"
-						icon={<PictureOutlined />}
-						onClick={() => imageInputRef.current?.click()}
-						disabled={!hasProject || blocked}
-						title={t("附加图片（也可直接粘贴截图）")}
-					>
-						{t("图片")}
-					</Button>
+					<Tooltip title={supportsImageInput ? t("附加图片（也可直接粘贴截图）") : imageUnsupportedReason}>
+						<span style={{ display: "inline-flex" }}>
+							<Button
+								type="text"
+								size="small"
+								icon={<PictureOutlined />}
+								onClick={() => imageInputRef.current?.click()}
+								disabled={!supportsImageInput || !hasProject || blocked}
+							>
+								{t("图片")}
+							</Button>
+						</span>
+					</Tooltip>
 					<Button
 						type="text"
 						size="small"
@@ -681,6 +706,7 @@ export function Composer({
 						ref={imageInputRef}
 						type="file"
 						accept="image/*"
+						disabled={!supportsImageInput || !hasProject || blocked}
 						multiple
 						hidden
 						onChange={(event) => {

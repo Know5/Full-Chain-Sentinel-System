@@ -30,7 +30,8 @@ import { t } from "../i18n.ts";
 import type { SentinelProjectInfo, SentinelProxyConfigView } from "../types.ts";
 import { Page } from "../ui/Page.tsx";
 import { deleteConfirmMatches, PROJECT_REMOVE_OPTIONS } from "./ProjectDeleteDialog.tsx";
-import { ProjectProxyDialog } from "./ProjectProxyDialog.tsx";
+import { ProjectProxyDialog, type ProjectProxyChoice, projectProxyId, projectProxyNode } from "./ProjectProxyDialog.tsx";
+import { ProjectProxyFields } from "./ProjectProxyFields.tsx";
 
 const { Text } = Typography;
 
@@ -80,9 +81,9 @@ export function ProjectsPage({
 	projects: SentinelProjectInfo[];
 	activeProject: SentinelProjectInfo | null;
 	busy: boolean;
-	/** Proxy profiles and the default, for the row dialog. */
+	/** Proxy profiles and the default, for creation and the row dialog. */
 	proxyConfig: SentinelProxyConfigView;
-	onCreate: (name: string) => Promise<string | null>;
+	onCreate: (name: string, proxyId?: string | null, proxyNode?: string) => Promise<string | null>;
 	onRecreate: (id: string) => Promise<string | null>;
 	onRemove: (id: string, confirmName: string, scope: "container" | "data") => Promise<string | null>;
 	onStop: (id: string) => Promise<string | null>;
@@ -96,6 +97,7 @@ export function ProjectsPage({
 	const [actionBusy, setActionBusy] = useState(false);
 	const [createOpen, setCreateOpen] = useState(false);
 	const [createForm] = Form.useForm<{ name: string }>();
+	const [createProxy, setCreateProxy] = useState<ProjectProxyChoice>({ kind: "inherit" });
 	const [confirmName, setConfirmName] = useState("");
 	const [scope, setScope] = useState<"container" | "data">("container");
 	const [deleteFor, setDeleteFor] = useState<SentinelProjectInfo | null>(null);
@@ -116,9 +118,11 @@ export function ProjectsPage({
 	const create = async () => {
 		const name = createForm.getFieldValue("name")?.trim();
 		if (!name) return;
-		const ok = await run(() => onCreate(name));
+		if (actionBusy) return;
+		const ok = await run(() => onCreate(name, projectProxyId(createProxy), projectProxyNode(createProxy)));
 		if (ok) {
 			createForm.resetFields();
+			setCreateProxy({ kind: "inherit" });
 			setCreateOpen(false);
 			message.success(t("项目已创建"));
 		}
@@ -404,11 +408,12 @@ export function ProjectsPage({
 				okText={t("创建")}
 				cancelText={t("取消")}
 				confirmLoading={actionBusy}
+				okButtonProps={{ disabled: actionBusy }}
 				onOk={() => void create()}
 				onCancel={() => setCreateOpen(false)}
 				destroyOnHidden
 			>
-				<Form form={createForm} layout="vertical" onFinish={() => void create()}>
+				<Form form={createForm} layout="vertical" onFinish={() => void create()} disabled={actionBusy}>
 					<Form.Item
 						name="name"
 						label={t("项目名称")}
@@ -417,6 +422,7 @@ export function ProjectsPage({
 					>
 						<Input autoFocus placeholder={t("例如：客户内网")} onPressEnter={() => void create()} />
 					</Form.Item>
+					<ProjectProxyFields config={proxyConfig} choice={createProxy} disabled={actionBusy} onChange={setCreateProxy} />
 				</Form>
 			</Modal>
 

@@ -38,7 +38,7 @@ import { CONSOLE_VERSION, PROJECT_REPOSITORY } from "../branding.ts";
 import { SessionPanel, type SessionPanelProps } from "../chat/SessionPanel.tsx";
 import { SentinelMark } from "../components/icons.tsx";
 import { getLanguage, t } from "../i18n.ts";
-import type { SentinelMode, SentinelPageId, SentinelProjectInfo } from "../types.ts";
+import type { SentinelMode, SentinelPageId, SentinelProjectInfo, SentinelProxyConfigView } from "../types.ts";
 import { SENTINEL_MODE_LABELS } from "../types.ts";
 import { consoleSidebarTheme } from "../ui/theme.ts";
 import {
@@ -70,9 +70,10 @@ export interface ConsoleShellProps {
 	projects: SentinelProjectInfo[];
 	activeProject: SentinelProjectInfo | null;
 	busy: boolean;
+	proxyConfig: SentinelProxyConfigView;
 	sessionPanel?: SessionPanelProps;
 	onSwitchProject: (id: string) => void;
-	onCreateProject: (name: string) => Promise<string | null>;
+	onCreateProject: (name: string, proxyId?: string | null, proxyNode?: string) => Promise<string | null>;
 	onManageProjects: () => void;
 	onRefresh: () => void;
 	onLogout: () => void;
@@ -111,6 +112,7 @@ export function ConsoleShell({
 	projects,
 	activeProject,
 	busy,
+	proxyConfig,
 	sessionPanel,
 	onSwitchProject,
 	onCreateProject,
@@ -325,6 +327,7 @@ export function ConsoleShell({
 					projects={projects}
 					activeProject={activeProject}
 					busy={busy}
+					proxyConfig={proxyConfig}
 					onSwitch={onSwitchProject}
 					onCreate={onCreateProject}
 					onManage={onManageProjects}

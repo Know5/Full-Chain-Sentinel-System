@@ -52,7 +52,7 @@ function report(config: SentinelProxyConfigView): SentinelEnvReport {
 	} as SentinelEnvReport;
 }
 
-function render(config: SentinelProxyConfigView = proxyConfig()): string {
+function render(config: SentinelProxyConfigView = proxyConfig(), pullingImage = false): string {
 	return renderToStaticMarkup(
 		createElement(EnvironmentPanel, {
 			report: report(config),
@@ -65,7 +65,7 @@ function render(config: SentinelProxyConfigView = proxyConfig()): string {
 			sourcesSavedAt: null,
 			networkSavedAt: null,
 			proxyConfig: config,
-			pullingImage: false,
+			pullingImage,
 			onSaveNetworkAndProxy: () => {},
 			onPullProxyImage: () => {},
 		}),
@@ -95,4 +95,12 @@ test("a missing proxy image is stated on the same card", () => {
 	expect(html).toContain("镜像不在本地");
 	// Pulling is an action, so it keeps its own button.
 	expect(html).toContain("拉取镜像");
+	// The network card's save can install the default image with no edits.
+	const card = html.slice(html.indexOf("容器网络与代理"));
+	const save = card.match(/<button[^>]*ant-btn-primary[^>]*>/)?.[0];
+	expect(save).toBeDefined();
+	expect(save).not.toContain("disabled");
+	const pulling = render(proxyConfig({ imagePresent: false }), true);
+	const busyCard = pulling.slice(pulling.indexOf("容器网络与代理"));
+	expect(busyCard.match(/<button[^>]*ant-btn-primary[^>]*>/)?.[0]).toContain("disabled");
 });

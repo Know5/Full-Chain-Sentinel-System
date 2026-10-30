@@ -8,7 +8,7 @@
  * nothing.
  */
 
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -21,6 +21,7 @@ import type {
 	SentinelProxyInput,
 	SentinelServerMessage,
 } from "../src/protocol.ts";
+import { readProxies, setProxyImage } from "../src/proxy.ts";
 import { startSentinelServer } from "../src/server.ts";
 import { type FakeDocker, installFakeDocker } from "./fake-docker.ts";
 
@@ -95,7 +96,7 @@ function drain(type: SentinelServerMessage["type"]): void {
 
 /** The config broadcast a request just produced. */
 async function config(): Promise<SentinelProxyConfigView & { error?: string }> {
-	const found = (await waitFor((entry) => entry.type === "proxy_config")) as {
+	const found = (await waitFor((entry) => entry.type === "proxy_config" && !entry.push)) as {
 		config: SentinelProxyConfigView;
 		error?: string;
 	};
@@ -184,7 +185,22 @@ beforeAll(async () => {
 	subscriptionUrl = `http://127.0.0.1:${address.port}/sub`;
 	agentDir = join(tempRoot, "agent");
 	mkdirSync(agentDir, { recursive: true });
-	fakeDocker = installFakeDocker(tempRoot, join(tempRoot, "projects", "demo"));
+	fakeDocker = installFakeDocker(tempRoot, join(tempRoot, "projects", "demo"), join(tempRoot, "docker.log"));
+	const binary = join(fakeDocker.dir, "docker");
+	writeFileSync(
+		binary,
+		readFileSync(binary, "utf-8").replace(
+			"\timage|build) exit 0 ;;",
+			`\timage)
+		case "$*" in *sing-box*) [ -f "$state_dir/.proxy-image-missing" ] && exit 1 ;; esac
+		exit 0 ;;
+	pull)
+		if [ -f "$state_dir/.proxy-pull-error" ]; then echo "registry unavailable" >&2; exit 1; fi
+		rm -f "$state_dir/.proxy-image-missing"
+		exit 0 ;;
+	build) exit 0 ;;`,
+		),
+	);
 	const started = await startSentinelServer({
 		cwd: join(tempRoot, "workspace"),
 		agentDir,
@@ -480,4 +496,64 @@ test("deleting a profile returns the projects that used it to the default", asyn
 	const row = await project(created.id);
 	expect(row.proxyId).toBeUndefined();
 	expect(row.proxyName).toBe("默认节点");
+});
+
+test("saving installs a missing image before validation and does not pull an existing image", async () => {
+	if (!fakeDocker) throw new Error("Fake Docker not installed");
+	mkdirSync(fakeDocker.stateDir, { recursive: true });
+	writeFileSync(join(fakeDocker.stateDir, ".proxy-image-missing"), "");
+	writeFileSync(join(tempRoot, "docker.log"), "");
+	drain("singbox_pull_started");
+	drain("singbox_pull_result");
+	const saved = await save(input({ name: "自动安装镜像" }));
+	expect(saved.error).toBeUndefined();
+	expect(saved.imagePresent).toBe(true);
+	await waitFor((entry) => entry.type === "singbox_pull_started");
+	await waitFor((entry) => entry.type === "singbox_pull_result" && entry.ok);
+	const log = readFileSync(join(tempRoot, "docker.log"), "utf-8");
+	expect(log).toContain(`pull ${saved.image}`);
+	expect(log.indexOf(`pull ${saved.image}`)).toBeLessThan(log.indexOf(" check -C "));
+
+	writeFileSync(join(tempRoot, "docker.log"), "");
+	expect((await save(input({ name: "镜像已存在" }))).error).toBeUndefined();
+	expect(readFileSync(join(tempRoot, "docker.log"), "utf-8")).not.toMatch(/^pull /m);
+});
+
+test("image pull failure is returned on save and does not validate or apply a gateway", async () => {
+	if (!fakeDocker) throw new Error("Fake Docker not installed");
+	writeFileSync(join(fakeDocker.stateDir, ".proxy-image-missing"), "");
+	writeFileSync(join(fakeDocker.stateDir, ".proxy-pull-error"), "");
+	writeFileSync(join(tempRoot, "docker.log"), "");
+	try {
+		const saved = await save(input({ name: "镜像拉取失败" }));
+		expect(saved.error).toContain("registry unavailable");
+		expect(saved.imagePresent).toBe(false);
+		const log = readFileSync(join(tempRoot, "docker.log"), "utf-8");
+		expect(log).toContain(`pull ${saved.image}`);
+		expect(log).not.toContain(" check -C ");
+		expect(log).not.toContain("runtime.sh apply");
+	} finally {
+		rmSync(join(fakeDocker.stateDir, ".proxy-pull-error"), { force: true });
+		rmSync(join(fakeDocker.stateDir, ".proxy-image-missing"), { force: true });
+	}
+});
+
+test("saving the environment image installs it even when its name has not changed", async () => {
+	if (!fakeDocker) throw new Error("Fake Docker not installed");
+	writeFileSync(join(fakeDocker.stateDir, ".proxy-image-missing"), "");
+	drain("proxy_config");
+	const image = readProxies(agentDir).image;
+	send({ type: "set_proxy_image", image });
+	const saved = await config();
+	expect(saved.error).toBeUndefined();
+	expect(saved.imagePresent).toBe(true);
+
+	// Explicit image changes use the same installation path.
+	writeFileSync(join(fakeDocker.stateDir, ".proxy-image-missing"), "");
+	drain("proxy_config");
+	send({ type: "set_proxy_image", image: "registry.example/sing-box:custom" });
+	const changed = await config();
+	expect(changed.image).toBe("registry.example/sing-box:custom");
+	expect(changed.imagePresent).toBe(true);
+	setProxyImage(agentDir, image);
 });

@@ -598,13 +598,19 @@ export class VulnerabilityStore {
 	list(projectId: string, filters: SentinelVulnFilters = {}): SentinelVulnSummary[] {
 		const conditions = ["project_id = ?"];
 		const params: SqliteValue[] = [projectId];
+		if (filters.ids !== undefined) {
+			const ids = scopedIds(filters.ids);
+			if (ids.length === 0) return [];
+			conditions.push(`id IN (${ids.map(() => "?").join(", ")})`);
+			params.push(...ids);
+		}
 		if (filters.status) {
 			conditions.push("status = ?");
 			params.push(filters.status);
 		}
-		if (filters.severity) {
-			conditions.push("severity = ?");
-			params.push(filters.severity);
+		if (filters.severity?.length) {
+			conditions.push(`severity IN (${filters.severity.map(() => "?").join(", ")})`);
+			params.push(...filters.severity);
 		}
 		if (filters.dubious) {
 			conditions.push("json_extract(review, '$.verdict') = 'dubious'");

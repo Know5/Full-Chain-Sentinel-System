@@ -11,7 +11,9 @@ import { DownOutlined, PlusOutlined, SettingOutlined } from "@ant-design/icons";
 import { App, Badge, Button, Dropdown, Form, Input, Modal, Typography } from "antd";
 import { useState } from "react";
 import { t } from "../i18n.ts";
-import type { SentinelProjectInfo } from "../types.ts";
+import type { SentinelProjectInfo, SentinelProxyConfigView } from "../types.ts";
+import { type ProjectProxyChoice, projectProxyId, projectProxyNode } from "../components/ProjectProxyDialog.tsx";
+import { ProjectProxyFields } from "../components/ProjectProxyFields.tsx";
 
 const { Text } = Typography;
 
@@ -31,6 +33,7 @@ export function ProjectSwitcher({
 	projects,
 	activeProject,
 	busy,
+	proxyConfig,
 	onSwitch,
 	onCreate,
 	onManage,
@@ -39,28 +42,31 @@ export function ProjectSwitcher({
 	activeProject: SentinelProjectInfo | null;
 	/** A run owns the container; creating or switching stays allowed but is explained. */
 	busy: boolean;
+	proxyConfig: SentinelProxyConfigView;
 	onSwitch: (id: string) => void;
-	onCreate: (name: string) => Promise<string | null>;
+	onCreate: (name: string, proxyId?: string | null, proxyNode?: string) => Promise<string | null>;
 	onManage: () => void;
 }) {
 	const { message } = App.useApp();
 	const [createOpen, setCreateOpen] = useState(false);
 	const [creating, setCreating] = useState(false);
 	const [form] = Form.useForm<{ name: string }>();
+	const [createProxy, setCreateProxy] = useState<ProjectProxyChoice>({ kind: "inherit" });
 
 	const list = Array.isArray(projects) ? projects : [];
 
 	const submit = async () => {
 		const name = form.getFieldValue("name")?.trim();
-		if (!name) return;
+		if (!name || creating) return;
 		setCreating(true);
-		const error = await onCreate(name);
+		const error = await onCreate(name, projectProxyId(createProxy), projectProxyNode(createProxy));
 		setCreating(false);
 		if (error) {
 			message.error(error);
 			return;
 		}
 		form.resetFields();
+		setCreateProxy({ kind: "inherit" });
 		setCreateOpen(false);
 	};
 
@@ -128,6 +134,7 @@ export function ProjectSwitcher({
 					>
 						<Input autoFocus placeholder={t("例如：客户内网")} onPressEnter={() => void submit()} />
 					</Form.Item>
+					<ProjectProxyFields config={proxyConfig} choice={createProxy} disabled={creating} onChange={setCreateProxy} />
 					{busy ? <Text type="secondary">{t("当前有任务在运行，新项目会在后台创建。")}</Text> : null}
 				</Form>
 			</Modal>

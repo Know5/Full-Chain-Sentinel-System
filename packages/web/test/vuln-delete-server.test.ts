@@ -145,6 +145,32 @@ test("a preview reports the impact, and confirming deletes exactly the selection
 		const second = make("B", 0);
 		store.update(first, { note: "复核备注" });
 		const keep = make("C", 1);
+		const foreign = store.create({
+			projectId: "another-project",
+			projectName: "其他项目",
+			source: "主代理",
+			title: "不应导出的漏洞",
+			severity: "low",
+			cvss: 2,
+			target: "10.0.0.8",
+			description: "描述",
+			packet: "GET /foreign",
+		});
+
+		// Selection must reach the report, including its project boundary.
+		send({ type: "export_vulns", filters: { ids: [first, foreign.id] } });
+		const report = await waitFor((message) => message.type === "vulns_export");
+		if (report.type !== "vulns_export") throw new Error("Expected report");
+		expect(report.markdown).toContain("发现 A");
+		expect(report.markdown).not.toContain("发现 B");
+		expect(report.markdown).not.toContain("发现 C");
+		expect(report.markdown).not.toContain("不应导出的漏洞");
+
+		send({ type: "export_vulns" });
+		const all = await waitFor((message) => message.type === "vulns_export");
+		if (all.type !== "vulns_export") throw new Error("Expected report");
+		for (const title of ["发现 A", "发现 B", "发现 C"]) expect(all.markdown).toContain(title);
+		expect(all.markdown).not.toContain("不应导出的漏洞");
 
 		send({ type: "list_vulns", filters: {} });
 		expect(await vulns()).toHaveLength(3);
